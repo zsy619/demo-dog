@@ -1,0 +1,65 @@
+# =============================================================================
+# docker-compose.yml -- demo-dog full-stack local deployment
+#
+# Services:
+#   backend  - the Go collector (built from Dockerfile, target=backend)
+#   frontend - the React SPA served by nginx (built from Dockerfile, target=frontend)
+#
+# Usage:
+#   docker compose up --build       # build images and start
+#   docker compose down              # tear down
+#   docker compose logs -f backend   # tail backend logs
+#
+# =============================================================================
+
+name: demo-dog
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    image: demo-dog-backend:0.1.0
+    container_name: demo-dog-backend
+    restart: unless-stopped
+    ports:
+      - "18080:8080"
+    environment:
+      GIN_MODE: release
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+      args:
+        VITE_API_BASE: /api
+    image: demo-dog-frontend:0.1.0
+    container_name: demo-dog-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    environment:
+      # The frontend nginx proxies /api -> backend:8080 over the docker network.
+      BACKEND_HOST: backend
+      BACKEND_PORT: 8080
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/ >/dev/null"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+# All services join the default compose network so nginx can resolve "backend".
+networks:
+  default:
+    name: demo-dog-net

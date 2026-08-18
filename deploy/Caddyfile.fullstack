@@ -1,0 +1,86 @@
+# =============================================================================
+# Caddyfile.fullstack -- demo-dog single-image config
+# =============================================================================
+#
+# Mirrors deploy/nginx-fullstack.conf (single Caddy instance listening on
+# :8080, reverse-proxying /api/* to dog-collector on 127.0.0.1:8080).
+#
+# Use this Caddyfile when you run both processes inside a single image
+# (the `--target all` Dockerfile build), or when Caddy runs as a sidecar
+# container on the same host as the backend.
+#
+# The main difference vs deploy/Caddyfile is that the upstream target is
+# `127.0.0.1:8080` instead of `backend:8080`, and the listen port is 8080
+# instead of 80.
+# =============================================================================
+
+{
+    admin off
+    auto_https off
+    default_content_type text/plain
+    log {
+        level INFO
+        format console
+    }
+}
+
+# Listen on 8080 to match the nginx-fullstack config (which exposes the
+# combined service on :8080 inside the container).
+:8080 {
+    root * /srv
+    encode gzip zstd
+
+    # ---- /api/*  (mirrors `location /api/` in nginx-fullstack.conf) ---------
+    @api path /api/*
+    reverse_proxy @api 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        lb_policy round_robin
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 60s
+            read_timeout 60s
+        }
+    }
+
+    # ---- /api/stream  WebSocket upgrade -------------------------------------
+    @ws path /api/stream
+    reverse_proxy @ws 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 3600s
+            read_timeout 3600s
+            write_timeout 3600s
+        }
+    }
+
+    # ---- /assets/  cache-control (mirrors `location /assets/`) --------------
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=2592000, immutable"
+
+    # ---- SPA fallback  (mirrors `try_files $uri $uri/ /index.html`) --------
+    @spa not path /api/* /assets/* /healthz
+    handle @spa {
+        try_files {path} /index.html
+        file_server
+    }
+
+    # ---- /healthz  (mirrors `location = /healthz`) --------------------------
+    @healthz path /healthz
+    handle @healthz {
+        respond `ok` 200 {
+            header Content-Type text/plain
+        }
+    }
+
+    # ---- Default -----------------------------------------------------------
+    handle {
+        file_server
+    }
+}

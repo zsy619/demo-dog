@@ -1,0 +1,28 @@
+# Backend-specific overrides
+# The root .gitignore already covers most cases; this file adds
+# backend-only entries (e.g. the compiled binary directory).
+
+# Compiled collector binary
+/bin/
+bin/
+*.test
+*.prof
+
+# Coverage / profiling
+coverage.out
+coverage.html
+*.coverprofile
+
+# Test / scratch data
+/testdata/tmp/
+*.tmp
+
+# GoLand / IntelliJ (project-level)
+.idea/
+*.iml
+
+# Local env / secrets
+.env
+.env.local
+*.env
+!.env.example

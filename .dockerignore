@@ -1,0 +1,48 @@
+# =============================================================================
+# .dockerignore -- files excluded from the Docker build context
+# =============================================================================
+
+# Git / VCS metadata
+.git/
+.gitignore
+.gitattributes
+
+# Local artifacts that should never end up in an image
+.run/
+dist/
+build/
+coverage/
+*.log
+*.pid
+
+# IDE / editor cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation that bakes into the image but does not need to
+docs/_build/
+docs/.vitepress/cache/
+
+# Node modules and Go build artifacts (re-built inside the image)
+backend/bin/
+frontend/node_modules/
+frontend/dist/
+
+# Test fixtures / scratch
+**/testdata/
+tmp/
+scratch/
+
+# CI / GitHub config is unnecessary inside images
+.github/
+.circleci/
+
+# Docker meta files (avoid recursive context confusion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+deploy/

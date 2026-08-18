@@ -1,0 +1,72 @@
+# =============================================================================
+# Dockerfile.caddy -- demo-dog frontend image using Caddy instead of nginx
+# =============================================================================
+#
+# Build:
+#   docker build -f deploy/Dockerfile.caddy -t demo-dog-frontend-caddy:0.1.0 \
+#       --build-arg CADDYFILE=deploy/Caddyfile .
+#
+# Run (frontend-only, expects a backend at backend:8080):
+#   docker run --rm -p 5173:80 \
+#       --network demo-dog-net \
+#       demo-dog-frontend-caddy:0.1.0
+#
+# Run (full-stack, expects the backend listening on 127.0.0.1:8080):
+#   docker build -f deploy/Dockerfile.caddy \
+#       --build-arg CADDYFILE=deploy/Caddyfile.fullstack \
+#       --build-arg LISTEN_PORT=8080 \
+#       -t demo-dog-caddy-fullstack:0.1.0 .
+#   docker run --rm -p 8080:8080 demo-dog-caddy-fullstack:0.1.0
+#
+# Notes:
+#   - The caddy image already includes brotli/zstd/gzip and HTTP/3.
+#   - We mount the Caddyfile and the SPA bundle into the standard paths.
+#   - Caddy runs as the `caddy` user (uid 1000) by default; ensure the
+#     mounted files are world-readable.
+# =============================================================================
+
+ARG CADDY_VERSION=2.8-alpine
+FROM caddy:${CADDY_VERSION}-builder AS builder
+# Pre-build the Caddy binary with the DNS module (Cloudflare by default).
+# Uncomment if you need DNS-01 challenges for wildcard certs.
+# RUN caddy-builder \
+#     github.com/caddy-dns/cloudflare
+
+FROM caddy:${CADDY_VERSION}
+
+ARG CADDYFILE=Caddyfile
+ARG LISTEN_PORT=80
+
+# Copy the chosen Caddyfile (must end up at /etc/caddy/Caddyfile for the
+# official image).
+COPY deploy/${CADDYFILE} /etc/caddy/Caddyfile
+
+# Copy the Vite build output from the frontend-builder stage. This expects
+# a separate `frontend-builder` stage defined in the root Dockerfile, or a
+# pre-built image. Adjust the COPY source if you build the SPA elsewhere.
+COPY --from=node:20-alpine /dev/null /tmp/placeholder 2>/dev/null || true
+# The root Dockerfile already produces /src/dist in its frontend-builder
+# stage; this snippet assumes both Dockerfiles are built together via
+#   docker build -f deploy/Dockerfile.caddy --build-context root=. .
+# For a self-contained build use the multi-stage form below.
+
+# ---- Self-contained multi-stage form --------------------------------------
+# FROM node:20-alpine AS frontend-builder
+# WORKDIR /src
+# COPY frontend/package.json frontend/package-lock.json* ./
+# RUN npm install --no-audit --no-fund
+# COPY frontend/ .
+# ARG VITE_API_BASE=/api
+# ENV VITE_API_BASE=${VITE_API_BASE}
+# RUN npm run build
+# COPY --from=frontend-builder /src/dist /srv
+
+# Default placeholder so the image still builds standalone.
+COPY frontend/dist /srv
+
+# Open the right port. Caddy listens on the ports declared in the Caddyfile;
+# this is purely cosmetic for `EXPOSE`.
+EXPOSE ${LISTEN_PORT}
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD wget -qO- http://localhost:${LISTEN_PORT}/healthz || exit 1

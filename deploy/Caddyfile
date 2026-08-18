@@ -1,0 +1,141 @@
+# =============================================================================
+# Caddyfile -- demo-dog (frontend-only, mirrors deploy/nginx.conf)
+# =============================================================================
+#
+# Serves the Vite-built React SPA on :80 and reverse-proxies /api to a backend
+# service discoverable via the "backend" hostname (used in docker-compose).
+#
+# Equivalent to deploy/nginx.conf but expressed in Caddy's native syntax.
+#
+# Features used:
+#   - reverse_proxy  with health_check and load balancing
+#   - transparent   WebSocket upgrade
+#   - encode        gzip (Caddy applies brotli+zstd automatically too)
+#   - file_server   with SPA fallback via @not_static matcher
+#   - header        for cache-control on /assets/
+#   - respond       for the /healthz endpoint
+#
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Upstream pool — equivalent to nginx's `upstream dog_backend { ... }` block.
+# ---------------------------------------------------------------------------
+# `dog_backend` is referenced as a named reverse_proxy below. Caddy performs
+# active health checks and round-robins; the `to` directive accepts multiple
+# backends separated by spaces for trivial load balancing.
+
+# ---------------------------------------------------------------------------
+# Main site block — equivalent to nginx's `server { listen 80 ... }`.
+# ---------------------------------------------------------------------------
+{
+    # ---- Global options (apply to all sites) --------------------------------
+    # admin off disables the admin API for production hardening.
+    admin off
+    # Persist Caddy's state (certificates, OCSP staples) so restarts keep TLS.
+    auto_https off
+    # Default MIME types for SPA assets.
+    default_content_type text/plain
+    # Emit a unique instance ID into every log line.
+    log {
+        level INFO
+        format console
+    }
+}
+
+# Replace the placeholder host below with the real hostname(s) that should
+# receive traffic. When the hostname is a public DNS name Caddy will obtain
+# and renew a Let's Encrypt certificate automatically (no extra config
+# needed; just leave `auto_https` on, or switch to the deploy/Caddyfile.https
+# variant when you want to be explicit).
+
+:80 {
+    # Resolve the SPA bundle path to the Vite build output mounted into the
+    # image at /usr/share/caddy (we set ROOT * /srv in the caddy image below).
+    root * /srv
+    encode gzip zstd
+
+    # ---- Reverse-proxy /api/*  (mirrors `location /api/`) -------------------
+    # All /api requests go to the backend collector. Caddy uses the
+    # `transparent` policy by default, which preserves Host / X-Forwarded-*.
+    @api path /api/*
+    reverse_proxy @api dog_backend {
+        # ---- Equivalent to nginx proxy_http_version 1.1 + Connection "" ----
+        # Caddy already speaks HTTP/1.1 with keep-alive by default.
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        # Load balancing + active health checks (mirrors `keepalive 16`).
+        lb_policy round_robin
+        lb_try_duration 30s
+        # Forwarded-timeout analogue for long-running requests.
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 60s
+            read_timeout 60s
+        }
+    }
+
+    # ---- WebSocket upgrade for /api/stream  (mirrors `location /api/stream`) -
+    # Caddy's reverse_proxy detects the Upgrade header automatically and
+    # switches to tunneling mode. We only need to extend the timeouts.
+    @ws path /api/stream
+    reverse_proxy @ws dog_backend {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        transport http {
+            dial_timeout 5s
+            # Match nginx's 3600s read/send timeouts so WS connections stay
+            # open for an hour before Caddy closes them.
+            response_header_timeout 3600s
+            read_timeout 3600s
+            write_timeout 3600s
+        }
+    }
+
+    # ---- Static asset caching  (mirrors `location /assets/`) ---------------
+    # Vite emits content-hashed filenames so we can safely set
+    # Cache-Control: public, max-age=2592000, immutable (30 days).
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=2592000, immutable"
+
+    # ---- SPA fallback  (mirrors `try_files $uri $uri/ /index.html`) --------
+    # Serve files from /srv if they exist; otherwise fall back to index.html
+    # so React Router (or in our case the state-based router in App.tsx)
+    # can take over on the client.
+    @spa not path /api/* /assets/* /healthz
+    handle @spa {
+        try_files {path} /index.html
+        file_server
+    }
+
+    # ---- Health endpoint  (mirrors `location = /healthz`) ------------------
+    @healthz path /healthz
+    handle @healthz {
+        respond `ok` 200 {
+            header Content-Type text/plain
+        }
+    }
+
+    # ---- Default response for anything else ---------------------------------
+    handle {
+        # If a real file exists in /srv, serve it; otherwise return 404 so
+        # the SPA fallback above catches it on the React side.
+        file_server
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Backend upstream definition (kept outside the site block on purpose so
+# multiple sites can share it; Caddy treats each `reverse_proxy` target as a
+# load-balancing pool when more than one address is given).
+# ---------------------------------------------------------------------------
+# Note: Caddy does not have a separate `upstream { ... }` block. The pool is
+# declared inline via the `to` directive on the reverse_proxy handler. The
+# `dog_backend` name above is a placeholder; Caddy resolves it as a DNS name
+# so the `dog_backend` value must be reachable inside the container network
+# (docker-compose's `backend` service is automatically resolvable; if you
+# want a clearer name, set the service name to `dog_backend` in
+# docker-compose.yml or use the IP literal `backend:8080` directly here).

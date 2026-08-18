@@ -1,0 +1,98 @@
+# =============================================================================
+# Caddyfile.https -- demo-dog with automatic HTTPS (Let's Encrypt)
+# =============================================================================
+#
+# Mirrors deploy/Caddyfile but with `auto_https on` and an explicit
+# server_name so Caddy obtains + renews a Let's Encrypt certificate for
+# your domain. Use this when you expose demo-dog to the public internet
+# behind a real DNS A/AAAA record.
+#
+# Replace `demo-dog.example.com` with your real hostname before deploying.
+# =============================================================================
+
+{
+    admin off
+    # auto_https is ON by default; this line documents the intent.
+    auto_https on
+    default_content_type text/plain
+
+    # Email used by Let's Encrypt for important account notifications
+    # (certificate revocation warnings, etc.). Replace with your address.
+    email ops@example.com
+
+    log {
+        level INFO
+        format console
+    }
+}
+
+# HTTPS + automatic HTTP→HTTPS redirect.
+demo-dog.example.com, :443 {
+    root * /srv
+    encode gzip zstd
+
+    # Optional: HSTS for one year, including subdomains. Uncomment after
+    # you're sure the certificate pipeline is stable.
+    # header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # ---- /api/*  ----------------------------------------------------------
+    @api path /api/*
+    reverse_proxy @api backend:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        lb_policy round_robin
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 60s
+            read_timeout 60s
+        }
+    }
+
+    # ---- /api/stream  WebSocket ---------------------------------------------
+    @ws path /api/stream
+    reverse_proxy @ws backend:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {scheme}
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 3600s
+            read_timeout 3600s
+            write_timeout 3600s
+        }
+    }
+
+    # ---- /assets/  --------------------------------------------------------
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=2592000, immutable"
+
+    # ---- SPA fallback ------------------------------------------------------
+    @spa not path /api/* /assets/* /healthz
+    handle @spa {
+        try_files {path} /index.html
+        file_server
+    }
+
+    # ---- /healthz ---------------------------------------------------------
+    @healthz path /healthz
+    handle @healthz {
+        respond `ok` 200 {
+            header Content-Type text/plain
+        }
+    }
+
+    # ---- Default -----------------------------------------------------------
+    handle {
+        file_server
+    }
+}
+
+# Explicit HTTP listener: redirect everything to HTTPS.
+# (auto_https on handles this implicitly, but the explicit form is
+# useful when you want to add HSTS or remove `.well-known` from the redirect.)
+:80 {
+    redir https://{host}{uri} permanent
+}

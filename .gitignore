@@ -1,0 +1,215 @@
+# ============================================================================
+# DOG — repo-level .gitignore
+# Covers Go, Node, editors, OS, build artifacts, and project-specific files.
+# Generated for the demo-dog project layout (backend + frontend).
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Go build artifacts
+# ----------------------------------------------------------------------------
+
+# Backup / swap files (sed -i.bak, edits)
+*.bak
+*.swp
+*.swo
+*.tmp
+*.orig
+*~
+
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.so
+*.dll
+*.test
+*.out
+
+# Go workspace / build output
+bin/
+dist/
+build/
+
+# Coverage and profiling
+*.coverprofile
+coverage.txt
+coverage.html
+*.gcda
+*.gcno
+
+# Vendoring (not used here; lefthand in case it shows up)
+vendor/
+
+# ----------------------------------------------------------------------------
+# 2. Go-specific files
+# ----------------------------------------------------------------------------
+
+# Test binary / cache
+*.test
+*.prof
+
+# GoLand / IntelliJ module files (project-level)
+.idea/
+*.iml
+
+# Dep graph cache (when running go mod graph, etc.)
+go.work
+go.work.sum
+
+# ----------------------------------------------------------------------------
+# 3. Node / Frontend
+# ----------------------------------------------------------------------------
+
+# Dependencies and lockfiles (commit package-lock.json but ignore pnpm-lock transient noise)
+node_modules/
+jspm_packages/
+
+# Build output
+dist/
+build/
+.next/
+.nuxt/
+.vite/
+.cache/
+.parcel-cache/
+.storybook-out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+.npm/
+.yarn/
+.pnpm-store/
+
+# Coverage / test output
+coverage/
+.nyc_output/
+*.lcov
+
+# Misc
+.eslintcache
+.stylelintcache
+.prettiercache
+.grunt/
+.babel-cache/
+.tmp/
+.temp/
+
+# ----------------------------------------------------------------------------
+# 4. Environment & secrets
+# ----------------------------------------------------------------------------
+
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# AWS / GCP / K8s credentials
+*.pem
+*.key
+*.crt
+*.kubeconfig
+kubeconfig*
+.gcloud-credentials.json
+
+# ----------------------------------------------------------------------------
+# 5. IDEs / editors
+# ----------------------------------------------------------------------------
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# JetBrains (GoLand, IntelliJ, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+.#*
+\#*
+
+# ----------------------------------------------------------------------------
+# 6. OS files
+# ----------------------------------------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.~lock.*
+.fuse_hidden*
+.Trash-*
+.nfs*
+
+# ----------------------------------------------------------------------------
+# 7. Docker / containers
+# ----------------------------------------------------------------------------
+
+# Build context garbage
+**/.dockerignore-tmp
+
+# ----------------------------------------------------------------------------
+# 8. Project-specific overrides
+# ----------------------------------------------------------------------------
+
+# Sample data / tmp
+backend/testdata/tmp/
+
+# Snapshots used during local debugging
+tmp/
+scratch/
+
+# Locally-edited API ports / run scripts
+backend/.run/
+.run/
+
+# ----------------------------------------------------------------------------
+# 9. Documentation build artifacts
+# ----------------------------------------------------------------------------
+
+# VitePress / Docusaurus / etc. (only relevant if you add docs sites)
+.vitepress/cache/
+.docusaurus/
+
+# ----------------------------------------------------------------------------
+# 10. OS / Dev-environment exceptions
+# ----------------------------------------------------------------------------
+
+# Allow GitHub Actions / CI caches if/when added later
+!.github/
+backend/bin/
