@@ -13,6 +13,8 @@ import type {
   SnapshotResponse,
   ServiceDetail,
   SpanRecord,
+  AlertRule,
+  AlertFire,
 } from "@/types/api";
 import { apiFetch } from "./fetch";
 
@@ -118,6 +120,10 @@ export const apiService = {
       `/services/${encodeURIComponent(name)}/detail`
     );
   },
+  alertsRules: () =>
+    apiFetch<{ rules: AlertRule[] }>("/alerts/rules"),
+  alertsFires: (n = 100) =>
+    apiFetch<{ fires: AlertFire[] }>(`/alerts/fires?n=${n}`),
 };
 
 // Legacy alias — pages that imported `api` keep working while new

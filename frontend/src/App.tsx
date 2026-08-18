@@ -22,6 +22,7 @@ const IngestDemo = lazy(() => import("@/pages/IngestDemo"));
 const Live = lazy(() => import("@/pages/Live"));
 const ServiceMapPage = lazy(() => import("@/pages/ServiceMapPage"));
 const ServiceDetailPage = lazy(() => import("@/pages/ServiceDetailPage"));
+const Alerts = lazy(() => import("@/pages/Alerts"));
 
 export type Page =
   | "overview"
@@ -34,7 +35,8 @@ export type Page =
   | "ingest"
   | "live"
   | "service-map"
-  | "service-detail";
+  | "service-detail"
+  | "alerts";
 
 const VALID_PAGES: Page[] = [
   "overview",
@@ -48,6 +50,7 @@ const VALID_PAGES: Page[] = [
   "live",
   "service-map",
   "service-detail",
+  "alerts",
 ];
 
 function isValid(p: string): p is Page {
@@ -108,6 +111,7 @@ export default function App() {
             (e2.key.toLowerCase() === "d" && "dashboards") ||
             (e2.key.toLowerCase() === "s" && "service-map") ||
             (e2.key.toLowerCase() === "v" && "service-detail") ||
+            (e2.key.toLowerCase() === "a" && "alerts") ||
             null;
           if (p) navigate(p);
         };
@@ -219,6 +223,8 @@ export default function App() {
             onNavigate={(p, p2) => navigate(p, new URLSearchParams(p2))}
           />
         );
+      case "alerts":
+        return <Alerts />;
       default:
         return null;
     }

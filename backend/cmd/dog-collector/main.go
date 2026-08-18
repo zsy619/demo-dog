@@ -65,6 +65,7 @@ func main() {
 	snapshotPath := flag.String("snapshot", "", "Optional path to a gob-encoded store snapshot. On startup the engine restores from it (if present); on shutdown the current state is atomically saved back to the same path.")
 	pprofToken := flag.String("pprof-token", "", "When set, exposes net/http/pprof endpoints at /debug/pprof/* gated by `?token=<value>`. Empty disables pprof.")
 	selfTrace := flag.Bool("self-trace", false, "Record the collectors own requests as OTLP spans and POST them back to /api/ingest/otlp. Useful for self-observability in production.")
+	alertsPath := flag.String("alerts-rules", "", "Optional path to a YAML/JSON file of SLO burn-rate rules. Empty disables alerting.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -118,11 +119,24 @@ func main() {
 
 	// If seed services are provided, drop a few records before serving so the
 	// first dashboard isnt empty.
-	if *seed != "" {
+if *seed != "" {
 		for _, name := range splitCSV(*seed) {
 			apiServer.InjectSeed(name, 10)
 		}
 	}
+
+	// Alerts: load rules from a YAML / JSON file when configured,
+	// then run a 30s ticker that evaluates burn rates and POSTs
+	// webhooks for any fired rules.
+	if *alertsPath != "" {
+		if rules, err := api.LoadAlertRulesFile(*alertsPath); err == nil {
+			apiServer.SetAlertRules(rules)
+			fmt.Printf("  Alert rules      : %d loaded from %s\n", len(rules), *alertsPath)
+		} else {
+			fmt.Printf("  Alert rules      : load failed: %v\n", err)
+		}
+	}
+	go apiServer.RunAlertTicker(30 * time.Second)
 
 	// MountPProf + WrapWithSelfTrace must be called BEFORE we read
 	// apiServer.Handler() so the server struct sees the configured

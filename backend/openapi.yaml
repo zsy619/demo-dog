@@ -541,6 +541,70 @@ paths:
                   spans_accepted: { type: integer, format: int64 }
                   queries_served: { type: integer, format: int64 }
 
+  /api/alerts/rules:
+    get:
+      tags: [admin]
+      summary: Active SLO burn-rate rules.
+      responses:
+        "200":
+          description: Rules.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        service: { type: string }
+                        target: { type: number, format: float }
+                        window: { type: integer, format: int64, description: "nanoseconds" }
+                        fast_window: { type: integer, format: int64 }
+                        fast_burn: { type: number, format: float }
+                        slow_burn: { type: number, format: float }
+                        severity:
+                          type: string
+                          enum: [info, warning, critical]
+                        channels:
+                          type: array
+                          items: { type: string, format: uri }
+
+  /api/alerts/fires:
+    get:
+      tags: [admin]
+      summary: Recent alert fires.
+      parameters:
+        - in: query
+          name: n
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Fires.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fires:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rule:
+                          $ref: "#/components/schemas/AlertRule"
+                        severity:
+                          type: string
+                          enum: [info, warning, critical]
+                        timestamp: { type: string, format: date-time }
+                        window:
+                          type: string
+                          enum: [fast, slow]
+                        burn_rate: { type: number, format: float }
+                        reason: { type: string }
+
   /api/keys:
     get:
       tags: [admin]
@@ -604,6 +668,23 @@ components:
       description: Authenticated but the role does not permit this operation.
 
   schemas:
+
+    AlertRule:
+      type: object
+      properties:
+        name: { type: string }
+        service: { type: string }
+        target: { type: number, format: float }
+        window: { type: integer, format: int64 }
+        fast_window: { type: integer, format: int64 }
+        fast_burn: { type: number, format: float }
+        slow_burn: { type: number, format: float }
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        channels:
+          type: array
+          items: { type: string }
 
     HealthResponse:
       type: object

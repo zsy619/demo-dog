@@ -698,3 +698,27 @@ func (d *Doris) QueryTraces(traceID, service string, limit int) model.QueryResul
 		},
 	}
 }
+
+// SuccessCounts returns the number of ok and error spans for the
+// given service with start_time >= sinceMillis. Used by the alerts
+// engine to compute burn rates without exposing the full span set.
+func (d *Doris) SuccessCounts(service string, sinceMillis int64) (ok int, errs int) {
+	d.muSpans.RLock()
+	defer d.muSpans.RUnlock()
+	for _, spans := range d.hotSpans {
+		for _, s := range spans {
+			if s.Service != service {
+				continue
+			}
+			if s.StartTime.UnixMilli() < sinceMillis {
+				continue
+			}
+			if s.Status == "error" {
+				errs++
+			} else {
+				ok++
+			}
+		}
+	}
+	return ok, errs
+}

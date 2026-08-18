@@ -51,6 +51,9 @@ type Server struct {
 	// first access; tests can swap it via SetAuditLog.
 	auditLog *AuditLog
 
+	// alertsEngine evaluates SLO burn-rate rules and fires webhooks.
+	alerts *alertsEngine
+
 	// mux is the top-level http.ServeMux. Exposed so add-on endpoints
 	// (pprof, probes) can be mounted after construction.
 	mux *http.ServeMux
@@ -76,6 +79,7 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 		auth:        NewAPIKeyAuth(),
 		authM:       AuthModeOff,
 		auditLog:    NewAuditLog(10_000),
+		alerts:      newAlertsEngine(s),
 		started:     time.Now(),
 		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -152,6 +156,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/audit/stats", s.handleAuditStats)
 	mux.HandleFunc("/api/keys", s.handleListKeys)
 	mux.HandleFunc("/api/probe", s.handleProbe)
+	mux.HandleFunc("/api/alerts/rules", s.handleAlertsRules)
+	mux.HandleFunc("/api/alerts/fires", s.handleAlertsFires)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
 	// Layering (outer -> inner):

@@ -30,6 +30,7 @@ const SIGNAL_ITEMS: Array<{ id: Page; label: string; icon: string }> = [
 const ADMIN_ITEMS: Array<{ id: Page; label: string; icon: string }> = [
   { id: "datasources", label: "Data sources", icon: "▤" },
   { id: "ingest", label: "Ingest demo", icon: "⇄" },
+  { id: "alerts", label: "Alerts", icon: "⚑" },
 ];
 
 function NavItem({

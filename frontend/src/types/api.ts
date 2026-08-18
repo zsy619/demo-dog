@@ -211,3 +211,71 @@ export interface ServiceDetail {
   endpoints: EndpointStats[];
   qps: SeriesPoint[];
 }
+
+export interface AlertRule {
+  name: string;
+  description?: string;
+  service?: string;
+  target: number;
+  // durations come over the wire as nanoseconds (Go time.Duration).
+  window: number;
+  fast_window: number;
+  fast_burn: number;
+  slow_burn: number;
+  severity: "info" | "warning" | "critical";
+  channels: string[];
+}
+
+export interface AlertFire {
+  rule: AlertRule;
+  severity: string;
+  timestamp: string;
+  window: "fast" | "slow";
+  burn_rate: number;
+  reason: string;
+}
+
+export interface AlertRule {
+  name: string;
+  description?: string;
+  service?: string;
+  target: number;
+  // Durations arrive as nanoseconds (Go time.Duration).
+  window: number;
+  fast_window: number;
+  fast_burn: number;
+  slow_burn: number;
+  severity: "info" | "warning" | "critical";
+  channels: string[];
+}
+
+export interface AlertFire {
+  rule: AlertRule;
+  severity: string;
+  timestamp: string;
+  window: "fast" | "slow";
+  burn_rate: number;
+  reason: string;
+}
+
+export interface AlertRule {
+  name: string;
+  description?: string;
+  service?: string;
+  target: number;
+  window: number;
+  fast_window: number;
+  fast_burn: number;
+  slow_burn: number;
+  severity: "info" | "warning" | "critical";
+  channels: string[];
+}
+
+export interface AlertFire {
+  rule: AlertRule;
+  severity: string;
+  timestamp: string;
+  window: "fast" | "slow";
+  burn_rate: number;
+  reason: string;
+}

@@ -1,0 +1,31 @@
+# Default SLO burn-rate rules. Multi-window format:
+#
+#   fast_burn  = budget multiplier over fast_window that pages on
+#   slow_burn  = budget multiplier over window that warns on
+#
+# Google SRE reference values:
+#   fast_burn: 14.4x over 1h,   slow_burn: 1x over 24h
+#
+# We use shorter windows by default for a backend that may not have
+# 24h of history at start.
+rules:
+  - name: checkout-availability-99
+    description: checkout service availability over rolling 30m window
+    service: checkout
+    target: 0.99
+    window: 30m
+    fast_window: 5m
+    fast_burn: 14.4
+    slow_burn: 1
+    severity: critical
+    channels: []
+
+  - name: api-error-budget
+    description: cross-service 5xx error budget
+    target: 0.995
+    window: 1h
+    fast_window: 10m
+    fast_burn: 10
+    slow_burn: 1
+    severity: warning
+    channels: []
