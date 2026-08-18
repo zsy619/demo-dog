@@ -12,6 +12,7 @@ import FadeIn from "@/components/anim/FadeIn";
 import Stagger from "@/components/anim/Stagger";
 import { useStream } from "@/hooks/useStream";
 import { toast } from "@/components/Toast";
+import { VirtualTable } from "@/components/VirtualTable";
 
 interface Props {
   service: string;
@@ -546,27 +547,42 @@ export default function Logs({ service, onServiceChange, onOpenTrace, initialTra
                 No logs match these filters.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-grafana-elev text-[11px] text-grafana-muted uppercase tracking-wider sticky top-0">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Time</th>
-                    <th className="px-3 py-2 text-left">Service</th>
-                    <th className="px-3 py-2 text-left">Level</th>
-                    <th className="px-3 py-2 text-left">Message</th>
-                    <th className="px-3 py-2 text-left">Trace</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i} className="border-t border-grafana-border hover:bg-grafana-elev/50">
-                      <td className="px-3 py-1 font-mono text-[11px] whitespace-nowrap">
-                        <span title={r.timestamp}>{relativeTime(r.timestamp)}</span>
-                      </td>
-                      <td className="px-3 py-1 text-grafana-accent whitespace-nowrap">{r.service}</td>
-                      <td className="px-3 py-1">
-                        <SeverityBadge value={r.severity} />
-                      </td>
-                      <td className="px-3 py-1 font-mono text-[12px]">
+              <VirtualTable
+                rows={rows}
+                rowHeight={36}
+                threshold={500}
+                className="max-h-[70vh]"
+                ariaLabel="Log entries"
+                columns={[
+                  {
+                    key: "time",
+                    header: "Time",
+                    widthClass: "w-32",
+                    render: (r: any) => (
+                      <span title={r.timestamp} className="font-mono text-[11px]">
+                        {relativeTime(r.timestamp)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "service",
+                    header: "Service",
+                    widthClass: "w-32",
+                    render: (r: any) => (
+                      <span className="text-grafana-accent truncate">{r.service}</span>
+                    ),
+                  },
+                  {
+                    key: "level",
+                    header: "Level",
+                    widthClass: "w-24",
+                    render: (r: any) => <SeverityBadge value={r.severity} />,
+                  },
+                  {
+                    key: "message",
+                    header: "Message",
+                    render: (r: any) => (
+                      <>
                         <Highlight text={r.body ?? ""} query={search} />
                         {r.attributes && Object.keys(r.attributes).length > 0 && (
                           <div className="text-[10px] text-grafana-muted mt-0.5">
@@ -576,29 +592,33 @@ export default function Logs({ service, onServiceChange, onOpenTrace, initialTra
                               .join(" ")}
                           </div>
                         )}
-                      </td>
-                      <td className="px-3 py-1 font-mono text-[11px]">
-                        {r.trace_id ? (
-                          <button
-                            className="text-grafana-blue hover:underline"
-                            title={`Open trace ${r.trace_id}`}
-                            onClick={() => {
-                              if (onOpenTrace) onOpenTrace(r.trace_id!);
-                              else if (r.trace_id) {
-                                window.location.hash = `#/traces?trace_id=${r.trace_id}`;
-                              }
-                            }}
-                          >
-                            {r.trace_id.slice(0, 12)}
-                          </button>
-                        ) : (
-                          <span className="text-grafana-muted">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </>
+                    ),
+                  },
+                  {
+                    key: "trace",
+                    header: "Trace",
+                    widthClass: "w-28",
+                    render: (r: any) =>
+                      r.trace_id ? (
+                        <button
+                          className="text-grafana-blue hover:underline font-mono text-[11px]"
+                          title={`Open trace ${r.trace_id}`}
+                          onClick={() => {
+                            if (onOpenTrace) onOpenTrace(r.trace_id!);
+                            else if (r.trace_id) {
+                              window.location.hash = `#/traces?trace_id=${r.trace_id}`;
+                            }
+                          }}
+                        >
+                          {r.trace_id.slice(0, 12)}
+                        </button>
+                      ) : (
+                        <span className="text-grafana-muted">—</span>
+                      ),
+                  },
+                ]}
+              />
             )}
           </div>
         </div>
