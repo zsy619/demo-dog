@@ -56,6 +56,14 @@ type Doris struct {
 	hotMetrics  map[string][]model.MetricPoint // key=service|name
 	coldMetrics []model.MetricPoint
 
+	// Histograms keyed by service|name. We aggregate sum/count into the
+	// MV-style buckets AND keep the latest bucket_bounds + per-bucket
+	// counts for proper quantile queries. Without this, OTel histograms
+	// would degrade to scalar sum/count and SLO p95/p99 would silently
+	// be wrong.
+	muHistograms sync.RWMutex
+	histograms   map[string]*histogramAgg // key=service|name
+
 	muSpans sync.RWMutex
 	hotSpans  map[string][]model.SpanRecord // key=trace_id
 	coldSpans []model.SpanRecord
@@ -87,6 +95,7 @@ func New(cfg Config) *Doris {
 		coldLogs:     make([]model.LogRecord, 0, cfg.ColdCap),
 		logBuckets:   make(map[string]int),
 		hotMetrics:   make(map[string][]model.MetricPoint),
+		histograms:   make(map[string]*histogramAgg),
 		coldMetrics:  make([]model.MetricPoint, 0, cfg.ColdCap),
 		hotSpans:     make(map[string][]model.SpanRecord),
 		coldSpans:    make([]model.SpanRecord, 0, cfg.ColdCap),
@@ -212,6 +221,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	d.muMetrics.Unlock()
 
 	d.updateMetricMV(in)
+	d.updateHistograms(in)
 	d.metricsAccepted.Add(int64(len(in)))
 	d.touchServicesByMetrics(in)
 	return len(in)

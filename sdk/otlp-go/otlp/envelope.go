@@ -112,14 +112,16 @@ type OTelHistogram struct {
 }
 
 type OTelHistogramDP struct {
-	Attributes        []OTelAttr `json:"attributes,omitempty"`
-	StartTimeUnixNano string     `json:"startTimeUnixNano"`
-	TimeUnixNano      string     `json:"timeUnixNano"`
-	Count             string     `json:"count"`
-	Sum               float64    `json:"sum"`
-	Min               float64    `json:"min,omitempty"`
-	Max               float64    `json:"max,omitempty"`
-	Mean              float64    `json:"mean,omitempty"`
+	Attributes        []OTelAttr  `json:"attributes,omitempty"`
+	StartTimeUnixNano string      `json:"startTimeUnixNano"`
+	TimeUnixNano      string      `json:"timeUnixNano"`
+	Count             string      `json:"count"`
+	Sum               float64     `json:"sum"`
+	Min               float64     `json:"min,omitempty"`
+	Max               float64     `json:"max,omitempty"`
+	Mean              float64     `json:"mean,omitempty"`
+	BucketCounts      []string    `json:"bucketCounts,omitempty"`      // OTel expects string[] for u64
+	ExplicitBounds    []float64   `json:"explicitBounds,omitempty"`     // ascending, last is +Inf
 }
 
 type OTelResourceLogs struct {
@@ -302,21 +304,41 @@ func mapMetric(m MetricPoint) OTelMetric {
 			},
 		}
 	case TypeHistogram:
+		dp := OTelHistogramDP{
+			Attributes:        attrs,
+			StartTimeUnixNano: start,
+			TimeUnixNano:      ts,
+			Count:             "1",
+			Sum:               m.Value,
+			Min:               m.Value,
+			Max:               m.Value,
+			Mean:              m.Value,
+		}
+		// When the SDK emitted explicit bucket boundaries, forward them
+		// (and the bucket counts) to the backend so the receiver can
+		// compute true quantiles instead of a per-sample approximation.
+		if len(m.BucketBounds) > 0 {
+			dp.ExplicitBounds = append([]float64(nil), m.BucketBounds...)
+			counts := make([]string, len(m.BucketCounts))
+			for i, c := range m.BucketCounts {
+				counts[i] = strconv.FormatInt(c, 10)
+			}
+			dp.BucketCounts = counts
+			// Sum/count/min/max override per-sample values.
+			dp.Count = strconv.FormatInt(m.HistogramCount, 10)
+			dp.Sum = m.HistogramSum
+			dp.Min = m.HistogramMin
+			dp.Max = m.HistogramMax
+			if m.HistogramCount > 0 {
+				dp.Mean = m.HistogramSum / float64(m.HistogramCount)
+			}
+		}
 		return OTelMetric{
 			Name: m.Name,
 			Unit: m.Unit,
 			Histogram: &OTelHistogram{
 				AggregationTemporality: 1, // DELTA
-				DataPoints: []OTelHistogramDP{{
-					Attributes:        attrs,
-					StartTimeUnixNano: start,
-					TimeUnixNano:      ts,
-					Count:             "1",
-					Sum:               m.Value,
-					Min:               m.Value,
-					Max:               m.Value,
-					Mean:              m.Value,
-				}},
+				DataPoints:             []OTelHistogramDP{dp},
 			},
 		}
 	default:

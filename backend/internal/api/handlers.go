@@ -364,6 +364,53 @@ func (s *Server) handleHistogram(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleHistogramOTel returns the aggregated OTel histogram (explicit
+// bucket bounds + per-bucket counts) for a metric, along with p50/p95/p99
+// computed from those buckets. Returns 404 when no histogram data has
+// been received for the (service, name) pair, so the frontend can fall
+// back to the synthetic log-binned view.
+//
+//   GET /api/histogram/otel?service=checkout&name=http.duration_ms
+//   {
+//     "service": "checkout",
+//     "name": "http.duration_ms",
+//     "bounds": [0.005, 0.01, ..., 10, +Inf],
+//     "counts": [...],
+//     "total": 1234,
+//     "sum":   42.5,
+//     "min":   0.001,
+//     "max":   8.2,
+//     "p50":   0.045,
+//     "p95":   0.3,
+//     "p99":   1.1
+//   }
+func (s *Server) handleHistogramOTel(w http.ResponseWriter, r *http.Request) {
+	svc := r.URL.Query().Get("service")
+	name := r.URL.Query().Get("name")
+	if svc == "" || name == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("service and name are required"))
+		return
+	}
+	snap := s.store.HistogramSnapshot(svc, name)
+	if snap == nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("no histogram data for service=%s name=%s", svc, name))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service": svc,
+		"name":    name,
+		"bounds":  snap.Bounds,
+		"counts":  snap.Counts,
+		"total":   snap.Total,
+		"sum":     snap.Sum,
+		"min":     snap.Min,
+		"max":     snap.Max,
+		"p50":     s.store.HistogramQuantile(svc, name, 0.50),
+		"p95":     s.store.HistogramQuantile(svc, name, 0.95),
+		"p99":     s.store.HistogramQuantile(svc, name, 0.99),
+	})
+}
+
 // handleSeverity returns a count per severity for a service (or all).
 func (s *Server) handleSeverity(w http.ResponseWriter, r *http.Request) {
 	svc := r.URL.Query().Get("service")

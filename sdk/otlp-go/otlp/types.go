@@ -57,6 +57,18 @@ type MetricPoint struct {
 	Unit      string            `json:"unit,omitempty"`
 	Type      MetricType        `json:"type"`
 	Labels    map[string]string `json:"labels,omitempty"`
+
+	// OTel histogram fields. Populated by SDK users who configure
+	// WithHistogramBuckets(...). When present and Type == TypeHistogram
+	// the backend uses them to compute true quantiles. Optional for
+	// backwards compatibility — older exporters that send only sum/count
+	// still work, the backend falls back to per-sample aggregation.
+	BucketBounds   []float64 `json:"bucket_bounds,omitempty"`
+	BucketCounts   []int64   `json:"bucket_counts,omitempty"`
+	HistogramCount int64     `json:"histogram_count,omitempty"`
+	HistogramSum   float64   `json:"histogram_sum,omitempty"`
+	HistogramMin   float64   `json:"histogram_min,omitempty"`
+	HistogramMax   float64   `json:"histogram_max,omitempty"`
 }
 
 // SpanRecord is one span. Matches backend model.SpanRecord.

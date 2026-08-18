@@ -65,6 +65,17 @@ type MetricPoint struct {
 	Unit      string            `json:"unit,omitempty"`
 	Type      string            `json:"type"` // gauge|counter|histogram
 	Labels    map[string]string `json:"labels,omitempty"`
+
+	// Histogram fields — only set when Type == "histogram". When the
+	// exporter supplies explicit bucket boundaries we keep them so the
+	// store can compute true quantiles instead of falling back to a
+	// log-bucketed approximation.
+	BucketBounds   []float64 `json:"bucket_bounds,omitempty"`   // upper bounds (exclusive), ascending, last entry is overflow (+Inf)
+	BucketCounts   []int64   `json:"bucket_counts,omitempty"`   // count per bucket (including +Inf overflow)
+	HistogramCount int64     `json:"histogram_count,omitempty"` // total count (== sum of bucket counts)
+	HistogramSum   float64   `json:"histogram_sum,omitempty"`   // sum of all observations
+	HistogramMin   float64   `json:"histogram_min,omitempty"`
+	HistogramMax   float64   `json:"histogram_max,omitempty"`
 }
 
 // SpanRecord is a simplified OTel Span.
@@ -143,6 +154,20 @@ func (b MVBucket) Mean() float64 {
 		return 0
 	}
 	return b.Sum / float64(b.Count)
+}
+
+// HistogramView is the read-out of an aggregated OTel histogram. The
+// Bounds slice is the upper bound of each bucket (exclusive) with the
+// last entry representing +Inf overflow. Counts are the per-bucket
+// counts since the series began. Total/Sum/Min/Max are running totals
+// across the lifetime of the series.
+type HistogramView struct {
+	Bounds []float64 `json:"bounds"`
+	Counts []int64   `json:"counts"`
+	Total  int64     `json:"total"`
+	Sum    float64   `json:"sum"`
+	Min    float64   `json:"min"`
+	Max    float64   `json:"max"`
 }
 
 // MetricSeries is a labeled time series for frontend charts.

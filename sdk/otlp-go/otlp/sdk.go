@@ -3,6 +3,13 @@
 // The buffer is drained by a background goroutine that calls Export on a
 // configured cadence.
 //
+// Histograms: the SDK can either emit single-sample histogram data points
+// (one observation per Histogram() call) or accumulate locally and emit
+// real OTel histogram data points with explicit bucket boundaries. Use
+// WithHistogramBuckets(...) to opt into the latter; without it the
+// behavior matches the previous (per-call) shape so existing users are
+// not affected.
+//
 // Lifecycle:
 //
 //	sdk, err := otlp.New("http://localhost:18080",
@@ -55,6 +62,15 @@ type SDK struct {
 	errorHandler  func(err error)
 	autoResource  bool
 
+	// Optional histogram aggregation state. When histogramBuckets is
+	// non-nil, every Histogram() call accumulates into a per-flush-window
+	// aggregator and the SDK exports a single OTel histogram data point
+	// per series per flush. Without it the SDK still emits one
+	// data point per call (legacy behavior).
+	histogramBuckets []float64
+	histogramAcc     map[string]*histogramAccumulator
+	histogramAccMu   sync.Mutex
+
 	stop chan struct{}
 	done chan struct{}
 
@@ -63,6 +79,21 @@ type SDK struct {
 	inShutdown bool
 
 	stats Stats
+}
+
+// histogramAccumulator accumulates per-name observations between flushes.
+// Counters and per-bucket counts use int64 so they survive concurrent
+// Histogram() calls without locks on the hot path; we serialize the
+// drain under the SDK flush path via a swap-and-drain pattern.
+type histogramAccumulator struct {
+	name    string    // metric name (keyed by SDK at call time)
+	bounds  []float64 // copy of the configured bucket boundaries (ascending)
+	counts  []int64   // per-bucket counts (length == len(bounds))
+	total   int64
+	sum     float64
+	min     float64
+	max     float64
+	hasData bool
 }
 
 // SDKOption configures the SDK at construction.
@@ -120,6 +151,30 @@ func WithMaxBatch(n int) SDKOption {
 		if n > 0 {
 			s.maxBatch = n
 		}
+	}
+}
+
+// WithHistogramBuckets configures explicit OTel histogram bucket
+// boundaries for every Histogram() call on this SDK. When set, the SDK
+// accumulates observations between flushes and exports a single OTel
+// histogram data point per series per flush (sum/count/min/max +
+// per-bucket counts). Without it, each Histogram() call is exported as
+// a single data point immediately (legacy behavior).
+//
+// `bounds` must be ascending and represent upper bounds (exclusive) for
+// each bucket. The last entry is conventionally +Inf (math.MaxFloat64)
+// for the overflow bucket. A defensive copy is taken.
+//
+// This is the recommended setting for production usage — it lets the
+// backend compute true quantiles instead of approximating from a
+// log-bucketed fallback.
+func WithHistogramBuckets(bounds []float64) SDKOption {
+	return func(s *SDK) {
+		if len(bounds) == 0 {
+			return
+		}
+		cp := append([]float64(nil), bounds...)
+		s.histogramBuckets = cp
 	}
 }
 
@@ -256,14 +311,94 @@ func (s *SDK) Gauge(ctx context.Context, name string, value float64, kvs ...KV) 
 	})
 }
 
-// Histogram emits a single histogram sample.
+// Histogram emits a histogram observation.
+//
+// When the SDK was configured with WithHistogramBuckets, this accumulates
+// into a per-name aggregator that is drained at flush time. Otherwise it
+// emits one data point per call (legacy).
 func (s *SDK) Histogram(ctx context.Context, name string, value float64, kvs ...KV) {
+	if s.histogramBuckets != nil {
+		s.recordHistogramObservation(name, value)
+		return
+	}
 	s.emitMetric(MetricPoint{
 		Name:   name,
 		Value:  value,
 		Type:   TypeHistogram,
 		Labels: Map(kvs...),
 	})
+}
+
+// recordHistogramObservation feeds one sample into the per-name bucket
+// accumulator. Called from Histogram() when WithHistogramBuckets is set.
+func (s *SDK) recordHistogramObservation(name string, value float64) {
+	s.histogramAccMu.Lock()
+	defer s.histogramAccMu.Unlock()
+	if s.histogramAcc == nil {
+		s.histogramAcc = map[string]*histogramAccumulator{}
+	}
+	acc, ok := s.histogramAcc[name]
+	if !ok {
+		acc = &histogramAccumulator{
+			name:    name,
+			bounds:  s.histogramBuckets,
+			counts:  make([]int64, len(s.histogramBuckets)),
+			min:     value,
+			max:     value,
+			hasData: true,
+		}
+		s.histogramAcc[name] = acc
+	} else {
+		if !acc.hasData || value < acc.min {
+			acc.min = value
+		}
+		if !acc.hasData || value > acc.max {
+			acc.max = value
+		}
+		acc.hasData = true
+	}
+	acc.total++
+	acc.sum += value
+	for i, b := range s.histogramBuckets {
+		if value <= b {
+			acc.counts[i]++
+			return
+		}
+	}
+	// value > all configured bounds; counts already covered everything
+	// before overflow. Do nothing — last bucket is conventionally +Inf.
+}
+
+// drainHistograms is called by the flush loop. It atomically swaps the
+// accumulator map and returns a snapshot of the current accumulators.
+// The returned slice is owned by the caller and may be cleared after use.
+func (s *SDK) drainHistograms() []*histogramAccumulator {
+	if s.histogramBuckets == nil {
+		return nil
+	}
+	s.histogramAccMu.Lock()
+	defer s.histogramAccMu.Unlock()
+	if len(s.histogramAcc) == 0 {
+		return nil
+	}
+	out := make([]*histogramAccumulator, 0, len(s.histogramAcc))
+	for _, acc := range s.histogramAcc {
+		// Take a deep copy so further observations accumulate into
+		// fresh zero state.
+		cp := &histogramAccumulator{
+			name:    acc.name,
+			bounds:  append([]float64(nil), acc.bounds...),
+			counts:  append([]int64(nil), acc.counts...),
+			total:   acc.total,
+			sum:     acc.sum,
+			min:     acc.min,
+			max:     acc.max,
+			hasData: acc.hasData,
+		}
+		out = append(out, cp)
+	}
+	s.histogramAcc = map[string]*histogramAccumulator{}
+	return out
 }
 
 func (s *SDK) emitMetric(m MetricPoint) {
@@ -393,6 +528,24 @@ func (s *SDK) run() {
 func (s *SDK) flush(ctx context.Context) error {
 	s.stats.FlushCalls.Add(1)
 	breq := s.buf.Drain()
+	// Merge any accumulated histograms (when WithHistogramBuckets was
+	// configured) into the same batch so they ride out in one export.
+	for _, acc := range s.drainHistograms() {
+		if !acc.hasData {
+			continue
+		}
+		breq.Metrics = append(breq.Metrics, buffer.MetricPoint{
+			Name:      acc.name,
+			Value:     0,
+			Type:      "histogram",
+			BucketBounds: append([]float64(nil), acc.bounds...),
+			BucketCounts: append([]int64(nil), acc.counts...),
+			HistogramCount: acc.total,
+			HistogramSum:   acc.sum,
+			HistogramMin:   acc.min,
+			HistogramMax:   acc.max,
+		})
+	}
 	if len(breq.Logs) == 0 && len(breq.Metrics) == 0 && len(breq.Spans) == 0 {
 		return nil
 	}
@@ -460,13 +613,19 @@ func requestFromBuffer(breq buffer.Request) Request {
 	}
 	for i, m := range breq.Metrics {
 		req.Metrics[i] = MetricPoint{
-			Timestamp: m.Timestamp,
-			Service:   m.Service,
-			Name:      m.Name,
-			Value:     m.Value,
-			Unit:      m.Unit,
-			Type:      MetricType(m.Type),
-			Labels:    m.Labels,
+			Timestamp:      m.Timestamp,
+			Service:        m.Service,
+			Name:           m.Name,
+			Value:          m.Value,
+			Unit:           m.Unit,
+			Type:           MetricType(m.Type),
+			Labels:         m.Labels,
+			BucketBounds:   append([]float64(nil), m.BucketBounds...),
+			BucketCounts:   append([]int64(nil), m.BucketCounts...),
+			HistogramCount: m.HistogramCount,
+			HistogramSum:   m.HistogramSum,
+			HistogramMin:   m.HistogramMin,
+			HistogramMax:   m.HistogramMax,
 		}
 	}
 	for i, sp := range breq.Spans {

@@ -60,11 +60,15 @@ type otlpJSONEnvelope struct {
 				} `json:"gauge,omitempty"`
 				Histogram *struct {
 					DataPoints []struct {
-						Attributes       []otlpAttr `json:"attributes"`
-						StartTimeUnixNano string     `json:"startTimeUnixNano"`
-						TimeUnixNano      string     `json:"timeUnixNano"`
-						Count             string     `json:"count"`
-						Sum               float64    `json:"sum"`
+						Attributes        []otlpAttr  `json:"attributes"`
+						StartTimeUnixNano string      `json:"startTimeUnixNano"`
+						TimeUnixNano      string      `json:"timeUnixNano"`
+						Count             string      `json:"count"`
+						Sum               float64     `json:"sum"`
+						Min               float64     `json:"min,omitempty"`
+						Max               float64     `json:"max,omitempty"`
+						BucketCounts      []string    `json:"bucketCounts,omitempty"`
+						ExplicitBounds    []float64   `json:"explicitBounds,omitempty"`
 					} `json:"dataPoints"`
 				} `json:"histogram,omitempty"`
 			} `json:"metrics"`
@@ -229,27 +233,55 @@ func DecodeOTLPJSON(body []byte) (model.OTLPRequest, error) {
 						})
 					}
 				case mt.Histogram != nil:
-					for _, dp := range mt.Histogram.DataPoints {
-						attrs := attrListToMap(dp.Attributes)
-						mergeAttrs(attrs, resourceAttrs)
+				for _, dp := range mt.Histogram.DataPoints {
+					attrs := attrListToMap(dp.Attributes)
+					mergeAttrs(attrs, resourceAttrs)
+					// If the SDK sent explicit bucket boundaries + counts,
+					// pass them through so the store can compute true
+					// quantiles. Otherwise fall back to the count+sum
+					// pseudo-metrics that mimic OTel semantics over a
+					// backend that only supports numeric points.
+					if len(dp.ExplicitBounds) > 0 && len(dp.BucketCounts) > 0 {
+						bounds := append([]float64(nil), dp.ExplicitBounds...)
+						counts := make([]int64, len(dp.BucketCounts))
+						for i, s := range dp.BucketCounts {
+							counts[i] = int64(parseFloat(s))
+						}
 						out.Metrics = append(out.Metrics, model.MetricPoint{
-							Timestamp: nsToTime(dp.TimeUnixNano),
-							Service:   pickService(attrs, out.ResourceAttrs),
-							Name:      mt.Name + "_count",
-							Value:     parseFloat(dp.Count),
-							Unit:      unit,
-							Type:      "histogram",
-							Labels:    attrs,
-						}, model.MetricPoint{
-							Timestamp: nsToTime(dp.TimeUnixNano),
-							Service:   pickService(attrs, out.ResourceAttrs),
-							Name:      mt.Name + "_sum",
-							Value:     dp.Sum,
-							Unit:      unit,
-							Type:      "histogram",
-							Labels:    attrs,
+							Timestamp:      nsToTime(dp.TimeUnixNano),
+							Service:        pickService(attrs, out.ResourceAttrs),
+							Name:           mt.Name,
+							Value:          dp.Sum,
+							Unit:           unit,
+							Type:           "histogram",
+							Labels:         attrs,
+							BucketBounds:   bounds,
+							BucketCounts:   counts,
+							HistogramCount: int64(parseFloat(dp.Count)),
+							HistogramSum:   dp.Sum,
+							HistogramMin:   dp.Min,
+							HistogramMax:   dp.Max,
 						})
+						continue
 					}
+					out.Metrics = append(out.Metrics, model.MetricPoint{
+						Timestamp: nsToTime(dp.TimeUnixNano),
+						Service:   pickService(attrs, out.ResourceAttrs),
+						Name:      mt.Name + "_count",
+						Value:     parseFloat(dp.Count),
+						Unit:      unit,
+						Type:      "histogram",
+						Labels:    attrs,
+					}, model.MetricPoint{
+						Timestamp: nsToTime(dp.TimeUnixNano),
+						Service:   pickService(attrs, out.ResourceAttrs),
+						Name:      mt.Name + "_sum",
+						Value:     dp.Sum,
+						Unit:      unit,
+						Type:      "histogram",
+						Labels:    attrs,
+					})
+				}
 				}
 			}
 		}

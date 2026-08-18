@@ -35,6 +35,19 @@ type MetricPoint struct {
 	Unit      string
 	Type      string
 	Labels    map[string]string
+
+	// Histogram fields — populated when Type == "histogram" and the SDK
+	// was configured with explicit bucket boundaries via
+	// WithHistogramBuckets. BucketCounts and BucketBounds must have the
+	// same length, ascending upper bounds, with the last entry being
+	// +Inf (overflow). When these are zero the backend falls back to
+	// the per-sample histogram path.
+	BucketBounds   []float64
+	BucketCounts   []int64
+	HistogramCount int64
+	HistogramSum   float64
+	HistogramMin   float64
+	HistogramMax   float64
 }
 
 // SpanRecord is the local span representation.

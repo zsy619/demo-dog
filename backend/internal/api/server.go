@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/traces/", s.handleTrace)
 	mux.HandleFunc("/api/qps", s.handleQPS)
 	mux.HandleFunc("/api/histogram", s.handleHistogram)
+	mux.HandleFunc("/api/histogram/otel", s.handleHistogramOTel)
 	mux.HandleFunc("/api/severity", s.handleSeverity)
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
 	mux.HandleFunc("/api/metric-names", s.handleMetricNames)
