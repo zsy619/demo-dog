@@ -1,0 +1,825 @@
+openapi: 3.1.0
+info:
+  title: demo-dog collector API
+  version: 0.1.0
+  summary: Doris + OpenTelemetry + Grafana observability backend.
+  description: |
+    Single-binary, zero-dependency Go backend for an OpenTelemetry-style
+    observability stack. Supports logs / metrics / traces ingest, query,
+    multi-tenant filtering, RBAC, and audit logging.
+
+    Full source: https://github.com/zsy619/demo-dog
+  license:
+    name: MIT
+    url: https://github.com/zsy619/demo-dog/blob/main/LICENSE
+  contact:
+    name: demo-dog maintainers
+servers:
+  - url: http://localhost:18080
+    description: Local development (Vite proxies to this)
+  - url: https://dog.example.com
+    description: Production (replace with your deployment)
+
+tags:
+  - name: health
+    description: Liveness / readiness.
+  - name: ingest
+    description: Telemetry ingest (logs / metrics / traces).
+  - name: query
+    description: Read APIs.
+  - name: discovery
+    description: Service / datasource / dashboard discovery.
+  - name: stream
+    description: WebSocket real-time event stream.
+  - name: admin
+    description: Admin-only operations (require `admin` role).
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /api/health:
+    get:
+      tags: [health]
+      summary: Health probe.
+      security: []  # public — for K8s liveness
+      responses:
+        "200":
+          description: Collector is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/services:
+    get:
+      tags: [discovery]
+      summary: List all known services.
+      parameters:
+        - in: query
+          name: tenant
+          required: false
+          schema: { type: string }
+          description: Tenant filter (matches the X-Tenant-Id request header).
+      responses:
+        "200":
+          description: Service list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceList"
+
+  /api/services/{name}:
+    get:
+      tags: [discovery]
+      summary: Detailed view of one service.
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: query
+          name: tenant
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Service summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSummary"
+        "404":
+          description: Service not found.
+
+  /api/services/{name}/detail:
+    get:
+      tags: [discovery]
+      summary: Full per-service detail (logs + metrics + traces summaries).
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Service detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceDetail"
+
+  /api/query:
+    get:
+      tags: [query]
+      summary: Generic query endpoint.
+      parameters:
+        - in: query
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [logs, metrics, traces]
+        - in: query
+          name: service
+          required: false
+          schema: { type: string }
+        - in: query
+          name: name
+          required: false
+          schema: { type: string }
+          description: Metric name. Only for `type=metrics`.
+        - in: query
+          name: severity
+          required: false
+          schema: { type: string }
+        - in: query
+          name: trace_id
+          required: false
+          schema: { type: string }
+        - in: query
+          name: search
+          required: false
+          schema: { type: string }
+        - in: query
+          name: window
+          required: false
+          schema:
+            type: string
+            enum: ["1m", "5m"]
+        - in: query
+          name: since
+          required: false
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: until
+          required: false
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenant
+          required: false
+          schema: { type: string }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Query result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+
+  /api/datasources:
+    get:
+      tags: [discovery]
+      summary: List registered datasources.
+      responses:
+        "200":
+          description: Datasource list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSourceList"
+
+  /api/dashboards:
+    get:
+      tags: [discovery]
+      summary: List dashboard definitions.
+      responses:
+        "200":
+          description: Dashboards.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dashboards:
+                    type: array
+                    items: { $ref: "#/components/schemas/Dashboard" }
+
+  /api/dashboards/{id}/panels:
+    get:
+      tags: [discovery]
+      summary: Panels for a dashboard.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Panels.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dashboard_id: { type: string }
+                  panels:
+                    type: array
+                    items: { $ref: "#/components/schemas/Panel" }
+
+  /api/ingest/otlp:
+    post:
+      tags: [ingest]
+      summary: Ingest OTLP-shaped JSON (logs / metrics / traces).
+      description: |
+        Accepts the same envelope shape as `internal/model/signal.go`:
+
+        ```
+        {
+          "tenant_id": "acme",
+          "logs":    [{ "timestamp": "...", "service": "...", "body": "...", "severity": "INFO" }, ...],
+          "metrics": [{ "timestamp": "...", "service": "...", "name": "rps", "value": 1.0, "type": "counter" }, ...],
+          "spans":   [{ "trace_id": "...", "span_id": "...", "service": "...", "name": "...", "start": "...", "duration_ms": 12 }, ...]
+        }
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OTLPRequest" }
+      responses:
+        "202":
+          description: Accepted and queued.
+        "400":
+          description: Bad request (validation error).
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          description: Payload too large (> 4 MiB).
+        "503":
+          description: Ingest queue full. Retry after the period in `Retry-After`.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds to wait before retrying.
+
+  /api/ingest/otlp-json:
+    post:
+      tags: [ingest]
+      summary: Strict-OTLP-shaped envelope (subset, JSON only).
+      description: Same envelope as `/api/ingest/otlp` but with the official
+        OTel JSON field names (`resourceLogs`, `resourceMetrics`, etc.).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OTLPEnvelope" }
+      responses:
+        "202":
+          description: Accepted.
+
+  /api/ingest/recent:
+    get:
+      tags: [ingest]
+      summary: Recent raw ingest payloads (debugging aid).
+      responses:
+        "200":
+          description: Most recent N payloads.
+
+  /api/stream:
+    get:
+      tags: [stream]
+      summary: WebSocket stream of live telemetry events.
+      description: |
+        Upgrades to a WebSocket and pushes a stream of JSON-encoded
+        `StreamEvent` messages. Clients should reconnect with
+        exponential backoff; the server tears the connection down
+        during graceful shutdown.
+      responses:
+        "101":
+          description: Switching protocols.
+
+  /api/seed:
+    get:
+      tags: [admin]
+      summary: Synthesise a batch of fake signals.
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema: { type: string }
+        - in: query
+          name: n
+          required: false
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Number of seeded records.
+
+  /api/labels:
+    get:
+      tags: [discovery]
+      summary: Set of label keys observed across all data.
+      responses:
+        "200":
+          description: Label keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { type: string }
+
+  /api/service-map:
+    get:
+      tags: [discovery]
+      summary: Service dependency graph.
+      responses:
+        "200":
+          description: Service map.
+
+  /api/traces/{id}:
+    get:
+      tags: [query]
+      summary: Spans of a single trace.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Trace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trace_id: { type: string }
+                  spans:
+                    type: array
+                    items: { $ref: "#/components/schemas/SpanRecord" }
+
+  /api/qps:
+    get:
+      tags: [query]
+      summary: Per-service QPS over the last `window_min` minutes.
+      parameters:
+        - in: query
+          name: window_min
+          required: false
+          schema: { type: integer, default: 5 }
+      responses:
+        "200":
+          description: QPS series.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QPSResponse" }
+
+  /api/histogram:
+    get:
+      tags: [query]
+      summary: Per-service latency histogram (legacy fallback path).
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema: { type: string }
+        - in: query
+          name: bins
+          required: false
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Histogram.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistogramResponse" }
+
+  /api/histogram/otel:
+    get:
+      tags: [query]
+      summary: OTel-shaped histogram for a metric.
+      description: |
+        Returns bucket bounds, bucket counts, sum, count, min and max
+        as captured by the SDK when configured with
+        `WithHistogramBuckets`. Use this for accurate p50/p95/p99.
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema: { type: string }
+        - in: query
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OTel histogram.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OTelHistogram" }
+
+  /api/severity:
+    get:
+      tags: [query]
+      summary: Severity breakdown.
+      parameters:
+        - in: query
+          name: service
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Severity counts.
+
+  /api/snapshot:
+    get:
+      tags: [query]
+      summary: Snapshot of the latest samples (for live-tail UI).
+      responses:
+        "200":
+          description: Snapshot.
+
+  /api/metric-names:
+    get:
+      tags: [discovery]
+      summary: Top metric names by frequency.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Names.
+
+  /api/export:
+    get:
+      tags: [query]
+      summary: Export query results as CSV or JSON.
+      parameters:
+        - in: query
+          name: format
+          required: true
+          schema:
+            type: string
+            enum: [csv, json]
+        - in: query
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [logs, metrics, traces]
+      responses:
+        "200":
+          description: Export.
+          content:
+            text/csv: {}
+            application/json: {}
+
+  /api/audit:
+    get:
+      tags: [admin]
+      summary: Recent audit log events.
+      parameters:
+        - in: query
+          name: n
+          required: false
+          schema: { type: integer, default: 200, maximum: 10000 }
+      responses:
+        "200":
+          description: Audit events.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEvent" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/audit/stats:
+    get:
+      tags: [admin]
+      summary: Audit log buffer stats.
+      responses:
+        "200":
+          description: Stats.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buffered: { type: integer }
+                  capacity: { type: integer }
+                  total: { type: integer, format: int64 }
+
+  /api/keys:
+    get:
+      tags: [admin]
+      summary: List registered API keys (label + role + prefix only).
+      responses:
+        "200":
+          description: Keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  keys:
+                    type: array
+                    items:
+                          type: { type: string }
+                          properties:
+                            label:      { type: string }
+                            role:       { type: string, enum: [admin, writer, reader] }
+                            key_prefix: { type: string }
+
+  /api/probe:
+    get:
+      tags: [admin]
+      summary: Synthetic probe (self-check). Always returns 200 when the collector is healthy.
+      responses:
+        "200":
+          description: Healthy.
+
+  /metrics:
+    get:
+      tags: [health]
+      summary: Prometheus metrics scrape endpoint.
+      security: []  # public
+      responses:
+        "200":
+          description: Metrics in Prometheus text exposition format.
+          content:
+            text/plain: {}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "opaque token (configurable per key)"
+      description: |
+        Every API key registered via `-api-keys` carries one of three roles:
+        `admin`, `writer` (default), or `reader`. The role is implicit in
+        the key registration: `k1:admin:ops,k2:writer:checkout,k3:reader:grafana`.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: Bearer realm="dog-collector"
+    Forbidden:
+      description: Authenticated but the role does not permit this operation.
+
+  schemas:
+
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [ok] }
+        uptime_seconds: { type: integer }
+        engine: { $ref: "#/components/schemas/EngineStats" }
+        started_at: { type: string, format: date-time }
+
+    EngineStats:
+      type: object
+      properties:
+        logs_accepted:        { type: integer, format: int64 }
+        metrics_accepted:     { type: integer, format: int64 }
+        spans_accepted:       { type: integer, format: int64 }
+        queries_served:       { type: integer, format: int64 }
+        hot_logs_size:        { type: integer }
+        cold_logs_size:       { type: integer }
+        hot_metrics_size:     { type: integer }
+        hot_spans_size:       { type: integer }
+
+    ServiceList:
+      type: object
+      properties:
+        count: { type: integer }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceSummary" }
+
+    ServiceSummary:
+      type: object
+      properties:
+        name:         { type: string }
+        tenant_id:    { type: string }
+        logs_count:   { type: integer, format: int64 }
+        metrics_count: { type: integer, format: int64 }
+        spans_count:  { type: integer, format: int64 }
+        error_rate:   { type: number, format: float, description: "Fraction of spans that errored in the rolling window." }
+        p99_ms:       { type: number }
+        p95_ms:       { type: number }
+        p50_ms:       { type: number }
+        qps:          { type: number }
+        updated_at:   { type: string, format: date-time }
+
+    ServiceDetail:
+      type: object
+      properties:
+        name: { type: string }
+        logs:    { type: array, items: { $ref: "#/components/schemas/LogRecord" } }
+        metrics: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+        spans:   { type: array, items: { $ref: "#/components/schemas/SpanRecord" } }
+
+    DataSourceList:
+      type: object
+      properties:
+        count: { type: integer }
+        datasources:
+          type: array
+          items: { $ref: "#/components/schemas/DataSource" }
+
+    DataSource:
+      type: object
+      properties:
+        name:    { type: string }
+        type:    { type: string, enum: [logs, metrics, traces] }
+        url:     { type: string }
+        healthy: { type: boolean }
+
+    Dashboard:
+      type: object
+      properties:
+        id:    { type: string }
+        title: { type: string }
+        tags:  { type: array, items: { type: string } }
+
+    Panel:
+      type: object
+      properties:
+        id:    { type: string }
+        title: { type: string }
+        type:  { type: string, enum: [timeseries, stat, table, logs, gauge] }
+        query: { type: string }
+
+    LogRecord:
+      type: object
+      required: [service, body]
+      properties:
+        timestamp:   { type: string, format: date-time }
+        service:     { type: string }
+        severity:    { type: string, enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL] }
+        body:        { type: string }
+        trace_id:    { type: string }
+        span_id:     { type: string }
+        tenant_id:   { type: string }
+        attributes:
+          type: object
+          additionalProperties: true
+
+    MetricPoint:
+      type: object
+      required: [service, name, value]
+      properties:
+        timestamp:     { type: string, format: date-time }
+        service:       { type: string }
+        name:          { type: string }
+        value:         { type: number }
+        type:          { type: string, enum: [counter, gauge, histogram] }
+        unit:          { type: string }
+        tenant_id:     { type: string }
+        # OTel histogram bucket fields (populated by the SDK when
+        # WithHistogramBuckets is configured):
+        bucket_bounds: { type: array, items: { type: number } }
+        bucket_counts: { type: array, items: { type: integer } }
+        histogram_count: { type: integer, format: int64 }
+        histogram_sum:   { type: number }
+        histogram_min:   { type: number }
+        histogram_max:   { type: number }
+
+    SpanRecord:
+      type: object
+      required: [trace_id, span_id, service, name]
+      properties:
+        trace_id:    { type: string }
+        span_id:     { type: string }
+        parent_id:   { type: string }
+        service:     { type: string }
+        name:        { type: string }
+        start:       { type: string, format: date-time }
+        duration_ms: { type: number }
+        status:      { type: string, enum: [ok, error] }
+        attributes:  { type: object, additionalProperties: true }
+        tenant_id:   { type: string }
+
+    OTLPRequest:
+      type: object
+      properties:
+        tenant_id: { type: string }
+        logs:
+          type: array
+          items: { $ref: "#/components/schemas/LogRecord" }
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+        spans:
+          type: array
+          items: { $ref: "#/components/schemas/SpanRecord" }
+
+    OTLPEnvelope:
+      type: object
+      description: |
+        Strict OTel JSON envelope. `resourceLogs` / `resourceMetrics` /
+        `resourceSpans` mirror the official protobuf. Field-level types
+        match the OTel spec but only a subset is supported (no scope
+        signals, no exemplars).
+      properties:
+        resourceLogs:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { type: object, additionalProperties: true }
+              scopeLogs:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    scope: { type: object, additionalProperties: true }
+                    logRecords:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
+
+    QueryResult:
+      type: object
+      properties:
+        type: { type: string, enum: [logs, metrics, traces] }
+        rows:
+          type: array
+          items: {}
+        total: { type: integer, format: int64 }
+
+    QPSResponse:
+      type: object
+      properties:
+        window_min: { type: integer }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              service: { type: string }
+              points:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp: { type: string, format: date-time }
+                    value:     { type: number }
+
+    HistogramResponse:
+      type: object
+      properties:
+        service: { type: string }
+        bins:
+          type: array
+          items: { type: number }
+        counts:
+          type: array
+          items: { type: integer }
+
+    OTelHistogram:
+      type: object
+      properties:
+        service:    { type: string }
+        name:       { type: string }
+        bounds:     { type: array, items: { type: number } }
+        counts:     { type: array, items: { type: integer } }
+        sum:        { type: number }
+        count:      { type: integer, format: int64 }
+        min:        { type: number }
+        max:        { type: number }
+        quantiles:
+          type: object
+          properties:
+            p50: { type: number }
+            p95: { type: number }
+            p99: { type: number }
+
+    AuditEvent:
+      type: object
+      properties:
+        timestamp:  { type: string, format: date-time }
+        method:     { type: string }
+        path:       { type: string }
+        key_label:  { type: string }
+        role:       { type: string, enum: [admin, writer, reader] }
+        tenant:     { type: string }
+        status:     { type: integer }
+        bytes_in:   { type: integer, format: int64 }
+        bytes_out:  { type: integer, format: int64 }
+        remote_ip:  { type: string }
+        user_agent: { type: string }
