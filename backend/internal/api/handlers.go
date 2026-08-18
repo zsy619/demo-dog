@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -77,21 +78,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDataSources(w http.ResponseWriter, r *http.Request) {
-	sources := []map[string]any{
-		{
-			"id":             "doris",
-			"name":           "Doris",
-			"type":           "olap",
-			"default":        true,
-			"url":            "http://localhost:9030",
-			"database":       "demo_dog",
-			"tables":         []string{"__dog_logs", "__dog_metrics", "__dog_traces"},
-			"capabilities":   []string{"logs", "metrics", "traces"},
-			"description":    "In-memory Doris engine simulating Stream Load ingestion.",
-			"version":        "v0.1-demo",
-			"plugin_version": "0.1.0",
-		},
-	}
+	sources := s.datasources.List()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"datasources": sources,
 		"count":       len(sources),
@@ -178,11 +165,28 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !s.ingest.Submit(norm) {
-		resp := s.ingest.SubmitSync(norm)
-		resp.RetryLogs += len(norm.Logs)
-		resp.RetryMetrics += len(norm.Metrics)
-		resp.RetrySpans += len(norm.Spans)
-		writeJSON(w, http.StatusAccepted, resp)
+		// Ingest pipeline is at capacity. We previously degraded to a
+		// synchronous write here, which would block the HTTP handler
+		// goroutine and stall every other request behind it. That is a
+		// classic latency-explosion failure mode under load. Instead we
+		// return 503 + Retry-After so the upstream SDK can back off and
+		// retry. The synchronous path is still reachable via a separate
+		// explicit "force=true" query param for debug use only.
+		if r.URL.Query().Get("force") == "true" {
+			resp := s.ingest.SubmitSync(norm)
+			resp.RetryLogs += len(norm.Logs)
+			resp.RetryMetrics += len(norm.Metrics)
+			resp.RetrySpans += len(norm.Spans)
+			writeJSON(w, http.StatusAccepted, resp)
+			return
+		}
+		w.Header().Set("Retry-After", "1")
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"error":         "ingest pipeline at capacity",
+			"retry_logs":    len(norm.Logs),
+			"retry_metrics": len(norm.Metrics),
+			"retry_spans":   len(norm.Spans),
+		})
 		return
 	}
 
@@ -518,6 +522,7 @@ func rowsToCSV(rows []model.Row) [][]string {
 func (s *Server) handlePromMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	stats := s.store.Stats()
+	poolStats := s.ingest.PoolStats()
 	fmt.Fprintf(w, "# HELP dog_logs_accepted_total Number of log records accepted since start.\n")
 	fmt.Fprintf(w, "# TYPE dog_logs_accepted_total counter\n")
 	fmt.Fprintf(w, "dog_logs_accepted_total %d\n", stats.LogsAccepted)
@@ -543,6 +548,38 @@ func (s *Server) handlePromMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP dog_uptime_seconds Process uptime in seconds.\n")
 	fmt.Fprintf(w, "# TYPE dog_uptime_seconds gauge\n")
 	fmt.Fprintf(w, "dog_uptime_seconds %.0f\n", time.Since(s.started).Seconds())
+
+	// Ingest pipeline counters — operators need these to spot back-pressure.
+	fmt.Fprintf(w, "# HELP dog_ingest_jobs_accepted_total Jobs enqueued to the worker pool.\n")
+	fmt.Fprintf(w, "# TYPE dog_ingest_jobs_accepted_total counter\n")
+	fmt.Fprintf(w, "dog_ingest_jobs_accepted_total %d\n", poolStats.Accepted)
+	fmt.Fprintf(w, "# HELP dog_ingest_jobs_processed_total Jobs completed (success or terminal failure).\n")
+	fmt.Fprintf(w, "# TYPE dog_ingest_jobs_processed_total counter\n")
+	fmt.Fprintf(w, "dog_ingest_jobs_processed_total %d\n", poolStats.Processed)
+	fmt.Fprintf(w, "# HELP dog_ingest_jobs_retried_total Jobs retried after transient failure.\n")
+	fmt.Fprintf(w, "# TYPE dog_ingest_jobs_retried_total counter\n")
+	fmt.Fprintf(w, "dog_ingest_jobs_retried_total %d\n", poolStats.Retried)
+	fmt.Fprintf(w, "# HELP dog_ingest_jobs_failed_total Jobs that exhausted retries.\n")
+	fmt.Fprintf(w, "# TYPE dog_ingest_jobs_failed_total counter\n")
+	fmt.Fprintf(w, "dog_ingest_jobs_failed_total %d\n", poolStats.Failed)
+
+	// Go runtime metrics — minimal set so an operator can see
+	// goroutine / heap pressure without pulling in a full Prometheus
+	// client library.
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	fmt.Fprintf(w, "# HELP dog_go_goroutines Number of goroutines that currently exist.\n")
+	fmt.Fprintf(w, "# TYPE dog_go_goroutines gauge\n")
+	fmt.Fprintf(w, "dog_go_goroutines %d\n", runtime.NumGoroutine())
+	fmt.Fprintf(w, "# HELP dog_go_memstats_alloc_bytes Bytes of allocated heap objects.\n")
+	fmt.Fprintf(w, "# TYPE dog_go_memstats_alloc_bytes gauge\n")
+	fmt.Fprintf(w, "dog_go_memstats_alloc_bytes %d\n", ms.Alloc)
+	fmt.Fprintf(w, "# HELP dog_go_memstats_sys_bytes Total bytes of memory obtained from the OS.\n")
+	fmt.Fprintf(w, "# TYPE dog_go_memstats_sys_bytes gauge\n")
+	fmt.Fprintf(w, "dog_go_memstats_sys_bytes %d\n", ms.Sys)
+	fmt.Fprintf(w, "# HELP dog_go_memstats_gc_pause_total_seconds Cumulative GC pause time.\n")
+	fmt.Fprintf(w, "# TYPE dog_go_memstats_gc_pause_total_seconds counter\n")
+	fmt.Fprintf(w, "dog_go_memstats_gc_pause_total_seconds %.6f\n", float64(ms.PauseTotalNs)/1e9)
 }
 
 // helloFrame returns a pre-encoded welcome frame for new websocket clients.

@@ -89,16 +89,27 @@ func main() {
 		signal.Notify(sigInt, syscall.SIGINT, syscall.SIGTERM)
 		<-sigInt
 		fmt.Println("\n[DOG] shutting down...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		// 1. Stop accepting new HTTP requests and wait for in-flight ones.
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("graceful shutdown failed: %v", err)
+			log.Printf("[DOG] graceful http shutdown failed: %v", err)
 		}
+		// 2. Drain the ingest pipeline so queued signals land in the
+		//    store instead of being silently dropped.
+		in.Close()
 		close(idleClosed)
 	}()
 
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("http server error: %v", err)
+		// We intentionally do NOT use log.Fatalf here: it calls os.Exit,
+		// which skips defers and would abandon any in-flight ingest
+		// queue / partial batch. Instead, log the error, drain the
+		// ingest pipeline, and exit cleanly.
+		log.Printf("[DOG] http server error: %v", err)
+		in.Close()
+		fmt.Println("[DOG] bye.")
+		os.Exit(1)
 	}
 	<-idleClosed
 	fmt.Println("[DOG] bye.")

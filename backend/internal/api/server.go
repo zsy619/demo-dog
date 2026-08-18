@@ -25,17 +25,29 @@ type Server struct {
 
 	rng   *rand.Rand
 	rngMu sync.Mutex
+
+	// datasources is a thread-safe registry of logical backends the
+	// collector can route queries to. Plug a real Doris / ClickHouse
+	// driver at startup via Server.Datasources().Add(...).
+	datasources *datasourceRegistry
 }
 
 // New returns a new Server.
 func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 	return &Server{
-		store:   s,
-		ingest:  in,
-		hub:     hub,
-		started: time.Now(),
-		rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		store:       s,
+		ingest:      in,
+		hub:         hub,
+		datasources: newDatasourceRegistry(),
+		started:     time.Now(),
+		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+// Datasources exposes the datasource registry so callers (e.g. a
+// driver plugin at startup) can register additional backends.
+func (s *Server) Datasources() *datasourceRegistry {
+	return s.datasources
 }
 
 // Handler returns the root http.Handler with all routes mounted.

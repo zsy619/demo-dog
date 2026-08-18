@@ -53,6 +53,14 @@ func (in *Ingestor) Close() {
 	in.pool.Close()
 }
 
+// PoolStats exposes the worker pool counters (accepted, processed,
+// retried, failed). The HTTP /metrics handler renders them as
+// Prometheus counters so operators can see ingest back-pressure in
+// real time.
+func (in *Ingestor) PoolStats() batch.Stats {
+	return in.pool.Stats()
+}
+
 // Validate performs lightweight sanity checks on an OTLPRequest.
 // It does not check every field; missing service name is the only hard error.
 func (in *Ingestor) Validate(req *model.OTLPRequest) error {
