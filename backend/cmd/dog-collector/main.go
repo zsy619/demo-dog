@@ -62,10 +62,20 @@ func main() {
 	tlsKey := flag.String("tls-key", "", "Path to TLS private key (PEM).")
 	ratePerSec := flag.Float64("rate-limit", 0, "Per-IP token bucket refill rate (req/s). 0 disables rate limiting.")
 	rateBurst := flag.Float64("rate-burst", 200, "Per-IP token bucket burst capacity.")
+	snapshotPath := flag.String("snapshot", "", "Optional path to a gob-encoded store snapshot. On startup the engine restores from it (if present); on shutdown the current state is atomically saved back to the same path.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
 	s := store.New(cfg)
+
+	// Restore previous state if a snapshot file exists.
+	if *snapshotPath != "" {
+		if err := s.LoadFromFile(*snapshotPath); err != nil {
+			log.Printf("[DOG] snapshot load failed: %v (starting empty)", err)
+		} else {
+			fmt.Printf("  Snapshot           : %s (loaded)\n", *snapshotPath)
+		}
+	}
 
 	hub := stream.NewHub()
 	in := ingest.New(s, *workers)
@@ -134,6 +144,15 @@ func main() {
 		// 2. Drain the ingest pipeline so queued signals land in the
 		//    store instead of being silently dropped.
 		in.Close()
+		// 3. Snapshot the in-memory state to disk so the next process
+		//    can pick up where we left off.
+		if *snapshotPath != "" {
+			if err := s.SaveToFile(*snapshotPath); err != nil {
+				log.Printf("[DOG] snapshot save failed: %v", err)
+			} else {
+				fmt.Printf("  Snapshot saved     : %s\n", *snapshotPath)
+			}
+		}
 		close(idleClosed)
 	}()
 
@@ -151,6 +170,11 @@ func main() {
 		// ingest pipeline, and exit cleanly.
 		log.Printf("[DOG] http server error: %v", listenErr)
 		in.Close()
+		if *snapshotPath != "" {
+			if err := s.SaveToFile(*snapshotPath); err != nil {
+				log.Printf("[DOG] snapshot save failed: %v", err)
+			}
+		}
 		fmt.Println("[DOG] bye.")
 		os.Exit(1)
 	}

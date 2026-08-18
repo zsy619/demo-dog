@@ -1,0 +1,175 @@
+package store
+
+import (
+	"bytes"
+	"encoding/gob"
+	"errors"
+	"io"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/zsy619/demo-dog/backend/internal/model"
+)
+
+// PersistSnapshot is the serializable representation of the Doris engine.
+// It is intentionally limited to the hot tier + service summaries + MV
+// buckets so cold tiers can be rebuilt on next ingest.
+type PersistSnapshot struct {
+	Version    int
+	SavedAt    time.Time
+	HotLogs    []model.LogRecord
+	HotMetrics map[string][]model.MetricPoint
+	HotSpans   map[string][]model.SpanRecord
+	MV1m       map[string][]model.MVBucket
+	MV5m       map[string][]model.MVBucket
+	Services   map[string]*model.ServiceSummary
+}
+
+const persistVersion = 1
+
+var persistOnce sync.Once
+
+func persistRegister() {
+	persistOnce.Do(func() {
+		gob.Register([]model.MVBucket(nil))
+		gob.Register([]model.LogRecord(nil))
+		gob.Register(map[string][]model.SpanRecord(nil))
+		gob.Register(map[string]*model.ServiceSummary(nil))
+		gob.Register(map[string][]model.MVBucket(nil))
+		gob.Register(&model.MVBucket{})
+		gob.Register(&model.ServiceSummary{})
+	})
+}
+
+// PersistSnapshotBytes returns the snapshot as gob-encoded bytes.
+func (d *Doris) PersistSnapshotBytes() ([]byte, error) {
+	persistRegister()
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	d.muLogs.RLock()
+	hotLogs := append([]model.LogRecord(nil), d.hotLogs...)
+	d.muLogs.RUnlock()
+
+	d.muMetrics.RLock()
+	hotMetrics := make(map[string][]model.MetricPoint, len(d.hotMetrics))
+	for k, v := range d.hotMetrics {
+		hotMetrics[k] = append([]model.MetricPoint(nil), v...)
+	}
+	d.muMetrics.RUnlock()
+
+	d.muHistograms.RLock()
+	histograms := make(map[string]*histogramAgg, len(d.histograms))
+	for k, v := range d.histograms {
+		histograms[k] = v
+	}
+	d.muHistograms.RUnlock()
+
+	d.muSpans.RLock()
+	hotSpans := make(map[string][]model.SpanRecord, len(d.hotSpans))
+	for k, v := range d.hotSpans {
+		hotSpans[k] = append([]model.SpanRecord(nil), v...)
+	}
+	d.muSpans.RUnlock()
+
+	d.muMV.RLock()
+	mv1m := copyPersistMV(d.mvMinute)
+	mv5m := copyPersistMV(d.mvFiveMinute)
+	d.muMV.RUnlock()
+
+	d.muSum.RLock()
+	services := make(map[string]*model.ServiceSummary, len(d.sum))
+	for k, v := range d.sum {
+		cp := *v
+		services[k] = &cp
+	}
+	d.muSum.RUnlock()
+
+	snap := PersistSnapshot{
+		Version:    persistVersion,
+		SavedAt:    time.Now(),
+		HotLogs:    hotLogs,
+		HotMetrics: hotMetrics,
+		HotSpans:   hotSpans,
+		MV1m:       mv1m,
+		MV5m:       mv5m,
+		Services:   services,
+	}
+	if err := enc.Encode(&snap); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// RestoreSnapshot loads a snapshot from r into the engine.
+func (d *Doris) RestoreSnapshot(r io.Reader) error {
+	persistRegister()
+	dec := gob.NewDecoder(r)
+	var snap PersistSnapshot
+	if err := dec.Decode(&snap); err != nil {
+		return err
+	}
+	if snap.Version != persistVersion {
+		return errors.New("snapshot version mismatch")
+	}
+
+	d.muLogs.Lock()
+	d.hotLogs = snap.HotLogs
+	d.muLogs.Unlock()
+
+	d.muMetrics.Lock()
+	d.hotMetrics = snap.HotMetrics
+	d.muMetrics.Unlock()
+
+	d.muSpans.Lock()
+	d.hotSpans = snap.HotSpans
+	d.muSpans.Unlock()
+
+	d.muMV.Lock()
+	d.mvMinute = snap.MV1m
+	d.mvFiveMinute = snap.MV5m
+	d.muMV.Unlock()
+
+	d.muSum.Lock()
+	d.sum = snap.Services
+	d.muSum.Unlock()
+	return nil
+}
+
+// SaveToFile writes the snapshot atomically.
+func (d *Doris) SaveToFile(path string) error {
+	data, err := d.PersistSnapshotBytes()
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// LoadFromFile loads the snapshot. Missing file is not an error.
+func (d *Doris) LoadFromFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+	return d.RestoreSnapshot(f)
+}
+
+func copyPersistMV(src map[string][]model.MVBucket) map[string][]model.MVBucket {
+	if src == nil {
+		return nil
+	}
+	out := make(map[string][]model.MVBucket, len(src))
+	for k, v := range src {
+		out[k] = append([]model.MVBucket(nil), v...)
+	}
+	return out
+}
