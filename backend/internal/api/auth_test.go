@@ -106,3 +106,97 @@ func TestAPIKeyAuth_PublicPathsBypass(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRole(t *testing.T) {
+	cases := map[string]Role{
+		"admin":    RoleAdmin,
+		"writer":   RoleWriter,
+		"reader":   RoleReader,
+		"RW":       RoleWriter,
+		"":         RoleReader,
+		"unknown":  RoleReader,
+	}
+	for s, want := range cases {
+		if got := ParseRole(s); got != want {
+			t.Errorf("ParseRole(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+func TestAPIKeyAuth_AddFromSpec(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.AddFromSpec("k1:admin:alice")
+	a.AddFromSpec("k2:writer:checkout")
+	a.AddFromSpec("k3:reader:grafana")
+	a.AddFromSpec("k4") // default writer
+
+	if r, _ := a.RoleOf("k1"); r != RoleAdmin {
+		t.Errorf("k1 role = %v, want admin", r)
+	}
+	if r, _ := a.RoleOf("k2"); r != RoleWriter {
+		t.Errorf("k2 role = %v, want writer", r)
+	}
+	if r, _ := a.RoleOf("k3"); r != RoleReader {
+		t.Errorf("k3 role = %v, want reader", r)
+	}
+	if r, _ := a.RoleOf("k4"); r != RoleWriter {
+		t.Errorf("k4 default role = %v, want writer", r)
+	}
+	if got := a.LabelOf("k1"); got != "alice" {
+		t.Errorf("k1 label = %q, want alice", got)
+	}
+}
+
+func TestAPIKeyAuth_RequireRole(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.Add("r", "reader", RoleReader)
+	a.Add("w", "writer", RoleWriter)
+	a.Add("x", "admin", RoleAdmin)
+
+	base := a.Middleware(AuthModeAPIKey)
+
+	for _, tc := range []struct {
+		name     string
+		key      string
+		min      Role
+		wantCode int
+	}{
+		{"reader cannot write", "r", RoleWriter, http.StatusForbidden},
+		{"writer can write", "w", RoleWriter, http.StatusOK},
+		{"admin can write", "x", RoleWriter, http.StatusOK},
+		{"admin can admin", "x", RoleAdmin, http.StatusOK},
+		{"reader can read", "r", RoleReader, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inner := RequireRole(tc.min, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			h := base(inner)
+			req := httptest.NewRequest("GET", "/x", nil)
+			req.Header.Set("Authorization", "Bearer "+tc.key)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tc.wantCode {
+				t.Fatalf("got %d, want %d", rr.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestAPIKeyAuth_List(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.AddFromSpec("k1:admin:alice")
+	a.AddFromSpec("k2:writer:checkout")
+
+	entries := a.List()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	roles := map[string]Role{}
+	for _, e := range entries {
+		roles[e.Key] = e.Role
+	}
+	if roles["k1"] != RoleAdmin || roles["k2"] != RoleWriter {
+		t.Errorf("role map wrong: %+v", roles)
+	}
+}

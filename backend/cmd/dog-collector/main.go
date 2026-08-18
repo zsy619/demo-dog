@@ -104,8 +104,10 @@ func main() {
 	}
 	if keys != "" {
 		apiServer.SetAuthMode(api.AuthModeAPIKey)
-		for i, k := range splitCSV(keys) {
-			apiServer.Auth().Add(k, fmt.Sprintf("flag:%d", i))
+		for _, spec := range splitCSV(keys) {
+			// Spec format: "<key>" (defaults to writer) or
+			// "<key>:<role>" or "<key>:<role>:<label>".
+			apiServer.Auth().AddFromSpec(spec)
 		}
 		fmt.Printf("  Auth mode         : api-key (%d key(s) loaded)\n", apiServer.Auth().Count())
 	} else {

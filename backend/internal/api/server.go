@@ -44,6 +44,11 @@ type Server struct {
 	// per-IP token bucket and returns 429 with Retry-After when a
 	// single client floods the server.
 	rateLimiter *RateLimiter
+
+	// auditLog records every write operation (and optionally reads)
+	// for compliance + post-incident forensics. Created lazily on
+	// first access; tests can swap it via SetAuditLog.
+	auditLog *AuditLog
 }
 
 // New returns a new Server.
@@ -55,10 +60,19 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 		datasources: newDatasourceRegistry(),
 		auth:        NewAPIKeyAuth(),
 		authM:       AuthModeOff,
+		auditLog:    NewAuditLog(10_000),
 		started:     time.Now(),
 		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
+
+// Audit returns the audit log so callers can configure capacity at
+// startup or swap the implementation for tests.
+func (s *Server) Audit() *AuditLog { return s.auditLog }
+
+// SetAuditLog replaces the default audit log. Useful in tests or
+// when wiring a remote sink.
+func (s *Server) SetAuditLog(l *AuditLog) { s.auditLog = l }
 
 // Datasources exposes the datasource registry so callers (e.g. a
 // driver plugin at startup) can register additional backends.
@@ -118,15 +132,57 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
 	mux.HandleFunc("/api/metric-names", s.handleMetricNames)
 	mux.HandleFunc("/api/export", s.handleExport)
+	mux.HandleFunc("/api/audit", s.handleAudit)
+	mux.HandleFunc("/api/audit/stats", s.handleAuditStats)
+	mux.HandleFunc("/api/keys", s.handleListKeys)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
+	// Layering (outer -> inner):
+	//   withCORS -> audit -> rateLimit -> auth.Middleware ->
+	//   applyRoleGates -> mux
+	//
+	// auth.Middleware runs BEFORE the role gate so it has a chance
+	// to stamp X-Dog-Role on the request header. Anything outside
+	// auth sees the headers intact.
+	gated := s.applyRoleGates(mux)
 	h := s.auth.Middleware(s.authM,
 		"/api/health", "/metrics",
-	)(mux)
+	)(gated)
 	if s.rateLimiter != nil {
 		h = s.rateLimiter.Middleware()(h)
 	}
+	if s.auditLog != nil {
+		h = AuditMiddleware(s.auditLog, false)(h)
+	}
 	return s.withCORS(withLogging(h))
+}
+
+// applyRoleGates returns a handler that gates specific routes on role.
+// Anything not in the gate list passes through unchanged.
+func (s *Server) applyRoleGates(next http.Handler) http.Handler {
+	adminOnly := map[string]bool{
+		"/api/audit":       true,
+		"/api/audit/stats": true,
+		"/api/keys":         true,
+		"/api/seed":         true,
+		"/api/seed/stream":  true,
+	}
+	// writer+ so ingest is open to writers (default) and admin.
+	writerOrUp := map[string]bool{
+		"/api/ingest/otlp":      true,
+		"/api/ingest/otlp-json": true,
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if adminOnly[r.URL.Path] {
+			RequireRole(RoleAdmin, next).ServeHTTP(w, r)
+			return
+		}
+		if writerOrUp[r.URL.Path] && r.Method != http.MethodGet {
+			RequireRole(RoleWriter, next).ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) withCORS(h http.Handler) http.Handler {
