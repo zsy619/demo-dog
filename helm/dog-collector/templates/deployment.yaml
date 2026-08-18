@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dog-collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dog-collector.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "dog-collector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dog-collector.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          args:
+            - -addr={{ .Values.config.addr }}
+            - -workers={{ .Values.config.workers }}
+            - -queue={{ .Values.config.queue }}
+            - -snapshot={{ .Values.config.snapshotPath }}
+            {{- if .Values.config.rateLimit }}
+            - -rate-limit={{ .Values.config.rateLimit }}
+            - -rate-burst={{ .Values.config.rateBurst }}
+            {{- end }}
+            {{- if .Values.config.selfTrace }}
+            - -self-trace=true
+            {{- end }}
+            {{- if .Values.cors.origins }}
+            - -cors-origins={{ .Values.cors.origins }}
+            {{- end }}
+            - -pprof-token=$(PPROF_TOKEN)
+          env:
+            - name: DOG_API_KEYS
+              value: {{ .Values.auth.apiKeys | quote }}
+            - name: PPROF_TOKEN
+              value: {{ .Values.auth.pprofToken | quote }}
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.cpu
+                  divisor: "1"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/probe
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/dog-collector
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "dog-collector.fullname" . }}-state
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}

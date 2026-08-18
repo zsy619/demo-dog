@@ -1,0 +1,16 @@
+apiVersion: v2
+name: dog-collector
+description: |
+  demo-dog collector — Doris + OpenTelemetry + Grafana backend.
+  Single-binary Go service with RBAC, audit, OpenAPI, self-tracing.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - observability
+  - otel
+  - logs
+  - metrics
+  - traces
+maintainers:
+  - name: demo-dog maintainers

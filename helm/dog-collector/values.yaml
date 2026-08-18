@@ -1,0 +1,81 @@
+# Default values for dog-collector.
+# Override with `-f my-values.yaml` or `--set key=value`.
+
+image:
+  repository: ghcr.io/zsy619/dog-collector
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 80
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: dog-collector.local
+      paths: ["/"]
+  tls: []
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  cpuUtilization: 70
+  memoryUtilization: 80
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: standard
+  accessModes: ["ReadWriteOnce"]
+
+# CLI flags passed to the collector binary. Concatenated as a single
+# command line in the container args.
+config:
+  addr: ":8080"
+  workers: 8
+  queue: 4096
+  rateLimit: 50      # req/s per IP, 0 disables
+  rateBurst: 200
+  selfTrace: true
+  snapshotPath: /var/lib/dog-collector/state.snap
+
+# Authentication. apiKeys must be a comma-separated list of
+# <key>:<role>:<label> specs. Replace via `helm install --set auth.apiKeys=...`
+# in production; the placeholder below is rejected at startup.
+auth:
+  apiKeys: "REPLACE_admin:admin:ops,REPLACE_writer:writer:checkout,REPLACE_reader:reader:grafana"
+  pprofToken: "REPLACE_pprof_token"
+
+# CORS allowlist. Empty = wildcard (dev mode).
+cors:
+  origins: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# ServiceMonitor is emitted only when prometheus-operator is installed
+# and serviceMonitor.enabled=true.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

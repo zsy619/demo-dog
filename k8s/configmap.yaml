@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dog-collector-config
+  namespace: observability
+data:
+  # Compose the full CLI here so the deployment manifest stays small.
+  # Mounted into /etc/dog-collector/args for visibility.
+  args.env: |
+    -addr=:8080
+    -workers=8
+    -queue=4096
+    -snapshot=/var/lib/dog-collector/state.snap
+    -rate-limit=50
+    -rate-burst=200
+    -self-trace=true
+  cors-origins: |
+    https://grafana.example.com
+    https://app.example.com
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dog-collector-secrets
+  namespace: observability
+type: Opaque
+stringData:
+  # Replace with `kubectl create secret` or sealed-secrets. Three keys
+  # separated by comma. Each key uses the form <key>:<role>:<label>:
+  #
+  #   DOG_API_KEYS="<key>:admin:ops,<key>:writer:checkout,<key>:reader:grafana"
+  api-keys: "CHANGEME_admin:CHANGEME_writer:CHANGEME_reader"
+  # Token used to unlock pprof. Rotate on a schedule.
+  PPROF_TOKEN: "CHANGEME_pprof_token"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dog-collector
+  namespace: observability
+  annotations:
+    # cert-manager issues the cert automatically.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - dog-collector.example.com
+      secretName: dog-collector-tls
+  rules:
+    - host: dog-collector.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dog-collector
+                port:
+                  number: 80
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dog-collector
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: dog-collector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dog-collector
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
