@@ -79,35 +79,42 @@ var ErrForbidden = errors.New("role does not permit this operation")
 // KeyEntry is one row of the auth registry. The Label field is the
 // human-facing identifier (typically the service name or the user
 // name). The Role field gates which capabilities the key carries.
+// TenantID binds the key to one tenant; empty means the key can
+// impersonate any tenant (only useful for platform admin keys).
 type KeyEntry struct {
-	Key   string
-	Label string
-	Role  Role
+	Key      string
+	Label    string
+	Role     Role
+	TenantID string
 }
 
 // APIKeyAuth is a tiny registry of accepted keys. Lookups use
 // constant-time compare so two keys of the same length do not leak
 // position-by-position through timing differences.
 type APIKeyAuth struct {
-	mu     sync.RWMutex
-	keys   map[string]struct{}
-	labels map[string]string
-	roles  map[string]Role
+	mu      sync.RWMutex
+	keys    map[string]struct{}
+	labels  map[string]string
+	roles   map[string]Role
+	tenants map[string]string
 }
 
 // NewAPIKeyAuth returns an empty auth registry.
 func NewAPIKeyAuth() *APIKeyAuth {
 	return &APIKeyAuth{
-		keys:   make(map[string]struct{}),
-		labels: make(map[string]string),
-		roles:  make(map[string]Role),
+		keys:    make(map[string]struct{}),
+		labels:  make(map[string]string),
+		roles:   make(map[string]Role),
+		tenants: make(map[string]string),
 	}
 }
 
-// Add registers a new key with an optional label and a role.
-// Empty keys are ignored so callers do not accidentally create a
-// wildcard. When `role` is omitted the default is RoleWriter so the
-// most common case (an SDK pushing telemetry) Just Works.
+// Add registers a new key with an optional label, a role, and an
+// optional tenant binding. Empty keys are ignored so callers do
+// not accidentally create a wildcard. When `role` is omitted the
+// default is RoleWriter so the most common case (an SDK pushing
+// telemetry) Just Works. When `tenant` is empty the key can act
+// on any tenant (platform-admin style).
 func (a *APIKeyAuth) Add(key, label string, role ...Role) {
 	if key == "" {
 		return
@@ -123,19 +130,33 @@ func (a *APIKeyAuth) Add(key, label string, role ...Role) {
 	a.roles[key] = r
 }
 
-// AddFromSpec accepts a parsed "<key>:<role>:<label>" or "<key>:<role>"
-// or "<key>" record. This is the shape the CLI flag parser emits
-// from `-api-keys k1:admin:alice,k2:writer:checkout,k3`. Unknown
+// AddForTenant registers a key bound to a specific tenant.
+func (a *APIKeyAuth) AddForTenant(key, label, tenant string, role ...Role) {
+	a.Add(key, label, role...)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.tenants[key] = tenant
+}
+
+// AddFromSpec accepts a parsed "<key>:<role>:<label>:<tenant>" or
+// "<key>:<role>:<label>" or "<key>:<role>" or "<key>" record. This is
+// the shape the CLI flag parser emits from
+// `-api-keys k1:admin:alice:acme,k2:writer:checkout:acme,k3`. Unknown
 // roles fall back to RoleWriter.
 func (a *APIKeyAuth) AddFromSpec(spec string) {
-	parts := strings.SplitN(spec, ":", 3)
+	parts := strings.SplitN(spec, ":", 4)
 	switch len(parts) {
 	case 1:
 		a.Add(parts[0], "", RoleWriter)
 	case 2:
 		a.Add(parts[0], "", ParseRole(parts[1]))
+	case 3:
+		a.Add(parts[0], parts[2], ParseRole(parts[1]))
 	default:
 		a.Add(parts[0], parts[2], ParseRole(parts[1]))
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		a.tenants[parts[0]] = parts[3]
 	}
 }
 
@@ -146,6 +167,7 @@ func (a *APIKeyAuth) Remove(key string) {
 	delete(a.keys, key)
 	delete(a.labels, key)
 	delete(a.roles, key)
+	delete(a.tenants, key)
 }
 
 // Count returns the number of registered keys.
@@ -201,12 +223,21 @@ func (a *APIKeyAuth) List() []KeyEntry {
 	out := make([]KeyEntry, 0, len(a.keys))
 	for k := range a.keys {
 		out = append(out, KeyEntry{
-			Key:   k,
-			Label: a.labels[k],
-			Role:  a.roles[k],
+			Key:      k,
+			Label:    a.labels[k],
+			Role:     a.roles[k],
+			TenantID: a.tenants[k],
 		})
 	}
 	return out
+}
+
+// TenantOf returns the tenant binding for key, or empty when the key
+// is not bound (which means it may act on any tenant).
+func (a *APIKeyAuth) TenantOf(key string) string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.tenants[key]
 }
 
 // Middleware returns an http middleware that enforces `mode`. When
@@ -244,6 +275,9 @@ func (a *APIKeyAuth) Middleware(mode AuthMode, publicPaths ...string) func(http.
 			}
 			if label := a.LabelOf(key); label != "" {
 				r.Header.Set("X-Dog-Key-Label", label)
+			}
+			if tenant := a.TenantOf(key); tenant != "" {
+				r.Header.Set("X-Dog-Tenant", tenant)
 			}
 			next.ServeHTTP(w, r)
 		})

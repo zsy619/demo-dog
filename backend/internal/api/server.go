@@ -15,6 +15,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/ingest"
 	"github.com/zsy619/demo-dog/backend/internal/store"
 	"github.com/zsy619/demo-dog/backend/internal/stream"
+	"github.com/zsy619/demo-dog/backend/internal/tenants"
 )
 
 // Server wires routes to the underlying services.
@@ -53,6 +54,10 @@ type Server struct {
 
 	// alertsEngine evaluates SLO burn-rate rules and fires webhooks.
 	alerts *alertsEngine
+
+	// tenants is the optional in-memory tenant registry. nil when
+	// the server runs in single-tenant mode.
+	tenants *tenants.Registry
 
 	// mux is the top-level http.ServeMux. Exposed so add-on endpoints
 	// (pprof, probes) can be mounted after construction.
@@ -158,6 +163,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/probe", s.handleProbe)
 	mux.HandleFunc("/api/alerts/rules", s.handleAlertsRules)
 	mux.HandleFunc("/api/alerts/fires", s.handleAlertsFires)
+	mux.HandleFunc("/api/tenants", s.handleTenantsDispatch)
+	mux.HandleFunc("/api/tenants/", s.handleTenantsDispatch)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
 	// Layering (outer -> inner):
@@ -262,6 +269,12 @@ func (s *Server) MountPProf(prefix, token string) {
 	s.pprofToken = token
 }
 
+// SetTenants wires the tenant registry to the server. Once a registry
+// is attached, /api/tenants endpoints become live.
+func (s *Server) SetTenants(reg *tenants.Registry) {
+	s.tenants = reg
+}
+
 // applyRoleGates returns a handler that gates specific routes on role.
 // Anything not in the gate list passes through unchanged.
 func (s *Server) applyRoleGates(next http.Handler) http.Handler {
@@ -271,6 +284,7 @@ func (s *Server) applyRoleGates(next http.Handler) http.Handler {
 		"/api/keys":         true,
 		"/api/seed":         true,
 		"/api/seed/stream":  true,
+		"/api/tenants":      true,
 	}
 	// writer+ so ingest is open to writers (default) and admin.
 	writerOrUp := map[string]bool{

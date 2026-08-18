@@ -28,6 +28,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/api"
 	"github.com/zsy619/demo-dog/backend/internal/ingest"
 	"github.com/zsy619/demo-dog/backend/internal/store"
+	"github.com/zsy619/demo-dog/backend/internal/tenants"
 	"github.com/zsy619/demo-dog/backend/internal/stream"
 )
 
@@ -66,6 +67,7 @@ func main() {
 	pprofToken := flag.String("pprof-token", "", "When set, exposes net/http/pprof endpoints at /debug/pprof/* gated by `?token=<value>`. Empty disables pprof.")
 	selfTrace := flag.Bool("self-trace", false, "Record the collectors own requests as OTLP spans and POST them back to /api/ingest/otlp. Useful for self-observability in production.")
 	alertsPath := flag.String("alerts-rules", "", "Optional path to a YAML/JSON file of SLO burn-rate rules. Empty disables alerting.")
+	tenantsFlag := flag.String("tenants", "", "Optional comma-separated list of <id>:<name> to seed on startup. Tenants registered here get a default admin key derived from -api-keys.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -109,8 +111,25 @@ func main() {
 		apiServer.SetAuthMode(api.AuthModeAPIKey)
 		for _, spec := range splitCSV(keys) {
 			// Spec format: "<key>" (defaults to writer) or
-			// "<key>:<role>" or "<key>:<role>:<label>".
+			// "<key>:<role>" or "<key>:<role>:<label>" or
+			// "<key>:<role>:<label>:<tenant>".
 			apiServer.Auth().AddFromSpec(spec)
+		}
+		// Optional tenant registry. Each tenant starts empty; the
+		// admin can mint keys via /api/tenants/<id>/keys.
+		if *tenantsFlag != "" {
+			reg := tenants.New()
+			for _, t := range splitCSV(*tenantsFlag) {
+				parts := strings.SplitN(t, ":", 2)
+				name := parts[0]
+				if len(parts) == 2 {
+					name = parts[1]
+				}
+				if _, err := reg.CreateTenant(parts[0], name, ""); err == nil {
+					fmt.Printf("  Tenant            : %s (%s)\n", parts[0], name)
+				}
+			}
+			apiServer.SetTenants(reg)
 		}
 		fmt.Printf("  Auth mode         : api-key (%d key(s) loaded)\n", apiServer.Auth().Count())
 	} else {
