@@ -30,6 +30,11 @@ type Server struct {
 	// collector can route queries to. Plug a real Doris / ClickHouse
 	// driver at startup via Server.Datasources().Add(...).
 	datasources *datasourceRegistry
+
+	// auth is the API-key registry. Empty by default (dev mode);
+	// populated via the -api-keys flag or DOG_API_KEYS env var.
+	auth  *APIKeyAuth
+	authM AuthMode
 }
 
 // New returns a new Server.
@@ -39,6 +44,8 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 		ingest:      in,
 		hub:         hub,
 		datasources: newDatasourceRegistry(),
+		auth:        NewAPIKeyAuth(),
+		authM:       AuthModeOff,
 		started:     time.Now(),
 		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -49,6 +56,13 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 func (s *Server) Datasources() *datasourceRegistry {
 	return s.datasources
 }
+
+// Auth exposes the API key registry so callers can register keys at
+// startup (or for tests). AuthMode() tells the middleware which mode
+// to enforce.
+func (s *Server) Auth() *APIKeyAuth    { return s.auth }
+func (s *Server) AuthMode() AuthMode    { return s.authM }
+func (s *Server) SetAuthMode(m AuthMode) { s.authM = m }
 
 // Handler returns the root http.Handler with all routes mounted.
 func (s *Server) Handler() http.Handler {
@@ -79,7 +93,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
-	return withCORS(withLogging(mux))
+	return withCORS(withLogging(s.auth.Middleware(s.authM,
+		"/api/health", "/metrics",
+	)(mux)))
 }
 
 func withCORS(h http.Handler) http.Handler {

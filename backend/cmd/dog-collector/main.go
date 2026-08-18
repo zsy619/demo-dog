@@ -55,6 +55,7 @@ func main() {
 	workers := flag.Int("workers", 8, "ingest worker pool size")
 	queue := flag.Int("queue", 4096, "ingest queue depth (bounded; backpressure on overflow)")
 	seed := flag.String("seed", "", "Optional comma-separated service names to seed on startup")
+	apiKeys := flag.String("api-keys", "", "Comma-separated list of accepted API keys. Empty (default) disables auth. Env DOG_API_KEYS is read as a fallback.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -65,6 +66,24 @@ func main() {
 	defer in.Close()
 
 	apiServer := api.New(s, in, hub)
+
+	// Configure API-key authentication. Sources, in priority order:
+	//   1. -api-keys flag (comma-separated)
+	//   2. DOG_API_KEYS env var (comma-separated)
+	// If both are empty the server starts in dev mode (no auth).
+	keys := *apiKeys
+	if keys == "" {
+		keys = os.Getenv("DOG_API_KEYS")
+	}
+	if keys != "" {
+		apiServer.SetAuthMode(api.AuthModeAPIKey)
+		for i, k := range splitCSV(keys) {
+			apiServer.Auth().Add(k, fmt.Sprintf("flag:%d", i))
+		}
+		fmt.Printf("  Auth mode         : api-key (%d key(s) loaded)\n", apiServer.Auth().Count())
+	} else {
+		fmt.Println("  Auth mode         : off (dev mode; do not expose to public networks)")
+	}
 
 	// If seed services are provided, drop a few records before serving so the
 	// first dashboard isnt empty.

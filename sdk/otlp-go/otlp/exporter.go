@@ -26,6 +26,12 @@ import (
 type Exporter struct {
 	endpoint   string
 	httpClient *http.Client
+
+	// apiKey, when non-empty, is attached to every outgoing request
+	// as `Authorization: Bearer <key>`. The collector accepts the
+	// same value via X-API-Key or ?api_key=... for debug use, but
+	// the bearer header is the recommended path for production.
+	apiKey string
 }
 
 // ExporterOption mutates the Exporter during construction.
@@ -59,6 +65,17 @@ func WithTimeout(d time.Duration) ExporterOption {
 	}
 }
 
+// WithAPIKey attaches a static bearer token to every outgoing request.
+// The collector must have the same key registered via -api-keys or
+// DOG_API_KEYS; otherwise the request is rejected with 401.
+//
+// Empty key is a no-op (useful for tests / dev mode).
+func WithAPIKey(key string) ExporterOption {
+	return func(e *Exporter) {
+		e.apiKey = key
+	}
+}
+
 // NewExporter builds a default Exporter. By default the SDK talks to the
 // simplified JSON ingest endpoint (/api/ingest/otlp) using the
 // otlp.Request wire schema. Set WithEndpoint to switch to the OTel JSON
@@ -88,6 +105,9 @@ func (e *Exporter) Export(ctx context.Context, req Request) (*Response, error) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
+	if e.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+e.apiKey)
+	}
 
 	resp, err := e.httpClient.Do(httpReq)
 	if err != nil {

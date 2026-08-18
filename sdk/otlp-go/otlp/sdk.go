@@ -56,6 +56,8 @@ type SDK struct {
 	buf      *buffer.Buffer
 	resource map[string]string
 
+	apiKey string
+
 	flushInterval time.Duration
 	maxBatch      int
 	sampler       Sampler
@@ -133,6 +135,27 @@ func WithResourceAttrs(attrs map[string]string) SDKOption {
 		for k, v := range attrs {
 			s.resource[k] = v
 		}
+	}
+}
+
+// WithAuthToken configures a static bearer token sent on every
+// outgoing request. The collector must have the same token registered
+// via -api-keys or DOG_API_KEYS, otherwise ingest is rejected with
+// 401.
+//
+// Empty token is a no-op (useful when wiring through env vars:
+//   otlp.WithAuthToken(os.Getenv("DOG_API_KEY"))
+// ).
+//
+// The exporter also exposes otlp.WithAPIKey as an ExporterOption for
+// callers that build their own *Exporter; this SDKOption version is
+// the convenience wrapper when going through otlp.New().
+func WithAuthToken(token string) SDKOption {
+	return func(s *SDK) {
+		if token == "" {
+			return
+		}
+		s.apiKey = token
 	}
 }
 
@@ -248,6 +271,15 @@ func New(endpoint string, opts ...SDKOption) (*SDK, error) {
 	sname, ok := s.resource["service.name"]
 	if !ok || sname == "" {
 		return nil, errors.New("otlp: WithService(name) is required")
+	}
+
+	// Propagate API key into the exporter. We do this after opts run so
+	// WithAPIKey takes precedence even if the caller also configured the
+	// exporter directly.
+	if s.apiKey != "" {
+		if exp, ok := s.exporter.(*Exporter); ok {
+			exp.apiKey = s.apiKey
+		}
 	}
 
 	s.resource["telemetry.sdk.name"] = "otlp-go"
