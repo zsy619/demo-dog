@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"sync"
@@ -49,6 +50,20 @@ type Server struct {
 	// for compliance + post-incident forensics. Created lazily on
 	// first access; tests can swap it via SetAuditLog.
 	auditLog *AuditLog
+
+	// mux is the top-level http.ServeMux. Exposed so add-on endpoints
+	// (pprof, probes) can be mounted after construction.
+	mux *http.ServeMux
+
+	// pprofPrefix / pprofToken are set by MountPProf and consulted by
+	// the chain constructed in Handler() so pprof lives OUTSIDE the
+	// auth + audit middleware (no token = no metrics, no audit spam).
+	pprofPrefix string
+	pprofToken  string
+
+	// pprofHandler is the assembled sub-mux exposed via the auth-
+	// bypass layer. Lazily constructed in Handler().
+	pprofHandler http.Handler
 }
 
 // New returns a new Server.
@@ -107,7 +122,8 @@ func (s *Server) SetRateLimit(rate, burst float64) {
 
 // Handler returns the root http.Handler with all routes mounted.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	s.mux = http.NewServeMux()
+	mux := s.mux
 
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/services", s.handleServices)
@@ -135,26 +151,109 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/audit", s.handleAudit)
 	mux.HandleFunc("/api/audit/stats", s.handleAuditStats)
 	mux.HandleFunc("/api/keys", s.handleListKeys)
+	mux.HandleFunc("/api/probe", s.handleProbe)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
 	// Layering (outer -> inner):
-	//   withCORS -> audit -> rateLimit -> auth.Middleware ->
-	//   applyRoleGates -> mux
+	//   withCORS -> audit -> rateLimit -> selfTrace -> latency ->
+	//   (pprof + auth.Middleware) -> applyRoleGates -> mux
 	//
 	// auth.Middleware runs BEFORE the role gate so it has a chance
-	// to stamp X-Dog-Role on the request header. Anything outside
-	// auth sees the headers intact.
+	// to stamp X-Dog-Role on the request header. pprof routes are
+	// mounted in their own layer so a /debug/pprof/* request never
+	// reaches the auth gate.
 	gated := s.applyRoleGates(mux)
 	h := s.auth.Middleware(s.authM,
-		"/api/health", "/metrics",
+		"/api/health", "/metrics", "/api/probe",
 	)(gated)
+	if s.pprofToken != "" {
+		h = s.buildPProfMux(h)
+	}
 	if s.rateLimiter != nil {
 		h = s.rateLimiter.Middleware()(h)
 	}
 	if s.auditLog != nil {
 		h = AuditMiddleware(s.auditLog, false)(h)
 	}
+	h = s.selfTraceMiddleware(h)
+	h = perHandlerLatency(h)
 	return s.withCORS(withLogging(h))
+}
+
+// perHandlerLatency wraps an http.Handler in a histogram that records
+// the wall-clock duration of every request, labelled by HTTP method
+// and (rough) route. The "route" is the URL path stripped of any
+// query string and trailing service identifier, so the metric stays
+// low-cardinality even with many distinct services.
+//
+// Exposed via /metrics under the name `dog_request_duration_seconds`.
+func perHandlerLatency(next http.Handler) http.Handler {
+	// Use a fixed bucket boundary set tuned for an observability
+	// backend: 1 ms ... 30 s. Buckets are global (not per-route) to
+	// keep the metric cardinality bounded.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		dur := time.Since(start).Seconds()
+		route := trimRoute(r.URL.Path)
+		requestDuration.WithLabelValues(r.Method, route).Observe(dur)
+	})
+}
+
+// trimRoute collapses noisy path segments to keep metric cardinality
+// predictable: service-id-like segments are replaced with `{name}`
+// and span-id-like hex strings with `{id}`. Anything else is left as
+// is.
+func trimRoute(p string) string {
+	out := make([]byte, 0, len(p))
+	inName := false
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		if c == '/' {
+			out = append(out, c)
+			inName = true
+			continue
+		}
+		if inName {
+			// Detect hex-only segment >= 16 chars (span / trace IDs).
+			j := i
+			for j < len(p) && p[j] != '/' {
+				j++
+			}
+			seg := p[i:j]
+			switch {
+			case isHex(seg) && len(seg) >= 16:
+				out = append(out, []byte("{id}")...)
+			case len(seg) > 0 && seg != "api":
+				out = append(out, []byte("{name}")...)
+			default:
+				out = append(out, []byte(seg)...)
+			}
+			i = j - 1
+			inName = false
+			continue
+		}
+		out = append(out, c)
+	}
+	return string(out)
+}
+
+func isHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// MountPProf registers the net/http/pprof handlers at the given
+// prefix, gated by a token query parameter. The token check is run
+// before any pprof handler so a leaked URL alone is insufficient.
+func (s *Server) MountPProf(prefix, token string) {
+	s.pprofPrefix = prefix
+	s.pprofToken = token
 }
 
 // applyRoleGates returns a handler that gates specific routes on role.
@@ -296,4 +395,71 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, sum)
+}
+
+// WrapWithSelfTrace enables self-tracing. When enabled, every
+// request through the server produces an OTLP span (POSTed to
+// /api/ingest/otlp on loopback) so the collector can graph its own
+// latency. The trace IDs are minted here; downstream SDKs that
+// honour W3C tracecontext will stitch into the same tree.
+func (s *Server) WrapWithSelfTrace(loopback string) {
+	selfTraceMu.Lock()
+	selfTraceEnabled = true
+	selfTraceLoopback = loopback
+	selfTraceMu.Unlock()
+}
+
+// handleProbe is a synthetic blackbox probe endpoint. It always
+// returns 200 OK with a small JSON body that lists the engine stats.
+// K8s readinessProbe and external uptime monitors hit this endpoint.
+// No authentication is required so a misconfigured auth layer cannot
+// take the collector offline.
+func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
+	stats := s.store.Stats()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":            "ok",
+		"uptime_seconds":    int(time.Since(s.started).Seconds()),
+		"logs_accepted":     stats.LogsAccepted,
+		"metrics_accepted":  stats.MetricsAccepted,
+		"spans_accepted":    stats.SpansAccepted,
+		"queries_served":    stats.QueriesServed,
+	})
+}
+
+// buildPProfMux wraps `next` in a small mux that handles the
+// configured /debug/pprof/* paths (each gated by the configured
+// token) and falls through to next for everything else. Called from
+// Handler() when MountPProf was invoked.
+func (s *Server) buildPProfMux(next http.Handler) http.Handler {
+	token := s.pprofToken
+	prefix := s.pprofPrefix
+	gate := func(real http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("token") != token {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			real(w, r)
+		}
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc(prefix+"/", gate(pprof.Index))
+	mux.HandleFunc(prefix+"/cmdline", gate(pprof.Cmdline))
+	mux.HandleFunc(prefix+"/profile", gate(pprof.Profile))
+	mux.HandleFunc(prefix+"/symbol", gate(pprof.Symbol))
+	mux.HandleFunc(prefix+"/trace", gate(pprof.Trace))
+	mux.HandleFunc(prefix+"/goroutine", gate(pprof.Handler("goroutine").ServeHTTP))
+	mux.HandleFunc(prefix+"/heap", gate(pprof.Handler("heap").ServeHTTP))
+	mux.HandleFunc(prefix+"/allocs", gate(pprof.Handler("allocs").ServeHTTP))
+	mux.HandleFunc(prefix+"/block", gate(pprof.Handler("block").ServeHTTP))
+	mux.HandleFunc(prefix+"/mutex", gate(pprof.Handler("mutex").ServeHTTP))
+	mux.HandleFunc(prefix+"/threadcreate", gate(pprof.Handler("threadcreate").ServeHTTP))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, p := mux.Handler(r)
+		if p == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }

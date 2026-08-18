@@ -592,6 +592,9 @@ func (s *Server) handlePromMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP dog_go_memstats_gc_pause_total_seconds Cumulative GC pause time.\n")
 	fmt.Fprintf(w, "# TYPE dog_go_memstats_gc_pause_total_seconds counter\n")
 	fmt.Fprintf(w, "dog_go_memstats_gc_pause_total_seconds %.6f\n", float64(ms.PauseTotalNs)/1e9)
+
+	// Per-handler latency histogram (Round 22.5).
+	WriteMetrics(w)
 }
 
 // helloFrame returns a pre-encoded welcome frame for new websocket clients.

@@ -517,6 +517,30 @@ paths:
                   capacity: { type: integer }
                   total: { type: integer, format: int64 }
 
+  /api/probe:
+    get:
+      tags: [health]
+      summary: Synthetic blackbox probe.
+      description: |
+        Always returns 200 when the collector is alive. No auth required
+        so K8s readinessProbe and external uptime monitors can hit it
+        without rotating API keys.
+      security: []
+      responses:
+        "200":
+          description: Healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  uptime_seconds: { type: integer }
+                  logs_accepted: { type: integer, format: int64 }
+                  metrics_accepted: { type: integer, format: int64 }
+                  spans_accepted: { type: integer, format: int64 }
+                  queries_served: { type: integer, format: int64 }
+
   /api/keys:
     get:
       tags: [admin]

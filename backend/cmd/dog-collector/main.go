@@ -63,6 +63,8 @@ func main() {
 	ratePerSec := flag.Float64("rate-limit", 0, "Per-IP token bucket refill rate (req/s). 0 disables rate limiting.")
 	rateBurst := flag.Float64("rate-burst", 200, "Per-IP token bucket burst capacity.")
 	snapshotPath := flag.String("snapshot", "", "Optional path to a gob-encoded store snapshot. On startup the engine restores from it (if present); on shutdown the current state is atomically saved back to the same path.")
+	pprofToken := flag.String("pprof-token", "", "When set, exposes net/http/pprof endpoints at /debug/pprof/* gated by `?token=<value>`. Empty disables pprof.")
+	selfTrace := flag.Bool("self-trace", false, "Record the collectors own requests as OTLP spans and POST them back to /api/ingest/otlp. Useful for self-observability in production.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -120,6 +122,16 @@ func main() {
 		for _, name := range splitCSV(*seed) {
 			apiServer.InjectSeed(name, 10)
 		}
+	}
+
+	// MountPProf + WrapWithSelfTrace must be called BEFORE we read
+	// apiServer.Handler() so the server struct sees the configured
+	// flags at chain-build time.
+	if *pprofToken != "" {
+		apiServer.MountPProf("/debug/pprof", *pprofToken)
+	}
+	if *selfTrace {
+		apiServer.WrapWithSelfTrace("http://localhost" + *addr)
 	}
 
 	server := &http.Server{
