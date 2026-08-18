@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import type { ServiceSummary } from "@/types/api";
 import type { Page } from "@/App";
 import Sparkline from "@/components/Sparkline";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SidebarProps {
   page: Page;
@@ -124,21 +125,51 @@ function ServiceRow({
   );
 }
 
+function TenantSwitcher() {
+  const { tenantId, setTenantId } = useAuth();
+  return (
+    <div className="px-3 pb-2 border-b border-grafana-border">
+      <label className="text-[10px] uppercase tracking-wider text-grafana-muted block mb-1">
+        Tenant
+      </label>
+      <input
+        value={tenantId}
+        onChange={(e) => setTenantId(e.target.value)}
+        placeholder="all tenants"
+        spellCheck={false}
+        autoComplete="off"
+        className="w-full bg-grafana-elev border border-grafana-border rounded px-2 py-1 text-xs focus:outline-none focus:border-grafana-blue"
+      />
+      <p className="mt-1 text-[10px] text-grafana-muted leading-tight">
+        Sent as{" "}
+        <code className="font-mono">X-Tenant-Id</code> on every API
+        request and{" "}
+        <code className="font-mono">?tenant=</code> on read queries.
+        Empty = no tenant filter.
+      </p>
+    </div>
+  );
+}
+
 export default function Sidebar({
   page,
   onPageChange,
   service,
   onServiceChange,
 }: SidebarProps) {
+  const auth = useAuth();
   const [services, setServices] = useState<ServiceSummary[]>([]);
   const [qpsByService, setQpsByService] = useState<Record<string, number[]>>({});
   const [filter, setFilter] = useState("");
 
+  // Re-load the service list whenever the tenant changes. The hook
+  // dependency list intentionally only re-runs on tenant change so
+  // we do not thrash the collector when nothing relevant shifted.
   useEffect(() => {
     let cancelled = false;
     const load = () =>
       api
-        .services()
+        .services(auth.tenantId || undefined)
         .then((r) => {
           if (!cancelled) setServices(r.services);
         })
@@ -149,7 +180,7 @@ export default function Sidebar({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [auth.tenantId]);
 
   // Fetch the per-service QPS series and turn it into a tiny ring buffer of
   // recent samples so each sidebar row can show a sparkline.
@@ -210,6 +241,8 @@ export default function Sidebar({
           </div>
         </div>
       </div>
+
+      <TenantSwitcher />
 
       <div className="flex-1 overflow-y-auto scrollbar-thin py-3">
         <Section title="General">
