@@ -62,8 +62,8 @@ type Doris struct {
 
 	// 1m & 5m materialized views for metrics, keyed by service|name.
 	muMV         sync.RWMutex
-	mvMinute     map[string][]model.SeriesPoint
-	mvFiveMinute map[string][]model.SeriesPoint
+	mvMinute     map[string][]model.MVBucket
+	mvFiveMinute map[string][]model.MVBucket
 
 	// Bookkeeping for service summaries.
 	muSum sync.RWMutex
@@ -90,8 +90,8 @@ func New(cfg Config) *Doris {
 		coldMetrics:  make([]model.MetricPoint, 0, cfg.ColdCap),
 		hotSpans:     make(map[string][]model.SpanRecord),
 		coldSpans:    make([]model.SpanRecord, 0, cfg.ColdCap),
-		mvMinute:     make(map[string][]model.SeriesPoint),
-		mvFiveMinute: make(map[string][]model.SeriesPoint),
+		mvMinute:     make(map[string][]model.MVBucket),
+		mvFiveMinute: make(map[string][]model.MVBucket),
 		sum:          make(map[string]*model.ServiceSummary),
 	}
 }
@@ -408,51 +408,75 @@ func (d *Doris) computeQPS(service string) float64 {
 }
 
 // updateMetricMV maintains simplified 1m and 5m rollups in MV buckets.
-// The key is service|name, the value is a downsampled series.
+// The key is service|name, the value is a downsampled series of
+// MVBucket (sum/count/min/max) which is converted to mean values when
+// the MV is read out. This replaces the previous running-average hack
+// that biased every bucket toward the first sample ever seen.
 func (d *Doris) updateMetricMV(in []model.MetricPoint) {
 	d.muMV.Lock()
 	defer d.muMV.Unlock()
 	for _, p := range in {
 		key := p.Service + "|" + p.Name
 		ts := p.Timestamp.Truncate(time.Minute).UnixMilli()
-		merged := d.mvMinute[key]
-		merged = appendOrUpdate(merged, model.SeriesPoint{Ts: ts, Value: p.Value})
-		d.mvMinute[key] = merged
+		d.mvMinute[key] = appendMVBucket(d.mvMinute[key], p.Value, ts)
 
 		ts5 := p.Timestamp.Truncate(5 * time.Minute).UnixMilli()
-		merged5 := d.mvFiveMinute[key]
-		merged5 = appendOrUpdate(merged5, model.SeriesPoint{Ts: ts5, Value: p.Value})
-		d.mvFiveMinute[key] = merged5
+		d.mvFiveMinute[key] = appendMVBucket(d.mvFiveMinute[key], p.Value, ts5)
 	}
 }
 
-// appendOrUpdate merges a point into an existing series by timestamp,
-// averaging values when multiple records fall in the same bucket.
-func appendOrUpdate(series []model.SeriesPoint, p model.SeriesPoint) []model.SeriesPoint {
+// appendMVBucket inserts value into the bucket matching ts. Out-of-order
+// arrivals are handled by linear search; pathological resort only happens
+// when an older ts slips in after a newer one (rare in practice).
+func appendMVBucket(series []model.MVBucket, value float64, ts int64) []model.MVBucket {
 	if len(series) == 0 {
-		return []model.SeriesPoint{p}
+		return []model.MVBucket{{Ts: ts, Sum: value, Count: 1, Min: value, Max: value}}
 	}
 	last := series[len(series)-1]
-	if last.Ts == p.Ts {
-		// running average, simple running mean
-		last.Value = (last.Value + p.Value) / 2
+	if last.Ts == ts {
+		// Same bucket: accumulate sum/count/min/max.
+		last.Sum += value
+		last.Count++
+		if value < last.Min {
+			last.Min = value
+		}
+		if value > last.Max {
+			last.Max = value
+		}
 		series[len(series)-1] = last
 		return series
 	}
-	if p.Ts < last.Ts {
+	if ts < last.Ts {
 		// Out-of-order arrival: linear search for bucket.
 		for i := range series {
-			if series[i].Ts == p.Ts {
-				series[i].Value = (series[i].Value + p.Value) / 2
+			if series[i].Ts == ts {
+				b := series[i]
+				b.Sum += value
+				b.Count++
+				if value < b.Min {
+					b.Min = value
+				}
+				if value > b.Max {
+					b.Max = value
+				}
+				series[i] = b
 				return series
 			}
 		}
-		// Append and resort if rare.
-		series = append(series, p)
+		series = append(series, model.MVBucket{Ts: ts, Sum: value, Count: 1, Min: value, Max: value})
 		sort.Slice(series, func(i, j int) bool { return series[i].Ts < series[j].Ts })
 		return series
 	}
-	return append(series, p)
+	return append(series, model.MVBucket{Ts: ts, Sum: value, Count: 1, Min: value, Max: value})
+}
+
+// mvToSeries converts MV buckets to a SeriesPoint series (mean values).
+func mvToSeries(buckets []model.MVBucket) []model.SeriesPoint {
+	out := make([]model.SeriesPoint, len(buckets))
+	for i, b := range buckets {
+		out[i] = model.SeriesPoint{Ts: b.Ts, Value: b.Mean()}
+	}
+	return out
 }
 
 // QueryLogs returns recent logs filtered by service, severity, and time window.
@@ -539,10 +563,10 @@ func (d *Doris) QueryMetrics(service, name, window string, limit int) model.Quer
 	d.muMV.RLock()
 	switch window {
 	case "5m":
-		series = append([]model.SeriesPoint(nil), d.mvFiveMinute[key]...)
+		series = mvToSeries(d.mvFiveMinute[key])
 		mvName = "mv_metrics_5m"
 	case "1m", "":
-		series = append([]model.SeriesPoint(nil), d.mvMinute[key]...)
+		series = mvToSeries(d.mvMinute[key])
 		mvName = "mv_metrics_1m"
 	default:
 		d.muMV.RUnlock()

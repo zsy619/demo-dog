@@ -121,6 +121,30 @@ type SeriesPoint struct {
 	Value float64 `json:"value"`
 }
 
+// MVBucket is a single time-bucketed aggregate. Each bucket represents
+// a 1- or 5-minute window and stores sum+count so we can compute a
+// proper mean when the bucket is read out (rather than the previous
+// "running average" hack that biased toward the first sample).
+//
+// On rollover (older buckets evicted to keep MV bounded), callers can
+// compute min/max in addition to the mean by reading the partially
+// populated fields.
+type MVBucket struct {
+	Ts    int64   `json:"ts"`    // bucket start, ms
+	Sum   float64 `json:"sum"`   // sum of values in the window
+	Count int64   `json:"count"` // number of samples
+	Min   float64 `json:"min"`
+	Max   float64 `json:"max"`
+}
+
+// Mean returns the bucket mean (0 if empty).
+func (b MVBucket) Mean() float64 {
+	if b.Count == 0 {
+		return 0
+	}
+	return b.Sum / float64(b.Count)
+}
+
 // MetricSeries is a labeled time series for frontend charts.
 type MetricSeries struct {
 	Name    string        `json:"name"`

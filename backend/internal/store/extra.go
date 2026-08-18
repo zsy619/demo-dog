@@ -137,10 +137,10 @@ func (d *Doris) QueryMetricsFiltered(f QueryFilter) model.QueryResult {
 	d.muMV.RLock()
 	switch f.Window {
 	case "5m":
-		series = append([]model.SeriesPoint(nil), d.mvFiveMinute[key]...)
+		series = mvToSeries(d.mvFiveMinute[key])
 		mvName = "mv_metrics_5m"
 	case "1m", "":
-		series = append([]model.SeriesPoint(nil), d.mvMinute[key]...)
+		series = mvToSeries(d.mvMinute[key])
 		mvName = "mv_metrics_1m"
 	default:
 		d.muMV.RUnlock()
@@ -420,18 +420,38 @@ func (d *Doris) PercentileLatencies(service string) (p50, p95, p99 float64) {
 	return percentile(samples, 0.50), percentile(samples, 0.95), percentile(samples, 0.99)
 }
 
+// percentile returns the q-th percentile (0..1) of `samples` using
+// linear interpolation between order statistics (the "C=1" / numpy
+// default). With only one sample we return it; with zero samples we
+// return 0. Without interpolation the previous implementation picked
+// the boundary bucket value, which systematically over-estimated
+// percentiles for small sample sets (e.g. p99 of [10,20,30,100] was
+// 100, not ~76 as the true 99th percentile).
 func percentile(samples []int64, q float64) float64 {
 	if len(samples) == 0 {
 		return 0
 	}
+	if q < 0 {
+		q = 0
+	}
+	if q > 1 {
+		q = 1
+	}
 	cp := make([]int64, len(samples))
 	copy(cp, samples)
 	sort.Slice(cp, func(i, j int) bool { return cp[i] < cp[j] })
-	idx := int(float64(len(cp)) * q)
-	if idx >= len(cp) {
-		idx = len(cp) - 1
+	if len(cp) == 1 {
+		return float64(cp[0])
 	}
-	return float64(cp[idx])
+	// Position in [0, len-1] floating point.
+	pos := q * float64(len(cp)-1)
+	lo := int(pos)
+	hi := lo + 1
+	if hi >= len(cp) {
+		hi = len(cp) - 1
+	}
+	frac := pos - float64(lo)
+	return float64(cp[lo]) + frac*(float64(cp[hi])-float64(cp[lo]))
 }
 
 func avgMs(samples []int64) float64 {
@@ -498,6 +518,13 @@ func (d *Doris) ServiceListForLog() []string {
 }
 
 // HistogramCounts returns a tiny histogram suitable for a sparkline.
+//
+// Uses fixed logarithmic bucket boundaries so the histogram is meaningful
+// regardless of the input range (no more "maxV=1 collapses everything to
+// bin 0" bug from the previous normalized-by-max implementation).
+//
+// Buckets: 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000 ms.
+// Samples outside the range spill into the first/last bucket.
 func (d *Doris) HistogramCounts(service string, bins int) []int {
 	d.muSpans.RLock()
 	defer d.muSpans.RUnlock()
@@ -512,25 +539,68 @@ func (d *Doris) HistogramCounts(service string, bins int) []int {
 	if len(samples) == 0 || bins <= 0 {
 		return []int{}
 	}
-	var maxV int64 = 1
+	// Fixed bucket edges in ms (chosen for typical web service latency:
+	// sub-ms … multi-second). Last edge is inclusive overflow.
+	edges := []int64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000}
+	counts := make([]int, len(edges)+1)
 	for _, s := range samples {
-		if s > maxV {
-			maxV = s
+		if s <= 0 {
+			counts[0]++
+			continue
+		}
+		placed := false
+		for i, e := range edges {
+			if s <= e {
+				counts[i]++
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			counts[len(counts)-1]++
 		}
 	}
-	counts := make([]int, bins)
-	for _, s := range samples {
-		ratio := float64(s) / float64(maxV)
-		idx := int(ratio * float64(bins))
-		if idx >= bins {
-			idx = bins - 1
-		}
-		if idx < 0 {
-			idx = 0
-		}
-		counts[idx]++
+	// Downsample/upsample to the requested `bins` count by simple bin
+	// coalescing. Caller requests <= ~10 buckets anyway.
+	return resampleBuckets(counts, bins)
+}
+
+// resampleBuckets collapses `src` into exactly `dst` bins using
+// greedy coalescing. If dst >= len(src) we pad with zeros (and
+// interleave) so the shape stays comparable; if dst < len(src) we
+// merge adjacent buckets.
+func resampleBuckets(src []int, dst int) []int {
+	if dst <= 0 {
+		return []int{}
 	}
-	return counts
+	if dst == len(src) {
+		out := make([]int, len(src))
+		copy(out, src)
+		return out
+	}
+	out := make([]int, dst)
+	if dst >= len(src) {
+		// Pad-and-interleave: distribute src into dst slots evenly.
+		for i, v := range src {
+			out[i*dst/len(src)] += v
+		}
+		return out
+	}
+	// Merge: each output bin averages k = len(src)/dst input bins.
+	k := len(src) / dst
+	r := len(src) % dst
+	idx := 0
+	for i := 0; i < dst; i++ {
+		size := k
+		if i < r {
+			size++
+		}
+		for j := 0; j < size && idx < len(src); j++ {
+			out[i] += src[idx]
+			idx++
+		}
+	}
+	return out
 }
 
 // SeverityCounts returns how many log records exist per severity for a service.

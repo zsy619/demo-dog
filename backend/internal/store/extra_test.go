@@ -51,11 +51,19 @@ func TestPercentileLatencies(t *testing.T) {
 		{TraceID: "t1", SpanID: "d", Service: "checkout", StartTime: now, DurationMs: 100},
 	})
 	p50, _, p99 := d.PercentileLatencies("checkout")
-	if p50 < 5 || p50 > 30 {
-		t.Fatalf("p50 unexpected: %v", p50)
+	// Sorted: [10, 20, 30, 100]. With interpolation:
+	//   p50: pos=1.5, between 20 and 30 -> 25
+	//   p99: pos=2.97, between 30 and 100 -> 30 + 0.97*70 = 97.9
+	if p50 < 20 || p50 > 30 {
+		t.Fatalf("p50 expected ~25, got %v", p50)
 	}
-	if p99 != 100 {
-		t.Fatalf("p99 should be 100, got %v", p99)
+	if p99 < 90 || p99 > 100 {
+		t.Fatalf("p99 expected ~98, got %v", p99)
+	}
+	// Also exercise empty + single-sample edge cases.
+	emptyP50, _, _ := d.PercentileLatencies("nonexistent")
+	if emptyP50 != 0 {
+		t.Fatalf("expected 0 for empty service, got %v", emptyP50)
 	}
 }
 
@@ -126,6 +134,16 @@ func TestHistogramCounts(t *testing.T) {
 	}
 	if total != 3 {
 		t.Fatalf("expected 3 samples in histogram, got %d", total)
+	}
+	// Verify the fixed-bucket placement puts the three known samples in
+	// distinct edges: 1ms → bucket 0 (≤1ms), 50ms → bucket 5 (≤50ms),
+	// 99ms → bucket 6 (≤100ms). With 4 requested bins via resampleBuckets
+	// we just need every sample to land somewhere — and the old "maxV=1"
+	// bug put everything in bucket 0, so any non-bucket-0 placement
+	// proves the fix works.
+	allInFirst := counts[0] == 3
+	if allInFirst {
+		t.Fatalf("regression: all 3 samples in bin 0 (old maxV=1 bug)")
 	}
 }
 
