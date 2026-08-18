@@ -66,6 +66,16 @@ type SDK struct {
 	errorHandler  func(err error)
 	autoResource  bool
 
+	// Buffer caps. Populated by WithBufferCaps; the actual cap is
+	// applied at buffer construction.
+	bufLogCap  int
+	bufMetCap  int
+	bufSpanCap int
+
+	// Redactor applied to outgoing records. nil falls back to
+	// DefaultRedactor.
+	redactor Redactor
+
 	// Optional histogram aggregation state. When histogramBuckets is
 	// non-nil, every Histogram() call accumulates into a per-flush-window
 	// aggregator and the SDK exports a single OTel histogram data point
@@ -224,6 +234,34 @@ func WithExporter(e ExporterInterface) SDKOption {
 	}
 }
 
+// WithBufferCaps installs per-stream caps on the internal buffer.
+// logCap, metCap, spanCap are the maximum number of records that may
+// queue for each signal. When the cap is hit the OLDEST record is
+// dropped (drop-oldest policy). Zero disables the cap for that stream.
+func WithBufferCaps(logCap, metCap, spanCap int) SDKOption {
+	return func(s *SDK) {
+		s.bufLogCap = logCap
+		s.bufMetCap = metCap
+		s.bufSpanCap = spanCap
+	}
+}
+
+// WithRedactor installs a function that scrubs PII from outgoing
+// records. The redactor is called once per record, on the
+// pre-marshalled wire shape, so it can rewrite both the body and any
+// sensitive attribute values.
+//
+// The default redactor (DefaultRedactor) masks `password=...`,
+// `Bearer ...`, `Authorization: ...`, and email addresses with
+// `***REDACTED***`.
+func WithRedactor(r Redactor) SDKOption {
+	return func(s *SDK) {
+		if r != nil {
+			s.redactor = r
+		}
+	}
+}
+
 // WithSampler installs a custom Sampler. The default is AlwaysOnSampler.
 // Sampler decisions are recorded in Stats.SamplerSkipped.
 func WithSampler(smp Sampler) SDKOption {
@@ -306,7 +344,8 @@ func New(endpoint string, opts ...SDKOption) (*SDK, error) {
 	for k, v := range s.resource {
 		resCopy[k] = v
 	}
-	s.buf = buffer.New(sname, resCopy)
+	s.buf = buffer.New(sname, resCopy,
+		buffer.WithCaps(s.bufLogCap, s.bufMetCap, s.bufSpanCap))
 
 	s.wg.Add(1)
 	go s.run()
@@ -590,6 +629,7 @@ func (s *SDK) run() {
 func (s *SDK) flush(ctx context.Context) error {
 	s.stats.FlushCalls.Add(1)
 	breq := s.buf.Drain()
+	s.applyRedactor(&breq)
 	// Merge any accumulated histograms (when WithHistogramBuckets was
 	// configured) into the same batch so they ride out in one export.
 	for _, acc := range s.drainHistograms() {
@@ -639,6 +679,32 @@ func (s *SDK) flush(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// applyRedactor runs the configured redactor (or DefaultRedactor when
+// nil) across every record in a batch before it leaves the SDK. The
+// redactor may rewrite both the body and any sensitive attribute
+// values; non-matches are passed through without allocation.
+func (s *SDK) applyRedactor(req *buffer.Request) {
+	redactor := s.redactor
+	if redactor == nil {
+		redactor = DefaultRedactor
+	}
+	for i := range req.Logs {
+		body, attrs := redactor(req.Logs[i].Body, req.Logs[i].Attributes)
+		req.Logs[i].Body = body
+		if attrs != nil {
+			req.Logs[i].Attributes = attrs
+		}
+	}
+	for i := range req.Spans {
+		// Span "name" + attributes are the candidate surfaces.
+		body, attrs := redactor(req.Spans[i].Name, req.Spans[i].Attributes)
+		req.Spans[i].Name = body
+		if attrs != nil {
+			req.Spans[i].Attributes = attrs
+		}
+	}
 }
 
 func (s *SDK) requeue(breq buffer.Request) {

@@ -85,14 +85,53 @@ type Buffer struct {
 	logs    []LogRecord
 	metrics []MetricPoint
 	spans   []SpanRecord
+
+	// Per-stream caps. Zero means unbounded (legacy behaviour).
+	// When the cap is hit the OLDEST record is dropped - this
+	// keeps tail latency stable under sustained backpressure.
+	// Drop counters expose the pressure so the operator can
+	// spot it via /metrics.
+	logCap   int
+	metCap   int
+	spanCap  int
+	dropLogs uint64
+	dropMet  uint64
+	dropSpan uint64
+}
+
+// Option configures the buffer at construction time.
+type Option func(*Buffer)
+
+// WithCaps installs per-stream caps. logCap, metCap, spanCap are
+// the maximum number of records that may queue for each signal.
+// Zero (or negative) disables the cap for that stream.
+func WithCaps(logCap, metCap, spanCap int) Option {
+	return func(b *Buffer) {
+		b.logCap = logCap
+		b.metCap = metCap
+		b.spanCap = spanCap
+	}
 }
 
 // New returns a buffer tied to the given service name and resource attrs.
-func New(service string, resource map[string]string) *Buffer {
-	return &Buffer{service: service, resource: resource}
+// Pass WithCaps to bound memory under sustained backpressure.
+func New(service string, resource map[string]string, opts ...Option) *Buffer {
+	b := &Buffer{service: service, resource: resource}
+	for _, o := range opts {
+		o(b)
+	}
+	return b
 }
 
-// PushLog enqueues a log record.
+// Stats reports the lifetime drop counters.
+func (b *Buffer) Stats() (dropLogs, dropMet, dropSpan uint64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.dropLogs, b.dropMet, b.dropSpan
+}
+
+// PushLog enqueues a log record. When the cap is hit the OLDEST
+// pending record is dropped to make room.
 func (b *Buffer) PushLog(l LogRecord) {
 	if l.Service == "" {
 		l.Service = b.service
@@ -101,11 +140,18 @@ func (b *Buffer) PushLog(l LogRecord) {
 		l.Timestamp = time.Now()
 	}
 	b.mu.Lock()
-	b.logs = append(b.logs, l)
+	if b.logCap > 0 && len(b.logs) >= b.logCap {
+		copy(b.logs, b.logs[1:])
+		b.logs[len(b.logs)-1] = l
+		b.dropLogs++
+	} else {
+		b.logs = append(b.logs, l)
+	}
 	b.mu.Unlock()
 }
 
-// PushMetric enqueues a metric point.
+// PushMetric enqueues a metric point. When the cap is hit the
+// OLDEST pending record is dropped.
 func (b *Buffer) PushMetric(m MetricPoint) {
 	if m.Service == "" {
 		m.Service = b.service
@@ -114,11 +160,18 @@ func (b *Buffer) PushMetric(m MetricPoint) {
 		m.Timestamp = time.Now()
 	}
 	b.mu.Lock()
-	b.metrics = append(b.metrics, m)
+	if b.metCap > 0 && len(b.metrics) >= b.metCap {
+		copy(b.metrics, b.metrics[1:])
+		b.metrics[len(b.metrics)-1] = m
+		b.dropMet++
+	} else {
+		b.metrics = append(b.metrics, m)
+	}
 	b.mu.Unlock()
 }
 
-// PushSpan enqueues a span.
+// PushSpan enqueues a span. When the cap is hit the OLDEST
+// pending record is dropped.
 func (b *Buffer) PushSpan(s SpanRecord) {
 	if s.Service == "" {
 		s.Service = b.service
@@ -127,7 +180,13 @@ func (b *Buffer) PushSpan(s SpanRecord) {
 		s.StartTime = time.Now()
 	}
 	b.mu.Lock()
-	b.spans = append(b.spans, s)
+	if b.spanCap > 0 && len(b.spans) >= b.spanCap {
+		copy(b.spans, b.spans[1:])
+		b.spans[len(b.spans)-1] = s
+		b.dropSpan++
+	} else {
+		b.spans = append(b.spans, s)
+	}
 	b.mu.Unlock()
 }
 
