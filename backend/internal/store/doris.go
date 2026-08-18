@@ -260,7 +260,7 @@ func (d *Doris) touchServices(rows []model.LogRecord) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
 	for _, r := range rows {
-		s := d.ensure(r.Service)
+		s := d.ensureFor(r.TenantID, r.Service)
 		s.LogsCount++
 		s.UpdatedAt = time.Now()
 	}
@@ -271,7 +271,7 @@ func (d *Doris) touchServicesByMetrics(rows []model.MetricPoint) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
 	for _, r := range rows {
-		s := d.ensure(r.Service)
+		s := d.ensureFor(r.TenantID, r.Service)
 		s.MetricsCount++
 		s.UpdatedAt = time.Now()
 	}
@@ -282,7 +282,7 @@ func (d *Doris) touchServicesBySpans(rows []model.SpanRecord) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
 	for _, r := range rows {
-		s := d.ensure(r.Service)
+		s := d.ensureFor(r.TenantID, r.Service)
 		s.SpansCount++
 		s.UpdatedAt = time.Now()
 	}
@@ -299,12 +299,40 @@ func (d *Doris) ensure(name string) *model.ServiceSummary {
 	return s
 }
 
+// ensureFor is like ensure but additionally records the tenant. We key
+// service summaries by (tenant||service) so two tenants with the same
+// service name do not collide in the summary map.
+func (d *Doris) ensureFor(tenant, name string) *model.ServiceSummary {
+	key := tenantKey(tenant, name)
+	s, ok := d.sum[key]
+	if !ok {
+		s = &model.ServiceSummary{Name: name, TenantID: tenant, UpdatedAt: time.Now()}
+		d.sum[key] = s
+	}
+	return s
+}
+
+// tenantKey composes a stable map key from tenant + service. The
+// separator is a control byte unlikely to appear in service names.
+func tenantKey(tenant, name string) string {
+	if tenant == "" {
+		return name
+	}
+	return tenant + "\x00" + name
+}
+
 // ListServices returns a stable, sorted view of service summaries.
-func (d *Doris) ListServices() []model.ServiceSummary {
+// When tenant is non-empty only services belonging to that tenant
+// are returned. When tenant is empty all services are returned (back
+// compat with callers that have not enabled multi-tenancy).
+func (d *Doris) ListServices(tenant string) []model.ServiceSummary {
 	d.muSum.RLock()
 	defer d.muSum.RUnlock()
 	out := make([]model.ServiceSummary, 0, len(d.sum))
 	for _, s := range d.sum {
+		if tenant != "" && s.TenantID != tenant {
+			continue
+		}
 		// Naive but acceptable for demo: derive error rate from hot logs.
 		s.ErrorRate = d.computeErrorRate(s.Name)
 		s.P50Ms, s.P95Ms, s.P99Ms = d.PercentileLatencies(s.Name)
@@ -316,11 +344,14 @@ func (d *Doris) ListServices() []model.ServiceSummary {
 	return out
 }
 
-// GetService returns a single service summary.
-func (d *Doris) GetService(name string) (model.ServiceSummary, bool) {
+// GetService returns a single service summary. When tenant is
+// non-empty, the lookup is restricted to summaries belonging to that
+// tenant.
+func (d *Doris) GetService(tenant, name string) (model.ServiceSummary, bool) {
 	d.muSum.RLock()
 	defer d.muSum.RUnlock()
-	s, ok := d.sum[name]
+	key := tenantKey(tenant, name)
+	s, ok := d.sum[key]
 	if !ok {
 		return model.ServiceSummary{}, false
 	}

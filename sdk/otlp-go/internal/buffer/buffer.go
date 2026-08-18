@@ -18,6 +18,7 @@ import (
 // LogRecord before marshaling.
 type LogRecord struct {
 	Timestamp  time.Time
+	TenantID   string
 	Service    string
 	Severity   string
 	Body       string
@@ -29,6 +30,7 @@ type LogRecord struct {
 // MetricPoint is the local metric representation.
 type MetricPoint struct {
 	Timestamp time.Time
+	TenantID  string
 	Service   string
 	Name      string
 	Value     float64
@@ -56,6 +58,7 @@ type SpanRecord struct {
 	SpanID     string
 	ParentID   string
 	Name       string
+	TenantID   string
 	Service    string
 	StartTime  time.Time
 	DurationMs int64

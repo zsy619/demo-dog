@@ -207,7 +207,10 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
 		return
 	}
-	out := s.store.ListServices()
+	// Tenant filter via ?tenant=... query param. Empty string means
+	// no filter (back-compat with single-tenant callers).
+	tenant := r.URL.Query().Get("tenant")
+	out := s.store.ListServices(tenant)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"services": out,
 		"count":    len(out),
@@ -231,7 +234,7 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, det)
 		return
 	}
-	sum, ok := s.store.GetService(name)
+	sum, ok := s.store.GetService(r.URL.Query().Get("tenant"), name)
 	if !ok {
 		writeError(w, http.StatusNotFound, errors.New("service not found"))
 		return

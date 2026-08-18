@@ -48,6 +48,7 @@ func (s Severity) Rank() int {
 // LogRecord is a single log entry. OTLP AnyValue is simplified to string.
 type LogRecord struct {
 	Timestamp  time.Time         `json:"timestamp"`
+	TenantID   string            `json:"tenant_id,omitempty"`
 	Service    string            `json:"service"`
 	Severity   Severity          `json:"severity"`
 	Body       string            `json:"body"`
@@ -59,6 +60,7 @@ type LogRecord struct {
 // MetricPoint is a single metric data point, simplified OTel NumberDataPoint.
 type MetricPoint struct {
 	Timestamp time.Time         `json:"timestamp"`
+	TenantID  string            `json:"tenant_id,omitempty"`
 	Service   string            `json:"service"`
 	Name      string            `json:"name"`
 	Value     float64           `json:"value"`
@@ -84,6 +86,7 @@ type SpanRecord struct {
 	SpanID     string            `json:"span_id"`
 	ParentID   string            `json:"parent_id,omitempty"`
 	Name       string            `json:"name"`
+	TenantID   string            `json:"tenant_id,omitempty"`
 	Service    string            `json:"service"`
 	StartTime  time.Time         `json:"start_time"`
 	DurationMs int64             `json:"duration_ms"`
@@ -94,6 +97,7 @@ type SpanRecord struct {
 // OTLPRequest is a JSON-simplified OTLP-style write payload.
 // Real OTLP uses Protobuf; this demo uses JSON but keeps OTel naming.
 type OTLPRequest struct {
+	TenantID      string            `json:"tenant_id,omitempty"`
 	ResourceAttrs map[string]string `json:"resource_attrs"`
 	Logs          []LogRecord       `json:"logs,omitempty"`
 	Metrics       []MetricPoint     `json:"metrics,omitempty"`
@@ -114,6 +118,7 @@ type OTLPResponse struct {
 // ServiceSummary is per-service overview consumed by the frontend cards.
 type ServiceSummary struct {
 	Name         string    `json:"name"`
+	TenantID     string    `json:"tenant_id,omitempty"`
 	LogsCount    int64     `json:"logs_count"`
 	MetricsCount int64     `json:"metrics_count"`
 	SpansCount   int64     `json:"spans_count"`

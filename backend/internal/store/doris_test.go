@@ -64,7 +64,7 @@ func TestServiceSummary(t *testing.T) {
 		{Timestamp: time.Now(), Service: "checkout", Severity: model.SeverityError, Body: "boom"},
 		{Timestamp: time.Now(), Service: "checkout", Severity: model.SeverityError, Body: "boom"},
 	})
-	svcs := d.ListServices()
+	svcs := d.ListServices("")
 	if len(svcs) != 1 {
 		t.Fatalf("expected 1 service, got %d", len(svcs))
 	}

@@ -693,7 +693,7 @@ func (d *Doris) QueriesServed() int64   { return d.queriesServed.Load() }
 //   - the last N trace IDs that touched this service,
 //   - the per-second QPS series for the most recent 5 minutes.
 func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
-	sum, ok := d.GetService(name)
+	sum, ok := d.GetService("", name)
 	if !ok {
 		return model.ServiceDetail{}, false
 	}

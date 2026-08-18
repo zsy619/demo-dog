@@ -96,8 +96,13 @@ func (in *Ingestor) Validate(req *model.OTLPRequest) error {
 // Normalize applies resource attributes (e.g. service.name) to records that
 // do not have their own service field. It also sets sensible defaults for
 // severity and timestamp so downstream code doesnt need to deal with zeros.
+//
+// Tenant scoping: if the request carries a TenantID, that value is copied
+// down to every record so the store and query layer can partition data
+// per tenant. If a record already has its own TenantID (rare) it wins.
 func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 	out := model.OTLPRequest{
+		TenantID:      req.TenantID,
 		ResourceAttrs: req.ResourceAttrs,
 		Logs:          append([]model.LogRecord(nil), req.Logs...),
 		Metrics:       append([]model.MetricPoint(nil), req.Metrics...),
@@ -109,6 +114,9 @@ func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 	}
 	now := time.Now()
 	for i := range out.Logs {
+		if out.Logs[i].TenantID == "" {
+			out.Logs[i].TenantID = out.TenantID
+		}
 		if out.Logs[i].Service == "" {
 			out.Logs[i].Service = defaultSvc
 		}
@@ -120,6 +128,9 @@ func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 		}
 	}
 	for i := range out.Metrics {
+		if out.Metrics[i].TenantID == "" {
+			out.Metrics[i].TenantID = out.TenantID
+		}
 		if out.Metrics[i].Service == "" {
 			out.Metrics[i].Service = defaultSvc
 		}
@@ -134,6 +145,9 @@ func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 		}
 	}
 	for i := range out.Spans {
+		if out.Spans[i].TenantID == "" {
+			out.Spans[i].TenantID = out.TenantID
+		}
 		if out.Spans[i].Service == "" {
 			out.Spans[i].Service = defaultSvc
 		}

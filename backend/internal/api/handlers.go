@@ -164,6 +164,12 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// X-Tenant-Id header takes effect only when the body did not
+	// already specify a tenant_id. This lets callers route by header
+	// for convenience while still allowing per-request overrides.
+	if h := r.Header.Get("X-Tenant-Id"); h != "" && req.TenantID == "" {
+		req.TenantID = h
+	}
 	norm := s.ingest.Normalize(&req)
 	if err := s.ingest.Validate(&norm); err != nil {
 		writeError(w, http.StatusBadRequest, err)

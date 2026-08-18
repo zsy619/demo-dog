@@ -58,6 +58,8 @@ type SDK struct {
 
 	apiKey string
 
+	tenantID string
+
 	flushInterval time.Duration
 	maxBatch      int
 	sampler       Sampler
@@ -156,6 +158,16 @@ func WithAuthToken(token string) SDKOption {
 			return
 		}
 		s.apiKey = token
+	}
+}
+
+// WithTenant sets the tenant identifier stamped on every metric, log,
+// and span the SDK emits. The collector uses this value to partition
+// data so different tenants cannot see each others traffic. Empty
+// string is a no-op (single-tenant mode).
+func WithTenant(tenantID string) SDKOption {
+	return func(s *SDK) {
+		s.tenantID = tenantID
 	}
 }
 
@@ -312,8 +324,15 @@ func (s *SDK) Log(ctx context.Context, severity Severity, body string, kvs ...KV
 
 // LogAttrs emits a pre-built LogRecord.
 func (s *SDK) LogAttrs(ctx context.Context, l LogRecord) {
+	if l.Service == "" && s.resource["service.name"] != "" {
+		l.Service = s.resource["service.name"]
+	}
+	if l.TenantID == "" {
+		l.TenantID = s.tenantID
+	}
 	s.buf.PushLog(buffer.LogRecord{
 		Timestamp:  l.Timestamp,
+		TenantID:   l.TenantID,
 		Service:    l.Service,
 		Severity:   transform.NormalizeSeverity(string(l.Severity)),
 		Body:       l.Body,
@@ -434,8 +453,15 @@ func (s *SDK) drainHistograms() []*histogramAccumulator {
 }
 
 func (s *SDK) emitMetric(m MetricPoint) {
+	if m.Service == "" && s.resource["service.name"] != "" {
+		m.Service = s.resource["service.name"]
+	}
+	if m.TenantID == "" {
+		m.TenantID = s.tenantID
+	}
 	s.buf.PushMetric(buffer.MetricPoint{
 		Timestamp: m.Timestamp,
+		TenantID:  m.TenantID,
 		Service:   m.Service,
 		Name:      m.Name,
 		Value:     m.Value,
@@ -469,6 +495,8 @@ func (s *SDK) Record(ctx context.Context, name string, start time.Time, err erro
 			SpanID:     sid,
 			ParentID:   pid,
 			Name:       name,
+			TenantID:   s.tenantID,
+			Service:    s.resource["service.name"],
 			StartTime:  start,
 			DurationMs: dur,
 			Status:     string(status),
@@ -502,6 +530,8 @@ func (s *SDK) Trace(ctx context.Context, name string) (context.Context, func(err
 			TraceID:    tid,
 			SpanID:     sid,
 			Name:       name,
+			TenantID:   s.tenantID,
+			Service:    s.resource["service.name"],
 			StartTime:  start,
 			DurationMs: time.Since(start).Milliseconds(),
 			Status:     string(status),
@@ -570,6 +600,8 @@ func (s *SDK) flush(ctx context.Context) error {
 			Name:      acc.name,
 			Value:     0,
 			Type:      "histogram",
+			TenantID:  s.tenantID,
+			Service:   s.resource["service.name"],
 			BucketBounds: append([]float64(nil), acc.bounds...),
 			BucketCounts: append([]int64(nil), acc.counts...),
 			HistogramCount: acc.total,

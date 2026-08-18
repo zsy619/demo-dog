@@ -40,6 +40,7 @@ const (
 // LogRecord is one log entry. Matches backend model.LogRecord.
 type LogRecord struct {
 	Timestamp  time.Time         `json:"timestamp"`
+	TenantID   string            `json:"tenant_id,omitempty"`
 	Service    string            `json:"service"`
 	Severity   Severity          `json:"severity"`
 	Body       string            `json:"body"`
@@ -51,6 +52,7 @@ type LogRecord struct {
 // MetricPoint is one number data point. Matches backend model.MetricPoint.
 type MetricPoint struct {
 	Timestamp time.Time         `json:"timestamp"`
+	TenantID  string            `json:"tenant_id,omitempty"`
 	Service   string            `json:"service"`
 	Name      string            `json:"name"`
 	Value     float64           `json:"value"`
@@ -77,6 +79,7 @@ type SpanRecord struct {
 	SpanID     string            `json:"span_id"`
 	ParentID   string            `json:"parent_id,omitempty"`
 	Name       string            `json:"name"`
+	TenantID   string            `json:"tenant_id,omitempty"`
 	Service    string            `json:"service"`
 	StartTime  time.Time         `json:"start_time"`
 	DurationMs int64             `json:"duration_ms"`
