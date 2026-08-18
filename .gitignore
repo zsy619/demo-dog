@@ -239,3 +239,4 @@ sdk/otlp-go/examples/*/hertz-demo-bin
 sdk/otlp-go/examples/*/*-bin
 
 sdk/otlp-go/examples/otel-histogram/otel-histogram
+backend/dog-collector

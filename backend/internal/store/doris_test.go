@@ -32,10 +32,10 @@ func TestInsertAndQueryMetrics(t *testing.T) {
 	// Insert metrics across 5 different minutes so the 1m MV produces 5 buckets.
 	for i := 0; i < 5; i++ {
 		d.InsertMetrics([]model.MetricPoint{
-			{Timestamp: now.Add(time.Duration(i) * time.Minute), Service: "checkout", Name: "http.server.duration", Value: float64(i * 10)},
+			{Timestamp: now.Add(time.Duration(i) * time.Minute), Service: "checkout", Name: "http.server.duration", TenantID: "t1", Value: float64(i * 10)},
 		})
 	}
-	out := d.QueryMetrics("checkout", "http.server.duration", "1m", 10)
+	out := d.QueryMetrics("t1", "checkout", "http.server.duration", "1m", 10)
 	if len(out.Series) != 1 {
 		t.Fatalf("expected 1 series, got %d", len(out.Series))
 	}

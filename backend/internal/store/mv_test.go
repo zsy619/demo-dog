@@ -16,14 +16,14 @@ func TestMetricMVAveragesCorrectly(t *testing.T) {
 	// All samples fall in the same 1-minute bucket.
 	ts := time.Now().Truncate(time.Minute)
 	d.InsertMetrics([]model.MetricPoint{
-		{Timestamp: ts, Service: "svc", Name: "cpu", Value: 10},
-		{Timestamp: ts.Add(10 * time.Second), Service: "svc", Name: "cpu", Value: 20},
-		{Timestamp: ts.Add(20 * time.Second), Service: "svc", Name: "cpu", Value: 30},
-		{Timestamp: ts.Add(30 * time.Second), Service: "svc", Name: "cpu", Value: 40},
+		{Timestamp: ts, Service: "svc", Name: "cpu", TenantID: "t1", Value: 10},
+		{Timestamp: ts.Add(10 * time.Second), Service: "svc", Name: "cpu", TenantID: "t1", Value: 20},
+		{Timestamp: ts.Add(20 * time.Second), Service: "svc", Name: "cpu", TenantID: "t1", Value: 30},
+		{Timestamp: ts.Add(30 * time.Second), Service: "svc", Name: "cpu", TenantID: "t1", Value: 40},
 	})
 	// Mean of [10,20,30,40] = 25. The old code would have returned
 	// ((10+20)/2 + 30)/2 + 40)/2 = 16.25 — biased toward the first sample.
-	got := d.mvMinute["svc|cpu"]
+	got := d.mvMinute["t1\x00svc|cpu"]
 	if len(got) != 1 {
 		t.Fatalf("expected 1 MV bucket, got %d", len(got))
 	}
@@ -49,11 +49,11 @@ func TestMetricMVMultipleBuckets(t *testing.T) {
 	d := New(DefaultConfig())
 	base := time.Now().Truncate(time.Minute)
 	d.InsertMetrics([]model.MetricPoint{
-		{Timestamp: base, Service: "svc", Name: "cpu", Value: 1},
-		{Timestamp: base.Add(time.Minute), Service: "svc", Name: "cpu", Value: 2},
-		{Timestamp: base.Add(2 * time.Minute), Service: "svc", Name: "cpu", Value: 3},
+		{Timestamp: base, Service: "svc", Name: "cpu", TenantID: "t1", Value: 1},
+		{Timestamp: base.Add(time.Minute), Service: "svc", Name: "cpu", TenantID: "t1", Value: 2},
+		{Timestamp: base.Add(2 * time.Minute), Service: "svc", Name: "cpu", TenantID: "t1", Value: 3},
 	})
-	buckets := d.mvMinute["svc|cpu"]
+	buckets := d.mvMinute["t1\x00svc|cpu"]
 	if len(buckets) != 3 {
 		t.Fatalf("expected 3 buckets, got %d", len(buckets))
 	}

@@ -16,6 +16,7 @@ import (
 // QueryFilter is a unified filter struct passed by HTTP handlers.
 // Empty fields are treated as "match anything".
 type QueryFilter struct {
+	Tenant          string            // tenant id (or empty = all)
 	Service         string            // exact match (or empty)
 	Name            string            // metric name (or empty)
 	Severity        string            // log severity (or empty) — exact match
@@ -96,6 +97,9 @@ func (d *Doris) QueryLogsFiltered(f QueryFilter) model.QueryResult {
 func (d *Doris) collectLogs(in []model.LogRecord, f QueryFilter) []model.LogRecord {
 	out := make([]model.LogRecord, 0, len(in))
 	for _, r := range in {
+		if f.Tenant != "" && r.TenantID != f.Tenant {
+			continue
+		}
 		if f.Service != "" && r.Service != f.Service {
 			continue
 		}
@@ -130,7 +134,7 @@ func (d *Doris) collectLogs(in []model.LogRecord, f QueryFilter) []model.LogReco
 func (d *Doris) QueryMetricsFiltered(f QueryFilter) model.QueryResult {
 	start := time.Now()
 	d.queriesServed.Add(1)
-	key := f.Service + "|" + f.Name
+	key := f.Tenant + "\x00" + f.Service + "|" + f.Name
 	var series []model.SeriesPoint
 	var mvName string
 
@@ -199,6 +203,9 @@ func (d *Doris) QueryTracesFiltered(f QueryFilter) model.QueryResult {
 		matchedTraces := make(map[string]struct{})
 		for tid, group := range d.hotSpans {
 			for _, s := range group {
+				if f.Tenant != "" && s.TenantID != f.Tenant {
+					continue
+				}
 				if f.Service != "" && s.Service != f.Service {
 					continue
 				}
@@ -229,6 +236,9 @@ func (d *Doris) QueryTracesFiltered(f QueryFilter) model.QueryResult {
 	hotN := len(all)
 	if len(all) < f.Limit {
 		for _, s := range d.coldSpans {
+			if f.Tenant != "" && s.TenantID != f.Tenant {
+				continue
+			}
 			if f.Service != "" && s.Service != f.Service {
 				continue
 			}

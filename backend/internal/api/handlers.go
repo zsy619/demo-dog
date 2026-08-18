@@ -65,6 +65,10 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	typ := q.Get("type")
 	f := parseFilter(q)
+	// Tenant filter: prefer auth-bound, fall back to ?tenant=...
+	// (used by platform admins to impersonate). When the key is bound
+	// to a tenant the filter is forced: a non-admin cannot escape.
+	f.Tenant = resolveTenant(r)
 	switch typ {
 	case "logs":
 		writeJSON(w, http.StatusOK, s.store.QueryLogsFiltered(f))
@@ -170,6 +174,13 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	if h := r.Header.Get("X-Tenant-Id"); h != "" && req.TenantID == "" {
 		req.TenantID = h
 	}
+	// Auth-bound tenant (X-Dog-Tenant, stamped by the middleware when
+	// the API key is registered for a tenant) takes priority over both
+	// the body and the X-Tenant-Id header. A non-admin key cannot
+	// escape its tenant even by spoofing the body.
+	if h := r.Header.Get("X-Dog-Tenant"); h != "" {
+		req.TenantID = h
+	}
 	norm := s.ingest.Normalize(&req)
 	if err := s.ingest.Validate(&norm); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -261,6 +272,9 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 	}
 	n := atoiDefault(r.URL.Query().Get("n"), 5)
 	req := s.generateSeed(svc, n)
+	// Pin seed records to the caller's tenant so an admin who seeds
+	// for tenant A does not accidentally pollute tenant B.
+	req.TenantID = resolveTenant(r)
 	s.ingest.SubmitSync(req)
 	for _, m := range req.Metrics {
 		s.hub.Publish(stream.Event{Kind: "metric", Service: m.Service, Timestamp: m.Timestamp.UnixMilli(), Name: m.Name, Value: m.Value})
@@ -295,6 +309,7 @@ func (s *Server) handleSeedStream(w http.ResponseWriter, r *http.Request) {
 		}
 		svc := services[s.randintInt(len(services))]
 		req := s.generateSeed(svc, 3)
+		req.TenantID = resolveTenant(r)
 		s.ingest.SubmitSync(req)
 		for _, l := range req.Logs {
 			s.hub.Publish(stream.Event{Kind: "log", Service: l.Service, Timestamp: l.Timestamp.UnixMilli(), Body: l.Body, Status: string(l.Severity)})

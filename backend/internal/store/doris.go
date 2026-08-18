@@ -457,7 +457,9 @@ func (d *Doris) updateMetricMV(in []model.MetricPoint) {
 	d.muMV.Lock()
 	defer d.muMV.Unlock()
 	for _, p := range in {
-		key := p.Service + "|" + p.Name
+		// Tenant + service + metric name as the MV bucket key so two
+		// tenants with the same service name do not co-mingle data.
+		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		ts := p.Timestamp.Truncate(time.Minute).UnixMilli()
 		d.mvMinute[key] = appendMVBucket(d.mvMinute[key], p.Value, ts)
 
@@ -595,10 +597,11 @@ func (d *Doris) QueryLogs(service string, severity string, limit int, sinceMs in
 
 // QueryMetrics returns time series for a metric name.
 // It uses the 1m materialized view when the requested window is large.
-func (d *Doris) QueryMetrics(service, name, window string, limit int) model.QueryResult {
+// Tenant parameter isolates data per-tenant; empty = legacy mode.
+func (d *Doris) QueryMetrics(tenant, service, name, window string, limit int) model.QueryResult {
 	start := time.Now()
 	d.queriesServed.Add(1)
-	key := service + "|" + name
+	key := tenant + "\x00" + service + "|" + name
 	var series []model.SeriesPoint
 	mvName := ""
 	d.muMV.RLock()
