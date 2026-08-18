@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import type { HealthResponse } from "@/types/api";
+import { useEffect, useRef, useState } from "react";
 import type { Page } from "@/App";
 import { useStreamStatus } from "@/hooks/useStream";
+import { useAuth } from "@/hooks/useAuth";
+import { useHealth, useServices } from "@/hooks/queries";
 import CountUp from "./anim/CountUp";
 import Pulse from "./anim/Pulse";
 import Glitch from "./anim/Glitch";
@@ -26,6 +26,7 @@ const TITLES: Record<Page, string> = {
 interface Props {
   page: Page;
   onPageChange: (p: Page) => void;
+  onOpenLogin?: () => void;
 }
 
 interface CounterSnapshot {
@@ -35,84 +36,50 @@ interface CounterSnapshot {
   ts: number;
 }
 
-export default function TopBar({ page }: Props) {
+export default function TopBar({ page, onOpenLogin }: Props) {
   const wsStatus = useStreamStatus();
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const auth = useAuth();
+  const healthQuery = useHealth();
+  const servicesQuery = useServices();
+  const health = healthQuery.data ?? null;
+  const error = healthQuery.error
+    ? String(healthQuery.error.message ?? healthQuery.error)
+    : null;
   const [now, setNow] = useState(() => new Date());
-  const [prev, setPrev] = useState<CounterSnapshot | null>(null);
+  const prevRef = useRef<CounterSnapshot | null>(null);
   const [rate, setRate] = useState<{ logs: number; metrics: number; spans: number }>({
     logs: 0,
     metrics: 0,
     spans: 0,
   });
   // Average error rate across services drives the global alert chip in the
-  // TopBar. Pulled once + every 8s — a slow sample is fine because the chip
-  // is meant to draw attention, not to flicker.
-  const [avgErr, setAvgErr] = useState(0);
+  // TopBar. The query refetches itself on focus + every 8s; no manual
+  // polling needed.
+  const svcs = servicesQuery.data?.services ?? [];
+  const avgErr =
+    svcs.length > 0 ? svcs.reduce((a, s) => a + s.error_rate, 0) / svcs.length : 0;
 
+  // Derive throughput each time the health payload updates. We keep the
+  // previous snapshot in a ref so the rate calculation has a baseline.
   useEffect(() => {
-    let cancelled = false;
-    const load = () =>
-      api
-        .health()
-        .then((h) => {
-          if (cancelled) return;
-          setHealth((prevHealth) => {
-            if (prevHealth) {
-              const now2 = Date.now();
-              const dt = Math.max(1, now2 - (prev?.ts ?? now2)) / 1000;
-              setPrev({
-                logs: prevHealth.engine.logs_accepted,
-                metrics: prevHealth.engine.metrics_accepted,
-                spans: prevHealth.engine.spans_accepted,
-                ts: now2,
-              });
-              setRate({
-                logs: (h.engine.logs_accepted - prevHealth.engine.logs_accepted) / dt,
-                metrics:
-                  (h.engine.metrics_accepted - prevHealth.engine.metrics_accepted) / dt,
-                spans: (h.engine.spans_accepted - prevHealth.engine.spans_accepted) / dt,
-              });
-            }
-            return h;
-          });
-          setError(null);
-        })
-        .catch((e) => {
-          if (!cancelled) setError(String(e.message ?? e));
-        });
-    load();
-    const id = window.setInterval(load, 4000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
+    if (!health) return;
+    const prev = prevRef.current;
+    if (prev) {
+      const now2 = Date.now();
+      const dt = Math.max(1, now2 - prev.ts) / 1000;
+      setRate({
+        logs: (health.engine.logs_accepted - prev.logs) / dt,
+        metrics: (health.engine.metrics_accepted - prev.metrics) / dt,
+        spans: (health.engine.spans_accepted - prev.spans) / dt,
+      });
+    }
+    prevRef.current = {
+      logs: health.engine.logs_accepted,
+      metrics: health.engine.metrics_accepted,
+      spans: health.engine.spans_accepted,
+      ts: Date.now(),
     };
-  }, []);
-
-  // Periodic sample of the service list to drive the global error chip.
-  useEffect(() => {
-    let cancelled = false;
-    const sample = () =>
-      api
-        .services()
-        .then((r) => {
-          if (cancelled) return;
-          const svcs = r.services;
-          const avg =
-            svcs.length > 0
-              ? svcs.reduce((a, s) => a + s.error_rate, 0) / svcs.length
-              : 0;
-          setAvgErr(avg);
-        })
-        .catch(() => {});
-    sample();
-    const id = window.setInterval(sample, 8000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, []);
+  }, [health]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -296,6 +263,32 @@ export default function TopBar({ page }: Props) {
         <div className="px-2 py-1 rounded border border-grafana-border bg-grafana-elev/40 font-mono text-grafana-text tabular-nums">
           {now.toLocaleTimeString()}
         </div>
+
+        <button
+          type="button"
+          onClick={() => onOpenLogin?.()}
+          className={
+            "px-2 py-1 rounded border text-xs flex items-center gap-1 " +
+            (auth.isAuthed
+              ? "border-emerald-700 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50"
+              : "border-amber-700 bg-amber-900/30 text-amber-300 hover:bg-amber-900/50")
+          }
+          aria-label={auth.isAuthed ? "Authenticated" : "Not authenticated"}
+          title={
+            auth.isAuthed
+              ? `Connected (key ending …${auth.apiKey.slice(-4)})`
+              : "Click to enter API key"
+          }
+        >
+          <span
+            className={
+              "inline-block w-1.5 h-1.5 rounded-full " +
+              (auth.isAuthed ? "bg-emerald-400" : "bg-amber-400")
+            }
+            aria-hidden="true"
+          />
+          {auth.isAuthed ? "Auth" : "Login"}
+        </button>
       </div>
     </header>
   );

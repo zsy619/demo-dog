@@ -2,6 +2,7 @@
 // subscription callback. The backend exposes its event stream at /api/stream.
 
 import type { StreamEvent } from "@/types/api";
+import { getApiKey, getTenantId } from "./auth";
 
 // StreamMessage mirrors the server StreamEvent shape; we keep both so
 // pages that want the strict union (StreamEvent) can also use it.
@@ -38,7 +39,21 @@ export class StreamClient {
 
   constructor(url?: string) {
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    this.url = url ?? `${proto}://${window.location.host}/api/stream`;
+    // Browsers cannot set arbitrary headers on WebSocket. We pass
+    // the API key (and optional tenant id) as query parameters so
+    // the collector middleware can authenticate the handshake. The
+    // query-param path is explicitly supported on the backend via
+    // AuthModeAPIKey.extractKey(); do not enable in production
+    // unless you accept tokens landing in access logs.
+    const params = new URLSearchParams();
+    const k = getApiKey();
+    if (k) params.set("api_key", k);
+    const t = getTenantId();
+    if (t) params.set("tenant", t);
+    const q = params.toString();
+    this.url =
+      url ??
+      `${proto}://${window.location.host}/api/stream${q ? `?${q}` : ""}`;
   }
 
   connect() {

@@ -1,21 +1,27 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
-import Overview from "@/pages/Overview";
-import Explore from "@/pages/Explore";
-import Logs from "@/pages/Logs";
-import Metrics from "@/pages/Metrics";
-import Traces from "@/pages/Traces";
-import DataSources from "@/pages/DataSources";
-import Dashboards from "@/pages/Dashboards";
-import IngestDemo from "@/pages/IngestDemo";
-import Live from "@/pages/Live";
-import ServiceMapPage from "@/pages/ServiceMapPage";
-import ServiceDetailPage from "@/pages/ServiceDetailPage";
 import CommandPalette from "@/components/CommandPalette";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastHost } from "@/components/Toast";
 import { useRoute } from "@/lib/router";
+import { LoginModal } from "@/components/LoginModal";
+import { useAuth } from "@/hooks/useAuth";
+
+// Lazy-load every page. The shell (TopBar + Sidebar + route chrome)
+// ships in the entry chunk; each page is its own dynamic chunk so a
+// user who never opens the Logs page never downloads it.
+const Overview = lazy(() => import("@/pages/Overview"));
+const Explore = lazy(() => import("@/pages/Explore"));
+const Logs = lazy(() => import("@/pages/Logs"));
+const Metrics = lazy(() => import("@/pages/Metrics"));
+const Traces = lazy(() => import("@/pages/Traces"));
+const DataSources = lazy(() => import("@/pages/DataSources"));
+const Dashboards = lazy(() => import("@/pages/Dashboards"));
+const IngestDemo = lazy(() => import("@/pages/IngestDemo"));
+const Live = lazy(() => import("@/pages/Live"));
+const ServiceMapPage = lazy(() => import("@/pages/ServiceMapPage"));
+const ServiceDetailPage = lazy(() => import("@/pages/ServiceDetailPage"));
 
 export type Page =
   | "overview"
@@ -48,13 +54,43 @@ function isValid(p: string): p is Page {
   return (VALID_PAGES as string[]).includes(p);
 }
 
+function PageFallback() {
+  // Skeleton placeholder so the layout does not jump while a chunk
+  // is loading. The bar is intentionally subtle.
+  return (
+    <div className="h-full w-full flex items-center justify-center text-grafana-muted text-xs">
+      <div className="animate-pulse">Loading…</div>
+    </div>
+  );
+}
+
 export default function App() {
   const [page, params, navigate] = useRoute();
   const safePage: Page = isValid(page) ? page : "overview";
+  const auth = useAuth();
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginError, setLoginError] = useState<string | undefined>(
+    undefined
+  );
 
   const service = params.get("service") ?? "";
   const signal = (params.get("signal") as "logs" | "metrics" | "traces") ?? "logs";
   const traceId = params.get("trace_id") ?? "";
+
+  // Listen for global 401 events from the fetch wrapper. When the
+  // collector rejects a key we surface a login modal so the user
+  // can re-authenticate without leaving the page they were on.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ status: number }>).detail;
+      if (detail?.status === 401) {
+        setLoginError("API key rejected by collector (401)");
+        setShowLogin(true);
+      }
+    };
+    window.addEventListener("dog:auth-error", handler);
+    return () => window.removeEventListener("dog:auth-error", handler);
+  }, []);
 
   // Top-level keyboard shortcuts (vim-ish): g l / g m / g t / g o / g e / g d / g s
   useEffect(() => {
@@ -197,13 +233,31 @@ export default function App() {
         onServiceChange={setService}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar page={safePage} onPageChange={setPage} />
+        <TopBar
+          page={safePage}
+          onPageChange={setPage}
+          onOpenLogin={() => {
+            setLoginError(undefined);
+            setShowLogin(true);
+          }}
+        />
         <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <ErrorBoundary key={safePage}>{main}</ErrorBoundary>
+          <ErrorBoundary key={safePage}>
+            <Suspense fallback={<PageFallback />}>{main}</Suspense>
+          </ErrorBoundary>
         </main>
       </div>
       <ToastHost />
       <CommandPalette page={safePage} navigate={navigate} onServiceChange={setService} />
+      {showLogin && (
+        <LoginModal
+          onClose={() => {
+            setShowLogin(false);
+            setLoginError(undefined);
+          }}
+          errorMessage={loginError}
+        />
+      )}
     </div>
   );
 }

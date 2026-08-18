@@ -11,22 +11,26 @@ import type {
   ServiceSummary,
   QPSResponse,
   SnapshotResponse,
+  ServiceDetail,
+  SpanRecord,
 } from "@/types/api";
+import { apiFetch } from "./fetch";
 
 const API_BASE = "/api";
 
 export interface QueryParams {
   type: "logs" | "metrics" | "traces";
   service?: string;
-  name?: string; // metric name
+  name?: string;
   severity?: string;
   trace_id?: string;
   search?: string;
   window?: "1m" | "5m";
-  since?: number; // ms
-  until?: number; // ms
+  since?: number;
+  until?: number;
   labels?: Record<string, string>;
   limit?: number;
+  tenant?: string;
 }
 
 export function buildQuery(p: QueryParams): URLSearchParams {
@@ -40,6 +44,7 @@ export function buildQuery(p: QueryParams): URLSearchParams {
   if (p.window) out.set("window", p.window);
   if (p.since) out.set("since", String(p.since));
   if (p.until) out.set("until", String(p.until));
+  if (p.tenant) out.set("tenant", p.tenant);
   if (p.labels) {
     for (const [k, v] of Object.entries(p.labels)) {
       out.append("label", `${k}=${v}`);
@@ -49,86 +54,74 @@ export function buildQuery(p: QueryParams): URLSearchParams {
   return out;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`GET ${path} failed: ${res.status} ${text}`);
-  }
-  return res.json() as Promise<T>;
+function qs(p: QueryParams): string {
+  const s = buildQuery(p).toString();
+  return s ? `?${s}` : "";
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`POST ${path} failed: ${res.status} ${text}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-export const api = {
-  health: () => getJson<HealthResponse>("/health"),
-  services: () =>
-    getJson<{ services: ServiceSummary[]; count: number }>("/services"),
-  service: (name: string) => getJson<ServiceSummary>(`/services/${name}`),
+export const apiService = {
+  health: () => apiFetch<HealthResponse>("/health", { anonymous: true }),
+  services: (tenant?: string) => {
+    const q = tenant ? `?tenant=${encodeURIComponent(tenant)}` : "";
+    return apiFetch<{ services: ServiceSummary[]; count: number }>(
+      `/services${q}`
+    );
+  },
+  service: (name: string, tenant?: string) => {
+    const q = tenant ? `?tenant=${encodeURIComponent(tenant)}` : "";
+    return apiFetch<ServiceSummary>(`/services/${name}${q}`);
+  },
   query: (params: QueryParams) =>
-    getJson<QueryResult>(`/query?${buildQuery(params).toString()}`),
+    apiFetch<QueryResult>(`/query${qs(params)}`),
   datasources: () =>
-    getJson<{ datasources: DataSource[]; count: number }>("/datasources"),
-  dashboards: () => getJson<{ dashboards: Dashboard[] }>("/dashboards"),
+    apiFetch<{ datasources: DataSource[]; count: number }>("/datasources"),
+  dashboards: () => apiFetch<{ dashboards: Dashboard[] }>("/dashboards"),
   panels: (id: string) =>
-    getJson<{ dashboard_id: string; panels: Panel[] }>(
+    apiFetch<{ dashboard_id: string; panels: Panel[] }>(
       `/dashboards/${id}/panels`
     ),
-  ingest: (body: unknown) => postJson<unknown>("/ingest/otlp", body),
+  ingest: (body: unknown) =>
+    apiFetch<unknown>("/ingest/otlp", { method: "POST", body }),
   ingestOTLPJSON: (body: unknown) =>
-    postJson<unknown>(
-      "/ingest/otlp-json",
-      body
-    ),
+    apiFetch<unknown>("/ingest/otlp-json", { method: "POST", body }),
   seed: (service: string, n: number) =>
-    getJson<{ service: string; seeded: number }>(
+    apiFetch<{ service: string; seeded: number }>(
       `/seed?service=${encodeURIComponent(service)}&n=${n}`
     ),
-  recentPayloads: () => getJson<{ payloads: unknown[] }>("/ingest/recent"),
-  // New endpoints
-  labels: () => getJson<LabelKeysResponse>("/labels"),
-  serviceMap: () => getJson<ServiceMap>("/service-map"),
+  recentPayloads: () => apiFetch<{ payloads: unknown[] }>("/ingest/recent"),
+  labels: () => apiFetch<LabelKeysResponse>("/labels"),
+  serviceMap: () => apiFetch<ServiceMap>("/service-map"),
   trace: (id: string) =>
-    getJson<{ trace_id: string; spans: import("@/types/api").SpanRecord[] }>(
+    apiFetch<{ trace_id: string; spans: SpanRecord[] }>(
       `/traces/${encodeURIComponent(id)}`
     ),
-  qps: (windowMin = 5) => getJson<QPSResponse>(`/qps?window_min=${windowMin}`),
+  qps: (windowMin = 5) =>
+    apiFetch<QPSResponse>(`/qps?window_min=${windowMin}`),
   histogram: (service: string, bins = 20) =>
-    getJson<HistogramResponse>(
+    apiFetch<HistogramResponse>(
       `/histogram?service=${encodeURIComponent(service)}&bins=${bins}`
     ),
   severity: (service = "") =>
-    getJson<SeverityResponse>(
-      service
-        ? `/severity?service=${encodeURIComponent(service)}`
-        : "/severity"
+    apiFetch<SeverityResponse>(
+      service ? `/severity?service=${encodeURIComponent(service)}` : "/severity"
     ),
-  snapshot: () => getJson<SnapshotResponse>("/snapshot"),
-  metricNames: (limit = 50) => getJson<{ names: string[] }>(`/metric-names?limit=${limit}`),
+  snapshot: () => apiFetch<SnapshotResponse>("/snapshot"),
+  metricNames: (limit = 50) =>
+    apiFetch<{ names: string[] }>(`/metric-names?limit=${limit}`),
   exportUrl: (params: QueryParams & { format: "csv" | "json" }) =>
     `${API_BASE}/export?${buildQuery(params).toString()}&format=${params.format}`,
   serviceDetail: (name: string) => {
-    // Refuse to fire a malformed URL when no service is picked. The page
-    // also guards against this, but defending the api boundary keeps a
-    // future caller from accidentally hitting the 404 endpoint.
     if (!name) {
       return Promise.reject(new Error("serviceDetail: empty name"));
     }
-    return getJson<import("@/types/api").ServiceDetail>(
+    return apiFetch<ServiceDetail>(
       `/services/${encodeURIComponent(name)}/detail`
     );
   },
 };
+
+// Legacy alias — pages that imported `api` keep working while new
+// code migrates to `apiService`.
+export const api = apiService;
 
 export const promMetrics = () => fetch("/metrics").then((r) => r.text());
