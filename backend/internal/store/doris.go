@@ -47,6 +47,12 @@ func DefaultConfig() Config {
 type Doris struct {
 	cfg Config
 
+	// wal is the optional write-ahead log. When set, every insert
+	// appends a record so a crash + restart can replay the last few
+	// seconds of writes without losing them.
+	walMu sync.Mutex
+	wal   *WAL
+
 	muLogs    sync.RWMutex
 	hotLogs   []model.LogRecord
 	coldLogs  []model.LogRecord
@@ -195,6 +201,7 @@ func (d *Doris) InsertLogs(in []model.LogRecord) int {
 
 	d.logsAccepted.Add(int64(len(in)))
 	d.touchServices(in)
+	d.appendWAL(opLog, in)
 	return len(in)
 }
 
@@ -224,6 +231,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	d.updateHistograms(in)
 	d.metricsAccepted.Add(int64(len(in)))
 	d.touchServicesByMetrics(in)
+	d.appendWAL(opMetric, in)
 	return len(in)
 }
 
@@ -252,9 +260,51 @@ func (d *Doris) InsertSpans(in []model.SpanRecord) int {
 
 	d.touchServicesBySpans(in)
 	d.spansAccepted.Add(int64(len(in)))
+	d.appendWAL(opSpan, in)
 	return len(in)
 }
 
+
+// SetWAL attaches a write-ahead log. Subsequent inserts append to it.
+// A nil WAL disables persistence.
+func (d *Doris) SetWAL(w *WAL) {
+	d.walMu.Lock()
+	defer d.walMu.Unlock()
+	d.wal = w
+}
+
+// appendWAL records a batch to the WAL. Safe with nil WAL.
+func (d *Doris) appendWAL(op uint32, payload any) {
+	d.walMu.Lock()
+	w := d.wal
+	d.walMu.Unlock()
+	if w == nil {
+		return
+	}
+	_ = w.Append(op, payload)
+}
+
+// ReplayInto reads every record from the WAL and applies it to d.
+// Call after LoadFromFile to rebuild the in-memory state from disk.
+func (d *Doris) ReplayInto(w *WAL) error {
+	if w == nil {
+		return nil
+	}
+	logs, metrics, spans, err := w.Replay()
+	if err != nil {
+		return err
+	}
+	if len(logs) > 0 {
+		d.InsertLogs(logs)
+	}
+	if len(metrics) > 0 {
+		d.InsertMetrics(metrics)
+	}
+	if len(spans) > 0 {
+		d.InsertSpans(spans)
+	}
+	return nil
+}
 // touchServices increments per-service counters for Logs.
 func (d *Doris) touchServices(rows []model.LogRecord) {
 	d.muSum.Lock()

@@ -64,6 +64,8 @@ func main() {
 	ratePerSec := flag.Float64("rate-limit", 0, "Per-IP token bucket refill rate (req/s). 0 disables rate limiting.")
 	rateBurst := flag.Float64("rate-burst", 200, "Per-IP token bucket burst capacity.")
 	snapshotPath := flag.String("snapshot", "", "Optional path to a gob-encoded store snapshot. On startup the engine restores from it (if present); on shutdown the current state is atomically saved back to the same path.")
+	walPath := flag.String("wal", "", "Optional path to the write-ahead log. When set, every insert is appended to the WAL so a crash + restart replays the last few seconds of writes.")
+	persistInterval := flag.Duration("persist-interval", 5*time.Minute, "How often to snapshot+rotate the WAL. 0 disables background persistence.")
 	pprofToken := flag.String("pprof-token", "", "When set, exposes net/http/pprof endpoints at /debug/pprof/* gated by `?token=<value>`. Empty disables pprof.")
 	selfTrace := flag.Bool("self-trace", false, "Record the collectors own requests as OTLP spans and POST them back to /api/ingest/otlp. Useful for self-observability in production.")
 	alertsPath := flag.String("alerts-rules", "", "Optional path to a YAML/JSON file of SLO burn-rate rules. Empty disables alerting.")
@@ -81,10 +83,36 @@ func main() {
 			fmt.Printf("  Snapshot           : %s (loaded)\n", *snapshotPath)
 		}
 	}
+	// Wire WAL. If the snapshot was loaded, replay the WAL on top so
+	// any in-flight writes since the last snapshot are recovered.
+	var wal *store.WAL
+	if *walPath != "" {
+		w, err := store.OpenWAL(*walPath)
+		if err != nil {
+			log.Printf("[DOG] WAL open failed: %v (continuing without persistence)", err)
+		} else {
+			wal = w
+			s.SetWAL(wal)
+				if err := s.ReplayInto(wal); err != nil {
+				log.Printf("[DOG] WAL replay failed: %v", err)
+			} else {
+				fmt.Printf("  WAL               : %s (active)\n", *walPath)
+			}
+		}
+	}
+	// Background snapshot+WAL rotation.
+	if *persistInterval > 0 && *snapshotPath != "" {
+		go store.PeriodicPersist(*persistInterval, s, *snapshotPath, wal)
+	}
 
 	hub := stream.NewHub()
 	in := ingest.New(s, *workers)
 	defer in.Close()
+	defer func() {
+		if wal != nil {
+			_ = wal.Close()
+		}
+	}()
 
 	apiServer := api.New(s, in, hub)
 
