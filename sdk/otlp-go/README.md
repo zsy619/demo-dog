@@ -319,8 +319,8 @@ SDK 发出的默认 envelope:
 
 ```
 quickstart     demo-dog       middleware      echo
-gin            hertz          grpc-server     db-tracing
-frontend-log-pipe              trace-propagation
+gin            hertz          beego           grpc-server
+db-tracing     frontend-log-pipe              trace-propagation
 kafka-consumer  worker-loop    otel-bridge
 prometheus-exporter              sampler-debug
 loadtest

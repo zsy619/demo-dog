@@ -11,8 +11,8 @@ go run ./examples/<name>
 > 所有示例默认连接 `http://localhost:18080`。如需指向远端 collector,
 > 用环境变量 `DOG_ENDPOINT=http://host:port` 覆盖。
 
-> 大多数示例只依赖 SDK 本身(零三方依赖)。`hertz` 例外,自带 `go.mod`,
-> 通过 `replace` 指向主 SDK,因此运行前需要单独 `cd examples/hertz && go mod tidy`。
+> 大多数示例只依赖 SDK 本身(零三方依赖)。`hertz` 和 `beego` 例外,自带 `go.mod`,
+> 通过 `replace` 指向主 SDK,因此运行前需要单独 `cd examples/<name> && go mod tidy`。
 
 ## 示例索引
 
@@ -31,6 +31,7 @@ go run ./examples/<name>
 | [`echo`](./echo) | `:8082` | Echo | stdlib 移植 + Echo 原生版注释 |
 | [`gin`](./gin) | `:8087` | Gin | stdlib 移植 + Gin 原生版注释 + `/metrics` |
 | [`hertz`](./hertz) | `:8088` | Hertz (CloudWeGo) | 真实 Hertz middleware + `/metrics` (自带 hertz 依赖) |
+| [`beego`](./beego) | `:8089` | Beego v2 | OtlpWrap helper + `/metrics` (自带 beego 依赖) |
 | [`frontend-log-pipe`](./frontend-log-pipe) | `:8083` | 浏览器→Go 反代 | React SPA 通过 POST 把 telemetry 反代到 SDK |
 | [`trace-propagation`](./trace-propagation) | `:8084`/`:8085` | 跨服务 W3C | 同进程两个服务演示 traceparent 透传 |
 

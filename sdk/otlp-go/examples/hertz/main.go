@@ -124,7 +124,6 @@ func OtlpMiddleware(sdk *otlp.SDK) app.HandlerFunc {
 			otlp.String("http.method", method),
 			otlp.String("http.target", path),
 			otlp.Int("http.status", int64(status)),
-			otlp.Int("http.duration_ms", durMs),
 			otlp.String("http.scheme", string(ctx.Request.URI().Scheme())),
 			otlp.String("http.host", string(ctx.Host())),
 			otlp.String("http.user_agent", string(ctx.UserAgent())),

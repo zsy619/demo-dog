@@ -70,7 +70,6 @@ func ginStyleMiddleware(sdk *otlp.SDK, next http.Handler) http.Handler {
 			otlp.String("http.method", r.Method),
 			otlp.String("http.path", r.URL.Path),
 			otlp.Int("http.status", int64(rw.status)),
-			otlp.Int("http.duration_ms", durMs),
 		}
 		sdk.Counter(ctx, "http.requests", 1, attrs...)
 		sdk.Histogram(ctx, "http.duration_ms", float64(durMs), attrs...)
@@ -116,7 +115,6 @@ func (s *statusWriter) WriteHeader(code int) {
 //               otlp.String("http.method", c.Request.Method),
 //               otlp.String("http.path", c.FullPath()),
 //               otlp.Int("http.status", int64(status)),
-//               otlp.Int("http.duration_ms", durMs),
 //           }
 //           sdk.Counter(ctx, "http.requests", 1, attrs...)
 //           sdk.Histogram(ctx, "http.duration_ms", float64(durMs), attrs...)

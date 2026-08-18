@@ -213,3 +213,28 @@ backend/.run/
 # Allow GitHub Actions / CI caches if/when added later
 !.github/
 backend/bin/
+
+# Examples produce built binaries during E2E smoke tests; ignore the
+# most common build outputs (each example typically builds a binary
+# matching its directory name).
+sdk/otlp-go/examples/*/quickstart
+sdk/otlp-go/examples/*/demo-dog
+sdk/otlp-go/examples/*/middleware
+sdk/otlp-go/examples/*/echo
+sdk/otlp-go/examples/*/gin
+sdk/otlp-go/examples/*/hertz
+sdk/otlp-go/examples/*/beego
+sdk/otlp-go/examples/*/grpc-server
+sdk/otlp-go/examples/*/db-tracing
+sdk/otlp-go/examples/*/frontend-log-pipe
+sdk/otlp-go/examples/*/trace-propagation
+sdk/otlp-go/examples/*/kafka-consumer
+sdk/otlp-go/examples/*/worker-loop
+sdk/otlp-go/examples/*/otel-bridge
+sdk/otlp-go/examples/*/prometheus-exporter
+sdk/otlp-go/examples/*/sampler-debug
+sdk/otlp-go/examples/*/loadtest
+sdk/otlp-go/examples/*/beego-demo-bin
+sdk/otlp-go/examples/*/hertz-demo-bin
+sdk/otlp-go/examples/*/*-bin
+
