@@ -19,13 +19,21 @@ var acceptKeyGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // Upgrade performs the WebSocket handshake on a hijacked HTTP connection.
 // It returns a connection that yields text frames via Read and writes them
 // via WriteText.
-func Upgrade(w http.ResponseWriter, r *http.Request) (net.Conn, *Conn, error) {
+//
+// allowedOrigins controls the cross-site check. An empty list accepts any
+// origin (dev mode); passing a non-empty list rejects requests whose
+// Origin header does not match one of the entries. Same-origin requests
+// (no Origin header, or Origin == Host) are always accepted.
+func Upgrade(w http.ResponseWriter, r *http.Request, allowedOrigins []string) (net.Conn, *Conn, error) {
 	if r.Header.Get("Upgrade") != "websocket" {
 		return nil, nil, errors.New("not a websocket upgrade")
 	}
 	key := r.Header.Get("Sec-WebSocket-Key")
 	if key == "" {
 		return nil, nil, errors.New("missing Sec-WebSocket-Key")
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && !originAllowed(origin, allowedOrigins) {
+		return nil, nil, errors.New("origin not allowed: " + origin)
 	}
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -48,6 +56,21 @@ func Upgrade(w http.ResponseWriter, r *http.Request) (net.Conn, *Conn, error) {
 		return nil, nil, err
 	}
 	return conn, &Conn{rwc: conn, bufrw: bufrw}, nil
+}
+
+// originAllowed returns true if `origin` is one of the allowedOrigins,
+// or if allowedOrigins is empty (dev default). A wildcard entry "*"
+// also matches any origin.
+func originAllowed(origin string, allowedOrigins []string) bool {
+	if len(allowedOrigins) == 0 {
+		return true
+	}
+	for _, a := range allowedOrigins {
+		if a == "*" || a == origin {
+			return true
+		}
+	}
+	return false
 }
 
 // Conn wraps a hijacked connection with WebSocket framing.

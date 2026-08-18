@@ -35,6 +35,15 @@ type Server struct {
 	// populated via the -api-keys flag or DOG_API_KEYS env var.
 	auth  *APIKeyAuth
 	authM AuthMode
+
+	// allowedOrigins controls CORS. Empty slice = wildcard "*".
+	// Populate via SetAllowedOrigins from main.
+	allowedOrigins []string
+
+	// rateLimiter is nil unless enabled via SetRateLimit. It uses a
+	// per-IP token bucket and returns 429 with Retry-After when a
+	// single client floods the server.
+	rateLimiter *RateLimiter
 }
 
 // New returns a new Server.
@@ -63,6 +72,24 @@ func (s *Server) Datasources() *datasourceRegistry {
 func (s *Server) Auth() *APIKeyAuth    { return s.auth }
 func (s *Server) AuthMode() AuthMode    { return s.authM }
 func (s *Server) SetAuthMode(m AuthMode) { s.authM = m }
+
+// SetAllowedOrigins restricts CORS Access-Control-Allow-Origin to the
+// given host list. Empty list keeps the wildcard default. Origins are
+// matched exactly (no scheme-relative quirks); set http://localhost:3000
+// if you only want to allow the dev frontend.
+func (s *Server) SetAllowedOrigins(origins []string) {
+	s.allowedOrigins = origins
+}
+
+// SetRateLimit installs a per-IP token-bucket rate limiter. Pass
+// rate=0 to disable.
+func (s *Server) SetRateLimit(rate, burst float64) {
+	if rate <= 0 {
+		s.rateLimiter = nil
+		return
+	}
+	s.rateLimiter = NewRateLimiter(rate, burst)
+}
 
 // Handler returns the root http.Handler with all routes mounted.
 func (s *Server) Handler() http.Handler {
@@ -93,16 +120,49 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
-	return withCORS(withLogging(s.auth.Middleware(s.authM,
+	h := s.auth.Middleware(s.authM,
 		"/api/health", "/metrics",
-	)(mux)))
+	)(mux)
+	if s.rateLimiter != nil {
+		h = s.rateLimiter.Middleware()(h)
+	}
+	return s.withCORS(withLogging(h))
 }
 
-func withCORS(h http.Handler) http.Handler {
+func (s *Server) withCORS(h http.Handler) http.Handler {
+	allowed := s.allowedOrigins
+	if len(allowed) == 0 {
+		allowed = []string{"*"}
+	}
+	wildcard := len(allowed) == 1 && allowed[0] == "*"
+	isAllowed := func(origin string) bool {
+		if wildcard {
+			return true
+		}
+		for _, a := range allowed {
+			if a == origin {
+				return true
+			}
+		}
+		return false
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if isAllowed(origin) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			} else if !wildcard {
+				// Unknown origin — return no ACAO header so the
+				// browser rejects the response.
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+		} else if wildcard {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

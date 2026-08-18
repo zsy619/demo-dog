@@ -135,6 +135,12 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("POST only"))
 		return
 	}
+	// Cap ingest body size to prevent a single huge payload from
+	// exhausting server memory. Default 4 MiB is generous for an
+	// OTel-style batch (typical is <100 KiB) but small enough to
+	// not let an attacker OOM the collector.
+	const maxBodyBytes = 4 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -208,7 +214,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
-	raw, conn, err := stream.Upgrade(w, r)
+	raw, conn, err := stream.Upgrade(w, r, s.allowedOrigins)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

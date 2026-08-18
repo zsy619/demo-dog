@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,6 +57,11 @@ func main() {
 	queue := flag.Int("queue", 4096, "ingest queue depth (bounded; backpressure on overflow)")
 	seed := flag.String("seed", "", "Optional comma-separated service names to seed on startup")
 	apiKeys := flag.String("api-keys", "", "Comma-separated list of accepted API keys. Empty (default) disables auth. Env DOG_API_KEYS is read as a fallback.")
+	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS origin allowlist. Empty (default) allows any origin (dev mode). Use http://localhost:3000 in production.")
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate (PEM). When set with -tls-key, the server listens with HTTPS.")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key (PEM).")
+	ratePerSec := flag.Float64("rate-limit", 0, "Per-IP token bucket refill rate (req/s). 0 disables rate limiting.")
+	rateBurst := flag.Float64("rate-burst", 200, "Per-IP token bucket burst capacity.")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -66,6 +72,17 @@ func main() {
 	defer in.Close()
 
 	apiServer := api.New(s, in, hub)
+
+	if origins := splitCSV(*corsOrigins); len(origins) > 0 {
+		apiServer.SetAllowedOrigins(origins)
+		fmt.Printf("  CORS origins       : %s\n", strings.Join(origins, ", "))
+	} else {
+		fmt.Println("  CORS origins       : * (dev mode; configure -cors-origins in production)")
+	}
+	if *ratePerSec > 0 {
+		apiServer.SetRateLimit(*ratePerSec, *rateBurst)
+		fmt.Printf("  Rate limit         : %.0f req/s burst=%.0f per IP\n", *ratePerSec, *rateBurst)
+	}
 
 	// Configure API-key authentication. Sources, in priority order:
 	//   1. -api-keys flag (comma-separated)
@@ -120,12 +137,19 @@ func main() {
 		close(idleClosed)
 	}()
 
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+	var listenErr error
+	if *tlsCert != "" && *tlsKey != "" {
+		fmt.Printf("  TLS                 : %s / %s\n", *tlsCert, *tlsKey)
+		listenErr = server.ListenAndServeTLS(*tlsCert, *tlsKey)
+	} else {
+		listenErr = server.ListenAndServe()
+	}
+	if listenErr != nil && listenErr != http.ErrServerClosed {
 		// We intentionally do NOT use log.Fatalf here: it calls os.Exit,
 		// which skips defers and would abandon any in-flight ingest
 		// queue / partial batch. Instead, log the error, drain the
 		// ingest pipeline, and exit cleanly.
-		log.Printf("[DOG] http server error: %v", err)
+		log.Printf("[DOG] http server error: %v", listenErr)
 		in.Close()
 		fmt.Println("[DOG] bye.")
 		os.Exit(1)
