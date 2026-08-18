@@ -319,9 +319,10 @@ SDK 发出的默认 envelope:
 
 ```
 quickstart     demo-dog       middleware      echo
-gin            grpc-server    db-tracing      frontend-log-pipe
-trace-propagation               kafka-consumer  worker-loop
-otel-bridge   prometheus-exporter              sampler-debug
+gin            hertz          grpc-server     db-tracing
+frontend-log-pipe              trace-propagation
+kafka-consumer  worker-loop    otel-bridge
+prometheus-exporter              sampler-debug
 loadtest
 ```
 

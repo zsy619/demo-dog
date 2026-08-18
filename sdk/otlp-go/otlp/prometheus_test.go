@@ -77,3 +77,30 @@ func TestEscapeLabelValue(t *testing.T) {
 		}
 	}
 }
+
+func TestPrometheusCollectorRender(t *testing.T) {
+	sdk, err := New("http://127.0.0.1:1",
+		WithService("prom-render-test"),
+		WithMaxBatch(100),
+		WithFlushInterval(0),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sdk.Shutdown(context.Background())
+
+	sdk.Counter(context.Background(), "remote_pings", 1,
+		String("region", "apac"))
+
+	col := NewPrometheusCollector(sdk, WithPrometheusPrefix("remote_"))
+	body, err := col.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "remote_pings") {
+		t.Errorf("missing remote_pings: %s", body)
+	}
+	if !strings.Contains(string(body), "apac") {
+		t.Errorf("missing region label: %s", body)
+	}
+}

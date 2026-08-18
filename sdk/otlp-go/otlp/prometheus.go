@@ -114,6 +114,14 @@ func (c *PrometheusCollector) Handler() http.Handler {
 	})
 }
 
+// Render returns the Prometheus exposition as a byte slice. Useful for
+// frameworks that need the body directly (e.g. Hertz, Fiber, gRPC-gateway)
+// without going through a stdlib http.Handler.
+func (c *PrometheusCollector) Render() ([]byte, error) {
+	p := &PrometheusExporter{prefix: c.prefix}
+	return p.Render(c.sdk.Snapshot())
+}
+
 func (p *PrometheusExporter) writeExposition(w io.Writer, req Request) error {
 	type metric struct {
 		Name string
