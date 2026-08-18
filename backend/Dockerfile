@@ -3,7 +3,7 @@
 # Stage 1: build a static Go binary using a pinned toolchain.
 # Stage 2: run it on a minimal Alpine image so the deployed artifact is small.
 
-FROM golang:1.23-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 
 # Cache go.mod first for faster incremental builds.
