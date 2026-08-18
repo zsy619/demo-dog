@@ -6,6 +6,18 @@
 > tenant, no auth) to a production-grade foundation that a small team can run
 > for a real internal workload.
 
+## Round 22 — Enterprise hardening (DONE)
+
+| Slice | Task | Status |
+|---|---|---|
+| 22.1 | RBAC + audit log + multi API key (admin/writer/reader) | done |
+| 22.2 | OpenAPI 3.1 spec at `backend/openapi.yaml` (30 paths) | done |
+| 22.3 | CI/CD (GH Actions: backend race tests, frontend vitest + typecheck + build, multi-arch docker buildx, SemVer release) | done |
+| 22.4 | SDK env config + buffer cap (drop-oldest) + PII redactor + tail sampler | done |
+| 22.5 | Self-tracing + pprof (token-gated) + blackbox probe + per-handler latency histogram | done |
+| 22.6 | K8s manifests + Helm chart (Deployment, Service, HPA, PDB, PVC, ConfigMap, Ingress, ServiceMonitor) | done |
+| 22.7 | Alert rules engine + SLO burn-rate (multi-window) + webhook + frontend Alerts page | done |
+
 This roadmap consumes the audit reports on disk:
 
 - `backend/PRODUCTION_READINESS_REPORT.md` (P0/P1 issues in Go backend)
