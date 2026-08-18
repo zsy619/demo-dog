@@ -3,6 +3,8 @@ import type { Page } from "@/App";
 import { useStreamStatus } from "@/hooks/useStream";
 import { useAuth } from "@/hooks/useAuth";
 import { useHealth, useServices } from "@/hooks/queries";
+import { useI18n } from "@/i18n/I18nProvider";
+import { LOCALES } from "@/i18n";
 import CountUp from "./anim/CountUp";
 import Pulse from "./anim/Pulse";
 import Glitch from "./anim/Glitch";
@@ -266,6 +268,8 @@ export default function TopBar({ page, onOpenLogin }: Props) {
           {now.toLocaleTimeString()}
         </div>
 
+        <LocalePicker />
+
         <button
           type="button"
           onClick={() => onOpenLogin?.()}
@@ -310,5 +314,26 @@ function TierBar({ hot, cold }: { hot: number; cold: number }) {
         style={{ width: `${100 - hotPct}%` }}
       />
     </div>
+  );
+}
+
+function LocalePicker() {
+  const { locale, setLocale } = useI18n();
+  return (
+    <label
+      className="px-2 py-1 rounded border border-grafana-border bg-grafana-elev/40 text-grafana-text text-[11px] flex items-center gap-1"
+      aria-label="Language selector"
+    >
+      <span aria-hidden="true">🌐</span>
+      <select
+        value={locale}
+        onChange={(e) => setLocale(e.target.value as "en" | "zh")}
+        className="bg-transparent outline-none cursor-pointer"
+      >
+        {LOCALES.map((l) => (
+          <option key={l.id} value={l.id}>{l.label}</option>
+        ))}
+      </select>
+    </label>
   );
 }

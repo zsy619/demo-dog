@@ -36,3 +36,38 @@ html, body, #root {
   50% { opacity: 1; }
 }
 .animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+
+/* Round 24 mobile layout: collapse the sidebar on narrow screens
+   and let pages take the full width. Tailwind utilities are
+   unchanged; this is the only custom rule for responsive behaviour. */
+@media (max-width: 768px) {
+  /* Stack the top bar elements into a vertical column. */
+  .responsive-topbar {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding: 8px;
+  }
+  /* Hide dense numerical widgets on mobile; the engine status + the
+     page title + login button are enough on a 360-pixel viewport. */
+  .desktop-only { display: none !important; }
+  /* Make the sidebar overlay instead of pushing content. */
+  .responsive-sidebar {
+    position: fixed !important;
+    z-index: 50;
+    inset: 48px 0 0 0;
+    width: 100% !important;
+    background: #0b0d12;
+  }
+}
+
+/* Round 24 a11y: focus rings + reduced-motion preference. The base
+   focus-visible styles are provided by Tailwind; this rule extends
+   the keyboard-focus outline to all interactive controls so the
+   keyboard-only user always sees where they are. */
+:focus-visible {
+  outline: 2px solid #7e3bf2;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
