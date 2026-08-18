@@ -23,6 +23,7 @@ const Live = lazy(() => import("@/pages/Live"));
 const ServiceMapPage = lazy(() => import("@/pages/ServiceMapPage"));
 const ServiceDetailPage = lazy(() => import("@/pages/ServiceDetailPage"));
 const Alerts = lazy(() => import("@/pages/Alerts"));
+const Tenants = lazy(() => import("@/pages/Tenants"));
 
 export type Page =
   | "overview"
@@ -36,7 +37,8 @@ export type Page =
   | "live"
   | "service-map"
   | "service-detail"
-  | "alerts";
+  | "alerts"
+  | "tenants";
 
 const VALID_PAGES: Page[] = [
   "overview",
@@ -51,6 +53,7 @@ const VALID_PAGES: Page[] = [
   "service-map",
   "service-detail",
   "alerts",
+  "tenants",
 ];
 
 function isValid(p: string): p is Page {
@@ -225,6 +228,8 @@ export default function App() {
         );
       case "alerts":
         return <Alerts />;
+      case "tenants":
+        return <Tenants />;
       default:
         return null;
     }

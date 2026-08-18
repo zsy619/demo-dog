@@ -22,6 +22,7 @@ const TITLES: Record<Page, string> = {
   "service-map": "Service map",
   "service-detail": "Service",
   alerts: "Alerts",
+  tenants: "Tenants",
 };
 
 interface Props {

@@ -279,3 +279,11 @@ export interface AlertFire {
   burn_rate: number;
   reason: string;
 }
+
+export interface Tenant {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  active: boolean;
+}

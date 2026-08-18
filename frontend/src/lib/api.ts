@@ -15,6 +15,7 @@ import type {
   SpanRecord,
   AlertRule,
   AlertFire,
+  Tenant,
 } from "@/types/api";
 import { apiFetch } from "./fetch";
 
@@ -124,6 +125,18 @@ export const apiService = {
     apiFetch<{ rules: AlertRule[] }>("/alerts/rules"),
   alertsFires: (n = 100) =>
     apiFetch<{ fires: AlertFire[] }>(`/alerts/fires?n=${n}`),
+  tenantsList: () =>
+    apiFetch<{ tenants: Tenant[] }>("/tenants"),
+  createTenant: (body: { id: string; name: string; description?: string }) =>
+    apiFetch<Tenant>("/tenants", { method: "POST", body }),
+  mintTenantKey: (tenantId: string, body: { label: string; role: string }) =>
+    apiFetch<{
+      tenant_id: string;
+      label: string;
+      plaintext: string;
+      role: string;
+      created_at: string;
+    }>(`/tenants/${encodeURIComponent(tenantId)}/keys`, { method: "POST", body }),
 };
 
 // Legacy alias — pages that imported `api` keep working while new
