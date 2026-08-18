@@ -633,6 +633,66 @@ docker run --rm -p 8080:8080 demo-dog-collector:0.1.0 -seed checkout,search
 - [ ] 前端:将基于状态的路由替换为 React Router,以支持深链。
 - [ ] 提供 Kubernetes 部署的 Helm Chart。
 
+## 🔐 生产化能力(本仓库当前已具备)
+
+### API 鉴权
+
+启动时通过 `-api-keys "k1,k2"` 或环境变量 `DOG_API_KEYS` 启用。SDK 侧:
+
+```go
+sdk, _ := otlp.New("https://collector.example.com",
+    otlp.WithService("checkout"),
+    otlp.WithAuthToken("k1"),      // 或 otlp.WithAPIKey 直接配 Exporter
+)
+```
+
+### 多租户
+
+请求体携带 `tenant_id` 字段即可隔离数据;HTTP 也可通过 `X-Tenant-Id` 头传入。
+
+```bash
+curl -H "X-Tenant-Id: acme" -X POST .../api/ingest/otlp -d {...}
+curl ".../api/services?tenant=acme"
+```
+
+SDK: `otlp.WithTenant("acme")`。
+
+### OTel 直方图端到端
+
+SDK 配置桶边界后,刷新间隔内累加成一帧 OTel 直方图(带 sum/count/min/max + 每桶计数),后端据此计算真正的 p50/p95/p99:
+
+```go
+sdk, _ := otlp.New(endpoint,
+    otlp.WithService("hist-demo"),
+    otlp.WithHistogramBuckets([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, math.MaxFloat64}),
+)
+sdk.Histogram(ctx, "http.duration_ms", 0.030)
+```
+
+查询: `GET /api/histogram/otel?service=hist-demo&name=http.duration_ms`
+
+### 持久化
+
+启动参数 `-snapshot /var/lib/dog/dog.snap` 后,SIGTERM 优雅关闭或致命监听错误时,内存状态原子写入(`*.tmp` → `rename`)。下次启动自动恢复,无外部依赖(gob 编码)。
+
+### 安全 / 限流 / 容量
+
+| 配置 | 默认 | 说明 |
+|---|---|---|
+| `-cors-origins` | `*`(dev) | 生产推荐 `http://localhost:3000` 等显式来源 |
+| `-tls-cert` / `-tls-key` | 空 | 同时设置后启用 HTTPS |
+| `-rate-limit` / `-rate-burst` | `0` / `200` | 每 IP 令牌桶;`0` 关闭 |
+| `handleIngest` | 4 MiB | `http.MaxBytesReader` 防止单请求 OOM |
+| ingest 队列满 | `503 Retry-After: 1` | 不再做同步回退以避免请求堆积 |
+
+### Prometheus 集成
+
+`/metrics` 现已暴露 12 项指标,涵盖日志/指标/链路吞吐、查询命中、热点层/冷点层水位、worker 池统计(accepted / processed / retried / failed)以及 Go 运行时(goroutines / heap / GC 暂停)。
+
+## 📅 30 天企业级落地路线图
+
+详见 [ROADMAP_30D.md](./ROADMAP_30D.md)。
+
 ---
 
 ## 📜 许可证
