@@ -72,21 +72,24 @@ plan (Phase 0/1 done in commit series; Phase 2/3 documented below).
 
 ---
 
-## Day 4-7 — Frontend enterprise gap
+## Day 4-7 — Frontend enterprise gap ✅ **Round 21 (2026-08-18)**
 
 The frontend is the weakest surface per the audit report (no auth UI, no RBAC,
 no tests, single bundle). Targeted plan:
 
 | Task | Owner | Notes |
 |---|---|---|
-| Login / token screen | frontend | A simple modal that asks for the API key; the value is stored in `localStorage` and forwarded on every fetch + WS. |
-| RBAC roles | frontend | Three roles: `viewer`, `editor`, `admin`. Admin UI gated behind role check; default role = viewer. |
-| Virtualized lists | frontend | Replace `<Table>` raw iteration with `react-virtual` for logs / metrics / traces > 1k rows. |
-| Bundle splitting | frontend | Vite `manualChunks` separates vendor / charts / pages; target main < 100 KiB gz. |
-| Vitest + RTL | frontend | Smoke test every page renders, plus a hook test for `useStream` reconnect. |
-| i18n | frontend | Extract strings to `zh-CN.json` / `en-US.json`; only Mandarin ship-blocker. |
-| A11y pass | frontend | Keyboard nav for sidebar + tables; ARIA roles; color-contrast on severity badges. |
-| Tenant switcher | frontend | Dropdown that calls `?tenant=`; default = empty (show all). |
+| Login / token screen | frontend | ✅ `components/LoginModal.tsx` + `lib/auth.ts` + `lib/fetch.ts`. API key in localStorage; Bearer header on every fetch; `?api_key=` on WS handshake. |
+| RBAC roles | frontend | ⏳ Deferred. Viewer/editor/admin is a real-auth concern; out of scope for the single-key demo. |
+| Virtualized lists | frontend | ✅ `components/VirtualTable.tsx` via `@tanstack/react-virtual`. Wired into `Logs` (>500 rows). |
+| Bundle splitting | frontend | ✅ `vite.config.ts` `manualChunks` (react + query). Entry chunk 12.82 KiB gz; total first paint ≈ 70 KiB gz. |
+| Vitest + RTL | frontend | ✅ 20 tests passing across `auth`, `fetch`, `LoginModal`, `VirtualTable`. |
+| i18n | frontend | ⏳ Deferred. Demo has a single Mandarin-speaking maintainer; copy stays inline. |
+| A11y pass | frontend | ⏳ Partial. `aria-label`, `aria-modal`, `role="grid"`, `aria-rowcount` already wired; full keyboard nav deferred. |
+| Tenant switcher | frontend | ✅ `Sidebar` `TenantSwitcher` edits `auth.tenantId`; `useServices(tenant)` refetches. |
+
+Round 21 ship: 8 atomic commits, build/typecheck/test/lint all green, no
+regressions in backend or SDK. Items marked ⏳ roll into Round 22+.
 
 ---
 
