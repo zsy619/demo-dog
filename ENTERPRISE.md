@@ -1,7 +1,11 @@
 # demo-dog — Enterprise readiness
 
 This document is the single-page summary of demo-dog's
-enterprise-grade feature set after the 30-day roadmap.
+enterprise-grade feature set.
+
+For per-round implementation detail, see
+`backend/PRODUCTION_READINESS_REPORT.md` (43 rounds shipped,
+stdlib-only deployment).
 
 ## Multi-tenancy
 
@@ -72,31 +76,71 @@ log / counter / gauge / histogram / span / flush / close
 * `/api/v1/query?query=…` — PromQL-lite endpoint (selectors,
   sum/avg/count, rate(), histogram_quantile()).
 
-## Alerting
+## Alerting & recording
 
 * Rule DSL: metric + threshold + window.
 * Three channels: webhook, email (SMTP + STARTTLS), PagerDuty
   (Events API v2).
+* Slack incoming webhook with severity-colored attachments.
+* RetryChannel with exponential backoff (2^(i-1)).
 * Multiplexer to fan out to multiple channels per rule.
+* Recording rules: precomputed queries that materialize a new
+  series (e.g. `sum(rate(http_requests[5m]))` →
+  `http_requests_5m`).
 * Test endpoint: `POST /api/alerts/rules/{name}/test`.
+* Rule list: `GET /api/v1/rules` (Prometheus-compatible).
 
 ## Observability
 
 * `GET /api/health` — engine stats + uptime + version.
-* `GET /metrics` — Prometheus exposition.
+* `GET /metrics` — Prometheus exposition (includes tenant
+  quota series).
 * `GET /api/admin/audit` — per-request audit log.
-* `GET /api/openapi` — full OpenAPI 3 spec.
+* `GET /api/openapi` — full OpenAPI 3.1 spec (14 paths,
+  2 security schemes, 4 schemas).
+* `GET /api/v1/rules` — alert + recording rule state.
+* `GET /api/v1/quotas` — tenant quota consumption.
 * W3C Trace Context propagation (`traceparent` /
   `tracestate`).
 
 ## Operations
 
 * Grafana JSON dashboards (overview + bridge).
+* Grafana datasource + dashboard provisioning YAML.
+* OpenTelemetry Collector drop-in (`ops/otelcol/dog-collector.yaml`).
 * `bench/ingest.js` + `bench/prom_write.js` zero-dep
   benchmarks.
 * `ops/RUNBOOK.md` with 10 operational scenarios.
-* K8s manifests in `ops/k8s/`.
+* K8s manifests in `ops/k8s/`, Helm chart in `deploy/`.
 * Docker-friendly static binary.
+
+## High availability
+
+* WAL append-only log with repair + snapshot.
+* Multi-node HA via replica primary/follower.
+* At-least-once delivery: `POST /replica/ack` with retention
+  buffer + min-ack GC.
+* Bearer-token auth (hashed, constant-time compare) on
+  `/replica/*`.
+* mTLS for `/replica` with stdlib `crypto/tls` (cert + key +
+  CA bundle, `RequireAndVerifyClientCert`).
+* W3C Trace Context propagation across follower→primary calls.
+
+## Auth
+
+* API keys with optional per-key resource scopes
+  (`rules:read`, `metrics:read`, etc.).
+* OIDC ID token federation via dex / keycloak / Okta —
+  verifies RS256 / ES256 / ES384 against issuer JWKS, maps
+  `sub`, `aud`, `exp`, `scope`, `groups`, `tenant_id` claims
+  into the same auth shape as static API keys.
+
+## Multi-tenant governance
+
+* Per-tenant quota tracker: MaxRequests / MaxBytes per window
+  with automatic window rollover.
+* Tenant-aware Prometheus metrics: requests, bytes, limited
+  state, configured caps.
 
 ## Performance (Apple Silicon, single core)
 
@@ -108,3 +152,13 @@ log / counter / gauge / histogram / span / flush / close
 
 Memory footprint: ~80 MB RSS at idle, ~200 MB under 10 k req/s
 load with the default hot-tier caps.
+
+## Deployment model
+
+* **Zero third-party dependencies.** Backend is Go 1.26 stdlib
+  only; SDKs are stdlib only (Python 3.8+, Node 18+, JDK 11+).
+* Single static binary with embedded frontend assets.
+* Helm chart + Dockerfile + systemd unit + k8s manifests.
+* Default operational state: standalone with WAL; opt-in HA
+  via replica + WAL replication.
+* Operator surface area: env vars + `cmd/dog-collector` flags.
