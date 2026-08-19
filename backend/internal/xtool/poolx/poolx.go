@@ -1,81 +1,38 @@
-// Package poolx 提供一个按类型构造 + Reset + 自动放回的对象池，
-// 与 sync.Pool 不同：对象不会被 GC 主动释放，且支持有界容量。
+// Package poolx 提供基于 sync.Pool 的对象池辅助，自动 Reset 与归还。
 package poolx
 
-import (
-	"errors"
-	"sync"
-)
+import "sync"
 
-// Factory 构造一个新对象。
-type Factory func() any
-
-// Resetter 在对象放回前执行清理。
-type Resetter func(any)
-
-// Pool 是通用对象池。
-type Pool struct {
-	mu       sync.Mutex
-	items    []any
-	capacity int
-	newFn    Factory
-	reset    Resetter
+// Pool 是 sync.Pool 的包装，构造对象时由 New 提供。
+type Pool[T any] struct {
+	p    sync.Pool
+	reset func(T)
 }
 
-// New 创建一个容量为 capacity 的 Pool。
-func New(capacity int, factory Factory, reset Resetter) *Pool {
-	if capacity <= 0 {
-		capacity = 32
+// New 创建一个对象池；reset 在每次 Get 时被调用。
+func New[T any](makeFn func() T, reset func(T)) *Pool[T] {
+	return &Pool[T]{
+		p:    sync.Pool{New: func() any { return makeFn() }},
+		reset: reset,
 	}
-	if factory == nil {
-		factory = func() any { return nil }
-	}
-	return &Pool{capacity: capacity, newFn: factory, reset: reset}
 }
 
-// Get 取出一个对象。
-func (p *Pool) Get() any {
-	p.mu.Lock()
-	if n := len(p.items); n > 0 {
-		v := p.items[n-1]
-		p.items = p.items[:n-1]
-		p.mu.Unlock()
-		return v
-	}
-	p.mu.Unlock()
-	return p.newFn()
-}
-
-// Put 放回对象。容量满时直接丢弃。
-func (p *Pool) Put(v any) error {
-	if v == nil {
-		return errors.New("poolx: nil")
-	}
+// Get 取出对象（如果池中有，先 reset）。
+func (p *Pool[T]) Get() T {
+	v := p.p.Get().(T)
 	if p.reset != nil {
 		p.reset(v)
 	}
-	p.mu.Lock()
-	if len(p.items) >= p.capacity {
-		p.mu.Unlock()
-		return nil
-	}
-	p.items = append(p.items, v)
-	p.mu.Unlock()
-	return nil
+	return v
 }
 
-// Len 返回池中对象数。
-func (p *Pool) Len() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.items)
+// Put 归还对象。
+func (p *Pool[T]) Put(v T) {
+	p.p.Put(v)
 }
 
-// Capacity 返回池容量。
-func (p *Pool) Capacity() int { return p.capacity }
-
-// Use 是 Put 的便捷封装，配合 defer 使用。
-func (p *Pool) Use(fn func(any)) {
+// Use 在函数内使用对象并自动归还。
+func (p *Pool[T]) Use(fn func(v T)) {
 	v := p.Get()
 	defer p.Put(v)
 	fn(v)
