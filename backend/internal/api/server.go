@@ -194,6 +194,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/keys", s.handleListKeys)
 	mux.HandleFunc("/api/probe", s.handleProbe)
 	mux.HandleFunc("/api/alerts/rules", s.handleAlertsRules)
+	mux.HandleFunc("/api/v1/rules", s.handleRules)
 	mux.HandleFunc("/api/alerts/fires", s.handleAlertsFires)
 	mux.HandleFunc("/api/tenants", s.handleTenantsDispatch)
 	mux.HandleFunc("/api/tenants/", s.handleTenantsDispatch)
