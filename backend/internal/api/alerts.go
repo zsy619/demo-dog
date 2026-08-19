@@ -11,14 +11,42 @@ import (
 )
 
 type alertsEngine struct {
-	mu  sync.Mutex
-	eng *alerts.Engine
+	mu    sync.Mutex
+	eng   *alerts.Engine
+	slos  []*alerts.SLO
 }
 
 func newAlertsEngine(s *store.Doris) *alertsEngine {
 	provider := &storeProvider{s: s}
 	return &alertsEngine{eng: alerts.NewEngine(provider)}
 }
+
+// AddSLO appends an SLO definition.
+func (a *alertsEngine) AddSLO(s *alerts.SLO) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.slos = append(a.slos, s)
+}
+
+// SLOStatus computes a fresh budget status for every registered SLO.
+func (a *alertsEngine) SLOStatus(now time.Time) []alerts.BudgetStatus {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]alerts.BudgetStatus, 0, len(a.slos))
+	for _, s := range a.slos {
+		if err := s.Validate(); err != nil {
+			continue
+		}
+		st, _ := alerts.Compute(s, zeroCountSink{}, now)
+		out = append(out, st)
+	}
+	return out
+}
+
+// zeroCountSink is a placeholder sink that reports no traffic.
+type zeroCountSink struct{}
+
+func (zeroCountSink) Counter(name string, window time.Duration) int64 { return 0 }
 
 type storeProvider struct {
 	s *store.Doris
@@ -67,4 +95,22 @@ func (a *alertsEngine) sortedRules() []alerts.Rule {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.eng.SortedRules()
+}
+
+func (a *alertsEngine) getRule(name string) (alerts.Rule, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.eng.GetRule(name)
+}
+
+func (a *alertsEngine) upsertRule(r alerts.Rule) (alerts.Rule, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.eng.UpsertRule(r)
+}
+
+func (a *alertsEngine) deleteRule(name string) (alerts.Rule, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.eng.DeleteRule(name)
 }

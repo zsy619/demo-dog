@@ -196,3 +196,46 @@ func (e *Engine) SortedRules() []Rule {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
+
+// UpsertRule inserts r or replaces the rule with the same name.
+// Returns the previous rule if one was replaced, plus the new one.
+func (e *Engine) UpsertRule(r Rule) (prev Rule, ok bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, existing := range e.rules {
+		if existing.Name == r.Name {
+			prev = existing
+			ok = true
+			e.rules[i] = r
+			return
+		}
+	}
+	e.rules = append(e.rules, r)
+	return
+}
+
+// DeleteRule removes the named rule.
+func (e *Engine) DeleteRule(name string) (Rule, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, r := range e.rules {
+		if r.Name == name {
+			out := e.rules[i]
+			e.rules = append(e.rules[:i], e.rules[i+1:]...)
+			return out, true
+		}
+	}
+	return Rule{}, false
+}
+
+// GetRule returns the named rule.
+func (e *Engine) GetRule(name string) (Rule, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, r := range e.rules {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Rule{}, false
+}

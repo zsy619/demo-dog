@@ -258,32 +258,137 @@ export interface AlertFire {
   reason: string;
 }
 
-export interface AlertRule {
-  name: string;
-  description?: string;
-  service?: string;
-  target: number;
-  window: number;
-  fast_window: number;
-  fast_burn: number;
-  slow_burn: number;
-  severity: "info" | "warning" | "critical";
-  channels: string[];
-}
-
-export interface AlertFire {
-  rule: AlertRule;
-  severity: string;
-  timestamp: string;
-  window: "fast" | "slow";
-  burn_rate: number;
-  reason: string;
-}
-
 export interface Tenant {
   id: string;
   name: string;
   description?: string;
   created_at: string;
   active: boolean;
+}
+
+// Admin / SLO / webhook / retention / quota / circuit / replica
+// surfaces that align with backend Rounds 42-50.
+
+export interface AuditEntry {
+  ts: string;
+  actor: string;
+  action: string;
+  target?: string;
+  ip?: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface AuditStats {
+  total: number;
+  ok: number;
+  failed: number;
+  by_action: Record<string, number>;
+  by_actor: Record<string, number>;
+}
+
+export interface SLOBudget {
+  name: string;
+  service: string;
+  target: number;
+  total: number;
+  bad: number;
+  error_rate: number;
+  budget: number;
+  budget_left: number;
+  budget_left_percent: number;
+  healthy: boolean;
+  as_of: string;
+  score: number;
+}
+
+export interface SLODecision {
+  short_window_ns: number;
+  short_burn: number;
+  long_window_ns: number;
+  long_burn: number;
+  level: "none" | "warn" | "page";
+  reason: string;
+}
+
+export interface RetentionPolicy {
+  tenant: string;
+  tier: "free" | "pro" | "enterprise" | string;
+  hot_ttl_ns: number;
+  cold_ttl_ns: number;
+  updated_at: string;
+}
+
+export interface QuotaStatus {
+  tenant: string;
+  requests: number;
+  bytes: number;
+  limited: number;
+  max_requests: number;
+  max_bytes: number;
+}
+
+export interface CircuitSnapshot {
+  state: "closed" | "open" | "half_open";
+  failures: number;
+  threshold: number;
+  cool_down_ns: number;
+  opened_at?: string;
+}
+
+export interface ReplicaStatus {
+  role: "primary" | "follower" | "";
+  peers: Array<{ id: string; last_offset: number; last_ack: number }>;
+  pending: number;
+  committed: number;
+}
+
+export interface WebhookSubscriber {
+  id: string;
+  url: string;
+  secret: string;
+  event_types: string[];
+  max_retries: number;
+}
+
+export interface WebhookDelivery {
+  event_id: string;
+  subscriber_id: string;
+  attempts: number;
+  status: number;
+  error?: string;
+  latency_ns: number;
+  last_try: string;
+}
+
+export interface WebhookStats {
+  subscribers: number;
+  delivered: number;
+  failed: number;
+  dlq: number;
+}
+
+export interface ProbeResult {
+  ok: boolean;
+  duration_ns: number;
+  status_code: number;
+  target: string;
+}
+
+export interface OIDCDiscovery {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  jwks_uri: string;
+  userinfo_endpoint: string;
+}
+
+export interface OIDCProviderConfig {
+  issuer: string;
+  client_id: string;
+  audiences: string[];
+  scopes: string[];
+  enabled: boolean;
+  email_claim: string;
+  groups_claim: string;
 }

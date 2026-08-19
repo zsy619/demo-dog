@@ -19,6 +19,17 @@ import type {
   QPSResponse,
   SeverityResponse,
   SnapshotResponse,
+  AuditEntry,
+  AuditStats,
+  SLOBudget,
+  RetentionPolicy,
+  QuotaStatus,
+  CircuitSnapshot,
+  ReplicaStatus,
+  WebhookSubscriber,
+  WebhookDelivery,
+  WebhookStats,
+  OIDCProviderConfig,
 } from "@/types/api";
 import type { QueryParams } from "@/lib/api";
 
@@ -41,6 +52,32 @@ export const queryKeys = {
   snapshot: () => ["snapshot"] as const,
   metricNames: (limit: number) => ["metric-names", limit] as const,
   query: (params: QueryParams) => ["query", params] as const,
+  // Round 39 / 41 / 42
+  audit: (limit: number) => ["audit", limit] as const,
+  auditStats: () => ["audit", "stats"] as const,
+  quotaAll: () => ["quota", "all"] as const,
+  quota: (tenant: string) => ["quota", tenant] as const,
+  // Round 44
+  slos: () => ["slos"] as const,
+  // Round 46
+  adminKeys: () => ["admin", "keys"] as const,
+  // Round 47
+  circuits: () => ["circuits"] as const,
+  // Round 48
+  ratelimits: () => ["ratelimits"] as const,
+  // Round 49
+  webhooks: () => ["webhooks"] as const,
+  webhooksDLQ: () => ["webhooks", "dlq"] as const,
+  webhooksStats: () => ["webhooks", "stats"] as const,
+  // Round 50
+  retention: () => ["retention"] as const,
+  retentionReport: (tenant: string) => ["retention", tenant, "report"] as const,
+  // Round 43
+  backups: () => ["backups"] as const,
+  // Replica
+  replica: () => ["replica"] as const,
+  // OIDC
+  oidcProviders: () => ["oidc", "providers"] as const,
 };
 
 // ---- query hooks -----------------------------------------------------
@@ -166,5 +203,127 @@ export function useQuery_(params: QueryParams) {
         ...(params.limit && { limit: String(params.limit) }),
       })
     ).toString()}`
+  );
+}
+
+// ---- admin / ops hooks (Rounds 39-50) --------------------------------
+
+export function useAudit(limit = 200) {
+  return useApiQuery<{ entries: AuditEntry[] }>(
+    queryKeys.audit(limit),
+    `/audit?limit=${limit}`,
+    { refetchInterval: 10_000 }
+  );
+}
+
+export function useAuditStats() {
+  return useApiQuery<AuditStats>(queryKeys.auditStats(), "/audit/stats", {
+    refetchInterval: 10_000,
+  });
+}
+
+export function useQuotaAll() {
+  return useApiQuery<{ quotas: QuotaStatus[] }>(
+    queryKeys.quotaAll(),
+    "/v1/quota",
+    { refetchInterval: 15_000 }
+  );
+}
+
+export function useQuota(tenant: string) {
+  return useApiQuery<QuotaStatus>(
+    queryKeys.quota(tenant),
+    `/v1/quota?tenant=${encodeURIComponent(tenant)}`,
+    { skip: !tenant }
+  );
+}
+
+export function useSLOs() {
+  return useApiQuery<{ slos: SLOBudget[] }>(
+    queryKeys.slos(),
+    "/v1/slos",
+    { refetchInterval: 30_000 }
+  );
+}
+
+export function useAdminKeys() {
+  return useApiQuery<{
+    keys: Array<{ id: string; label: string; tenant: string; role: string; created_at: string }>;
+  }>(queryKeys.adminKeys(), "/admin/keys");
+}
+
+export function useCircuits() {
+  return useApiQuery<{ circuits: Record<string, CircuitSnapshot> }>(
+    queryKeys.circuits(),
+    "/v1/circuits",
+    { refetchInterval: 15_000 }
+  );
+}
+
+export function useRatelimits() {
+  return useApiQuery<{ buckets: Array<{ key: string; tokens: number; level: number }> }>(
+    queryKeys.ratelimits(),
+    "/v1/ratelimits",
+    { refetchInterval: 15_000 }
+  );
+}
+
+export function useWebhooks() {
+  return useApiQuery<{ subscribers: WebhookSubscriber[] }>(
+    queryKeys.webhooks(),
+    "/v1/webhooks"
+  );
+}
+
+export function useWebhookDLQ() {
+  return useApiQuery<{ deliveries: WebhookDelivery[] }>(
+    queryKeys.webhooksDLQ(),
+    "/v1/webhooks/dlq"
+  );
+}
+
+export function useWebhookStats() {
+  return useApiQuery<WebhookStats>(
+    queryKeys.webhooksStats(),
+    "/v1/webhooks/stats",
+    { refetchInterval: 10_000 }
+  );
+}
+
+export function useRetention() {
+  return useApiQuery<{ policies: RetentionPolicy[] }>(
+    queryKeys.retention(),
+    "/v1/retention"
+  );
+}
+
+export function useRetentionReport(tenant: string) {
+  return useApiQuery<{
+    tenant: string;
+    tier: string;
+    hot_ns: number;
+    cold_ns: number;
+    drop: number;
+    move: number;
+    keep: number;
+  }>(queryKeys.retentionReport(tenant), `/v1/retention/${encodeURIComponent(tenant)}/report`, { skip: !tenant });
+}
+
+export function useBackups() {
+  return useApiQuery<{
+    backups: Array<{ name: string; path: string; size: number; mod_time: string }>;
+  }>(queryKeys.backups(), "/v1/backups");
+}
+
+export function useReplicaStatus() {
+  return useApiQuery<ReplicaStatus>(queryKeys.replica(), "/replica/state", {
+    refetchInterval: 5_000,
+  });
+}
+
+export function useOIDCProviders() {
+  return useApiQuery<{ providers: OIDCProviderConfig[] }>(
+    queryKeys.oidcProviders(),
+    "/v1/auth/oidc"
   );
 }

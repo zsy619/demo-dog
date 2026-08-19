@@ -16,6 +16,20 @@ import type {
   AlertRule,
   AlertFire,
   Tenant,
+  AuditEntry,
+  AuditStats,
+  SLOBudget,
+  SLODecision,
+  RetentionPolicy,
+  QuotaStatus,
+  CircuitSnapshot,
+  ReplicaStatus,
+  WebhookSubscriber,
+  WebhookDelivery,
+  WebhookStats,
+  ProbeResult,
+  OIDCDiscovery,
+  OIDCProviderConfig,
 } from "@/types/api";
 import { apiFetch } from "./fetch";
 
@@ -123,12 +137,31 @@ export const apiService = {
   },
   alertsRules: () =>
     apiFetch<{ rules: AlertRule[] }>("/alerts/rules"),
+  alertsRule: (name: string) =>
+    apiFetch<AlertRule>(`/v1/rules/${encodeURIComponent(name)}`),
+  upsertAlertRule: (rule: AlertRule) =>
+    apiFetch<AlertRule>("/v1/rules", { method: "PUT", body: rule }),
+  deleteAlertRule: (name: string) =>
+    apiFetch<void>(`/v1/rules/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
   alertsFires: (n = 100) =>
     apiFetch<{ fires: AlertFire[] }>(`/alerts/fires?n=${n}`),
   tenantsList: () =>
     apiFetch<{ tenants: Tenant[] }>("/tenants"),
   createTenant: (body: { id: string; name: string; description?: string }) =>
     apiFetch<Tenant>("/tenants", { method: "POST", body }),
+  updateTenant: (id: string, body: Partial<Tenant>) =>
+    apiFetch<Tenant>(`/tenants/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body,
+    }),
+  deleteTenant: (id: string) =>
+    apiFetch<void>(`/tenants/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  listTenantKeys: (tenantId: string) =>
+    apiFetch<{ keys: Array<{ id: string; label: string; role: string }> }>(
+      `/tenants/${encodeURIComponent(tenantId)}/keys`
+    ),
   mintTenantKey: (tenantId: string, body: { label: string; role: string }) =>
     apiFetch<{
       tenant_id: string;
@@ -137,6 +170,119 @@ export const apiService = {
       role: string;
       created_at: string;
     }>(`/tenants/${encodeURIComponent(tenantId)}/keys`, { method: "POST", body }),
+  rotateTenantKey: (tenantId: string, keyId: string) =>
+    apiFetch<{ key_id: string; plaintext: string }>(
+      `/tenants/${encodeURIComponent(tenantId)}/keys/${encodeURIComponent(keyId)}/rotate`,
+      { method: "POST" }
+    ),
+  revokeTenantKey: (tenantId: string, keyId: string) =>
+    apiFetch<void>(
+      `/tenants/${encodeURIComponent(tenantId)}/keys/${encodeURIComponent(keyId)}`,
+      { method: "DELETE" }
+    ),
+
+  // Round 39 / 41 / 42 surfaces
+  audit: (limit = 200) =>
+    apiFetch<{ entries: AuditEntry[] }>(`/audit?limit=${limit}`),
+  auditStats: () => apiFetch<AuditStats>("/audit/stats"),
+  probe: (target: string) =>
+    apiFetch<ProbeResult>(
+      `/probe?target=${encodeURIComponent(target)}`
+    ),
+  quota: (tenant: string) =>
+    apiFetch<QuotaStatus>(
+      `/v1/quota?tenant=${encodeURIComponent(tenant)}`
+    ),
+  quotaAll: () => apiFetch<{ quotas: QuotaStatus[] }>("/v1/quota"),
+
+  // Round 44 SLO
+  slos: () => apiFetch<{ slos: SLOBudget[] }>("/v1/slos"),
+  sloDecide: (shortNs: number, longNs: number) =>
+    apiFetch<SLODecision>(
+      `/v1/slos/decide?short_ns=${shortNs}&long_ns=${longNs}`
+    ),
+
+  // Round 46 admin API keys
+  adminKeys: () => apiFetch<{ keys: Array<{ id: string; label: string; tenant: string; role: string; created_at: string }> }>("/admin/keys"),
+  createAdminKey: (body: { label: string; tenant: string; role: string; scopes?: string[]; ttl_ns?: number }) =>
+    apiFetch<{ id: string; plaintext: string }>("/admin/keys", { method: "POST", body }),
+  rotateAdminKey: (id: string, grace_ns = 0) =>
+    apiFetch<{ id: string; plaintext: string }>(`/admin/keys/${encodeURIComponent(id)}/rotate?grace_ns=${grace_ns}`, { method: "POST" }),
+  revokeAdminKey: (id: string) =>
+    apiFetch<void>(`/admin/keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // Round 47 circuit breaker
+  circuits: () => apiFetch<{ circuits: Record<string, CircuitSnapshot> }>("/v1/circuits"),
+  resetCircuit: (name: string) =>
+    apiFetch<void>(`/v1/circuits/${encodeURIComponent(name)}/reset`, { method: "POST" }),
+
+  // Round 48 ratelimit
+  ratelimits: () => apiFetch<{ buckets: Array<{ key: string; tokens: number; level: number }> }>("/v1/ratelimits"),
+
+  // Round 49 webhooks
+  webhookSubscribers: () =>
+    apiFetch<{ subscribers: WebhookSubscriber[] }>("/v1/webhooks"),
+  addWebhookSubscriber: (s: WebhookSubscriber) =>
+    apiFetch<WebhookSubscriber>("/v1/webhooks", { method: "POST", body: s }),
+  removeWebhookSubscriber: (id: string) =>
+    apiFetch<void>(`/v1/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  webhookDLQ: () => apiFetch<{ deliveries: WebhookDelivery[] }>("/v1/webhooks/dlq"),
+  webhookStats: () => apiFetch<WebhookStats>("/v1/webhooks/stats"),
+  testWebhook: (id: string, body: { type: string; payload: Record<string, string>; tenant?: string }) =>
+    apiFetch<WebhookDelivery>(`/v1/webhooks/${encodeURIComponent(id)}/test`, { method: "POST", body }),
+
+  // Round 50 retention
+  retentionList: () => apiFetch<{ policies: RetentionPolicy[] }>("/v1/retention"),
+  setRetention: (body: RetentionPolicy) =>
+    apiFetch<RetentionPolicy>("/v1/retention", { method: "PUT", body }),
+  retentionReport: (tenant: string) =>
+    apiFetch<{
+      tenant: string;
+      tier: string;
+      hot_ns: number;
+      cold_ns: number;
+      drop: number;
+      move: number;
+      keep: number;
+    }>(`/v1/retention/${encodeURIComponent(tenant)}/report`),
+
+  // Round 43 backup
+  backups: () => apiFetch<{ backups: Array<{ name: string; path: string; size: number; mod_time: string }> }>("/v1/backups"),
+  createBackup: (body: { output: string; compress: boolean }) =>
+    apiFetch<{ output: string; sha256: string; bytes: number; snapshot_id: string; taken_at: string }>(
+      "/v1/backups",
+      { method: "POST", body }
+    ),
+  verifyBackup: (path: string) =>
+    apiFetch<{ ok: boolean; error?: string }>(
+      `/v1/backups/verify?path=${encodeURIComponent(path)}`
+    ),
+  restoreBackup: (body: { path: string; into: string; dry_run: boolean }) =>
+    apiFetch<{
+      input: string;
+      snapshot_id: string;
+      restored_files: string[];
+      taken_at: string;
+      sha256: string;
+    }>("/v1/backups/restore", { method: "POST", body }),
+
+  // Replica state
+  replicaStatus: () => apiFetch<ReplicaStatus>("/replica/state"),
+
+  // OIDC
+  oidcDiscovery: (issuer: string) =>
+    apiFetch<OIDCDiscovery>(
+      `/v1/auth/oidc/discovery?issuer=${encodeURIComponent(issuer)}`
+    ),
+  oidcProviders: () =>
+    apiFetch<{ providers: OIDCProviderConfig[] }>("/v1/auth/oidc"),
+  upsertOIDCProvider: (p: OIDCProviderConfig) =>
+    apiFetch<OIDCProviderConfig>("/v1/auth/oidc", { method: "PUT", body: p }),
+  deleteOIDCProvider: (issuer: string) =>
+    apiFetch<void>(
+      `/v1/auth/oidc?issuer=${encodeURIComponent(issuer)}`,
+      { method: "DELETE" }
+    ),
 };
 
 // Legacy alias — pages that imported `api` keep working while new

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zsy619/demo-dog/backend/internal/auth"
 	"github.com/zsy619/demo-dog/backend/internal/ingest"
 	"github.com/zsy619/demo-dog/backend/internal/store"
 	"github.com/zsy619/demo-dog/backend/internal/stream"
@@ -59,6 +60,33 @@ type Server struct {
 	// the server runs in single-tenant mode.
 	tenants *tenants.Registry
 
+	// quota is the per-tenant quota tracker (Round 42).
+	quota *QuotaTracker
+
+	// limiter is the per-IP rate limiter (Round 42 / 48).
+	limiter *RateLimiter
+
+	// breaker registry holds the circuit breakers (Round 47).
+	breaker *BreakerRegistry
+
+	// webhooks is the outbound dispatcher (Round 49).
+	webhooks *WebhookDispatcher
+
+	// retention is the per-tenant retention manager (Round 50).
+	retention *RetentionManager
+
+	// adminKeys owns the global API key table (Round 46).
+	adminKeys *auth.AdminStore
+
+	// replica is the at-least-once replication state (Round 38).
+	replica *ReplicaStatus
+
+	// oidc is the OIDC federation provider list (Round 41).
+	oidc *OIDCRegistry
+
+	// cfg holds the data dir + admin settings for backup endpoints.
+	cfg ServerConfig
+
 	// mux is the top-level http.ServeMux. Exposed so add-on endpoints
 	// (pprof, probes) can be mounted after construction.
 	mux *http.ServeMux
@@ -101,8 +129,23 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 		alerts:      newAlertsEngine(s),
 		started:     time.Now(),
 		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
+		quota:       NewQuotaTracker(),
+		breaker:     NewBreakerRegistry(),
+		webhooks:    NewWebhookDispatcher(),
+		retention:   NewRetentionManager(),
+		adminKeys:   auth.NewAdminStore(),
+		replica:     NewReplicaStatus(),
+		oidc:        NewOIDCRegistry(),
 	}
 }
+
+// ServerConfig bundles settings that the admin endpoints need.
+type ServerConfig struct {
+	DataDir string
+}
+
+// SetConfig attaches runtime configuration (data dir, etc.).
+func (s *Server) SetConfig(c ServerConfig) { s.cfg = c }
 
 // Audit returns the audit log so callers can configure capacity at
 // startup or swap the implementation for tests.
@@ -111,6 +154,27 @@ func (s *Server) Audit() *AuditLog { return s.auditLog }
 // SetAuditLog replaces the default audit log. Useful in tests or
 // when wiring a remote sink.
 func (s *Server) SetAuditLog(l *AuditLog) { s.auditLog = l }
+
+// Quota returns the per-tenant quota tracker (Round 42).
+func (s *Server) Quota() *QuotaTracker { return s.quota }
+
+// Breakers returns the circuit-breaker registry.
+func (s *Server) Breakers() *BreakerRegistry { return s.breaker }
+
+// Webhooks returns the webhook dispatcher handle.
+func (s *Server) Webhooks() *WebhookDispatcher { return s.webhooks }
+
+// Retention returns the retention manager handle.
+func (s *Server) Retention() *RetentionManager { return s.retention }
+
+// AdminKeys returns the admin API-key store.
+func (s *Server) AdminKeys() *auth.AdminStore { return s.adminKeys }
+
+// Replica returns the replica status handle.
+func (s *Server) Replica() *ReplicaStatus { return s.replica }
+
+// OIDC returns the OIDC registry.
+func (s *Server) OIDC() *OIDCRegistry { return s.oidc }
 
 // Datasources exposes the datasource registry so callers (e.g. a
 // driver plugin at startup) can register additional backends.
@@ -195,10 +259,33 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/probe", s.handleProbe)
 	mux.HandleFunc("/api/alerts/rules", s.handleAlertsRules)
 	mux.HandleFunc("/api/v1/rules", s.handleRules)
+	mux.HandleFunc("/api/v1/rules/", s.handleRulesAdmin)
 	mux.HandleFunc("/api/alerts/fires", s.handleAlertsFires)
 	mux.HandleFunc("/api/tenants", s.handleTenantsDispatch)
 	mux.HandleFunc("/api/tenants/", s.handleTenantsDispatch)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
+
+	// Round 53 parity endpoints (admin_v1.go).
+	mux.HandleFunc("/api/v1/quota", s.handleQuota)
+	mux.HandleFunc("/api/v1/slos", s.handleSLOs)
+	mux.HandleFunc("/api/v1/slos/decide", s.handleSLODecide)
+	mux.HandleFunc("/api/admin/keys", s.handleAdminKeys)
+	mux.HandleFunc("/api/admin/keys/", s.handleAdminKeyItem)
+	mux.HandleFunc("/api/v1/circuits", s.handleCircuits)
+	mux.HandleFunc("/api/v1/circuits/", s.handleCircuitItem)
+	mux.HandleFunc("/api/v1/ratelimits", s.handleRateLimits)
+	mux.HandleFunc("/api/v1/webhooks", s.handleWebhooks)
+	mux.HandleFunc("/api/v1/webhooks/", s.handleWebhookItem)
+	mux.HandleFunc("/api/v1/webhooks/dlq", s.handleWebhookDLQ)
+	mux.HandleFunc("/api/v1/webhooks/stats", s.handleWebhookStats)
+	mux.HandleFunc("/api/v1/retention", s.handleRetention)
+	mux.HandleFunc("/api/v1/retention/", s.handleRetentionReport)
+	mux.HandleFunc("/api/v1/backups", s.handleBackups)
+	mux.HandleFunc("/api/v1/backups/verify", s.handleBackupsVerify)
+	mux.HandleFunc("/api/v1/backups/restore", s.handleBackupsRestore)
+	mux.HandleFunc("/api/replica/state", s.handleReplicaState)
+	mux.HandleFunc("/api/v1/auth/oidc", s.handleOIDC)
+	mux.HandleFunc("/api/v1/auth/oidc/discovery", s.handleOIDCDiscovery)
 
 	// Layering (outer -> inner):
 	//   withCORS -> audit -> rateLimit -> selfTrace -> latency ->
