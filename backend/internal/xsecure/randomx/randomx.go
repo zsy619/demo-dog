@@ -1,13 +1,17 @@
-// Package randomx 提供基于 crypto/rand 的安全随机数工具。
+// Package randomx 提供安全随机数辅助（crypto/rand）。
 package randomx
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 )
 
-// Bytes 返回 n 字节随机数据。
+// Bytes 返回 n 字节安全随机数。
 func Bytes(n int) ([]byte, error) {
+	if n < 1 {
+		return nil, nil
+	}
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		return nil, err
@@ -15,7 +19,7 @@ func Bytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// Hex 返回 2n 长度的 hex 字符串。
+// Hex 返回 n 字节随机数的 hex 字符串。
 func Hex(n int) (string, error) {
 	b, err := Bytes(n)
 	if err != nil {
@@ -24,36 +28,42 @@ func Hex(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// Int63 返回 [0, max) 内的随机整数。
-func Int63(max int64) (int64, error) {
+// Base64 返回 n 字节随机数的 base64 字符串。
+func Base64(n int) (string, error) {
+	b, err := Bytes(n)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// Int 返回 [0, max) 范围内的安全随机整数。
+// 使用 modulo bias 拒绝采样。
+func Int(max int) (int, error) {
 	if max <= 0 {
 		return 0, nil
 	}
-	// 取 8 字节并 mod max
-	b, err := Bytes(8)
-	if err != nil {
+	// 简单做法：每次读 8 字节，使用 mod
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
 		return 0, err
 	}
-	v := int64(0)
-	for i := 0; i < 8; i++ {
-		v = (v << 8) | int64(b[i])
+	var v uint64
+	for _, x := range b {
+		v = v<<8 | uint64(x)
 	}
-	if v < 0 {
-		v = -v
-	}
-	return v % max, nil
+	return int(v % uint64(max)), nil
 }
 
-// String 返回指定长度的随机字母数字串。
-func String(n int) (string, error) {
-	const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	out := make([]byte, n)
-	for i := 0; i < n; i++ {
-		idx, err := Int63(int64(len(alpha)))
-		if err != nil {
-			return "", err
-		}
-		out[i] = alpha[idx]
+// Token 返回 URL 安全的随机 token（默认 32 字节）。
+func Token(n ...int) (string, error) {
+	l := 32
+	if len(n) > 0 && n[0] > 0 {
+		l = n[0]
 	}
-	return string(out), nil
+	b, err := Bytes(l)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
