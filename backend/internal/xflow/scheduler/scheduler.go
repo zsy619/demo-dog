@@ -1,106 +1,162 @@
-// Package scheduler 提供一个简单的间隔调度器，
-// 它把一组 Job 按各自间隔在后台协程中触发。
+// Package scheduler 提供一个简单的任务调度器：
+// 支持延时 + 周期任务。
 package scheduler
 
 import (
-	"errors"
+	"container/heap"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
-// Job 表示一个可被调度的任务。
-type Job struct {
+// Task 描述一个调度任务。
+type Task struct {
 	Name     string
+	NextRun  time.Time
 	Interval time.Duration
 	Fn       func()
 }
 
-// ErrNilFn 在 Fn 为空时返回。
-var ErrNilFn = errors.New("scheduler: 任务函数为空")
-
-// Scheduler 后台持有多个 Job，按各自 Interval 触发。
+// Scheduler 管理一组 Task。
 type Scheduler struct {
-	mu     sync.Mutex
-	jobs   []Job
-	wg     sync.WaitGroup
-	stop   chan struct{}
-	run    atomic.Bool
-	total  atomic.Uint64
+	mu    sync.Mutex
+	heap  taskHeap
+	stop  chan struct{}
+	wake  chan struct{}
+	run   bool
 }
 
-// New 创建一个空 Scheduler。
+type taskItem struct {
+	task *Task
+	idx  int
+}
+
+type taskHeap []*taskItem
+
+func (h taskHeap) Len() int { return len(h) }
+func (h taskHeap) Less(i, j int) bool { return h[i].task.NextRun.Before(h[j].task.NextRun) }
+func (h taskHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+	h[i].idx = i
+	h[j].idx = j
+}
+func (h *taskHeap) Push(x any) {
+	t := x.(*taskItem)
+	t.idx = len(*h)
+	*h = append(*h, t)
+}
+func (h *taskHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	old[n-1] = nil
+	*h = old[:n-1]
+	return x
+}
+
+// New 创建一个 Scheduler。
 func New() *Scheduler {
-	return &Scheduler{stop: make(chan struct{})}
-}
-
-// Add 注册一个任务。Interval <= 0 默认 1 秒。
-func (s *Scheduler) Add(j Job) error {
-	if j.Fn == nil {
-		return ErrNilFn
-	}
-	if j.Interval <= 0 {
-		j.Interval = time.Second
-	}
-	if j.Name == "" {
-		j.Name = "anon"
-	}
-	s.mu.Lock()
-	s.jobs = append(s.jobs, j)
-	s.mu.Unlock()
-	return nil
+	return &Scheduler{stop: make(chan struct{}), wake: make(chan struct{}, 1)}
 }
 
 // Start 启动调度循环。
 func (s *Scheduler) Start() {
-	if !s.run.CompareAndSwap(false, true) {
+	s.mu.Lock()
+	if s.run {
+		s.mu.Unlock()
 		return
 	}
-	for _, j := range s.snapshot() {
-		s.wg.Add(1)
-		go s.loop(j)
-	}
+	s.run = true
+	s.mu.Unlock()
+	go s.loop()
 }
 
-// Stop 停止所有任务并等待。
+// Stop 停止调度循环。
 func (s *Scheduler) Stop() {
-	if !s.run.CompareAndSwap(true, false) {
+	s.mu.Lock()
+	if !s.run {
+		s.mu.Unlock()
 		return
 	}
+	s.run = false
+	s.mu.Unlock()
 	close(s.stop)
-	s.wg.Wait()
-	s.stop = make(chan struct{})
 }
 
-// Total 返回触发次数累计。
-func (s *Scheduler) Total() uint64 { return s.total.Load() }
+// Add 注册一个周期任务。
+func (s *Scheduler) Add(name string, interval time.Duration, fn func()) {
+	t := &Task{Name: name, Interval: interval, NextRun: time.Now().Add(interval), Fn: fn}
+	s.mu.Lock()
+	heap.Push(&s.heap, &taskItem{task: t})
+	s.mu.Unlock()
+	s.notify()
+}
 
-func (s *Scheduler) snapshot() []Job {
+// Once 注册一个延时任务。
+func (s *Scheduler) Once(name string, delay time.Duration, fn func()) {
+	t := &Task{Name: name, Interval: 0, NextRun: time.Now().Add(delay), Fn: fn}
+	s.mu.Lock()
+	heap.Push(&s.heap, &taskItem{task: t})
+	s.mu.Unlock()
+	s.notify()
+}
+
+// Len 返回任务数。
+func (s *Scheduler) Len() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]Job, len(s.jobs))
-	copy(out, s.jobs)
-	return out
+	return s.heap.Len()
 }
 
-func (s *Scheduler) loop(j Job) {
-	defer s.wg.Done()
-	t := time.NewTicker(j.Interval)
+func (s *Scheduler) notify() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Scheduler) loop() {
+	t := time.NewTimer(time.Hour)
 	defer t.Stop()
 	for {
+		s.mu.Lock()
+		if s.heap.Len() == 0 {
+			s.mu.Unlock()
+			select {
+			case <-s.stop:
+				return
+			case <-s.wake:
+				continue
+			}
+		}
+		top := s.heap[0]
+		next := top.task.NextRun
+		s.mu.Unlock()
+		if !t.Stop() {
+			select {
+			case <-t.C:
+			default:
+			}
+		}
+		t.Reset(time.Until(next))
 		select {
 		case <-s.stop:
 			return
 		case <-t.C:
-			safeCall(j.Fn)
-			s.total.Add(1)
+		case <-s.wake:
+		}
+		s.mu.Lock()
+		if s.heap.Len() == 0 {
+			s.mu.Unlock()
+			continue
+		}
+		top = heap.Pop(&s.heap).(*taskItem)
+		s.mu.Unlock()
+		top.task.Fn()
+		if top.task.Interval > 0 {
+			top.task.NextRun = time.Now().Add(top.task.Interval)
+			s.mu.Lock()
+			heap.Push(&s.heap, top)
+			s.mu.Unlock()
 		}
 	}
-}
-
-func safeCall(fn func()) {
-	defer func() {
-		_ = recover()
-	}()
-	fn()
 }
