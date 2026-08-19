@@ -128,7 +128,19 @@ class Client:
                 "duration_ns": int(duration_ms * 1_000_000),
                 "status": status,
             })
+            # Cache the most recent trace + parent so the next flush
+            # emits a W3C traceparent header. The span itself stays in
+            # the buffer until flush(); callers can also call
+            # .set_current(trace_id, span_id) directly.
+            self._current_trace_id = trace_id
+            self._current_span_id = parent_span_id or span_id
             self._maybe_drop()
+
+    def set_current(self, trace_id: str, span_id: str) -> None:
+        """Manually pin the current trace context for outbound calls."""
+        with self._lock:
+            self._current_trace_id = trace_id
+            self._current_span_id = span_id
 
     def flush(self, timeout: float = 5.0) -> bool:
         """Synchronously ship the buffer. Returns True on success."""
@@ -165,14 +177,19 @@ class Client:
     # ---- internals ----
 
     def _post(self, path, body, timeout=5.0):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        if getattr(self, "_current_trace_id", None) and getattr(self, "_current_span_id", None):
+            headers["traceparent"] = (
+                f"00-{self._current_trace_id}-{self._current_span_id}-01"
+            )
         req = urllib.request.Request(
             self.base_url + path,
             data=json.dumps(body).encode("utf-8"),
             method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
+            headers=headers,
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status

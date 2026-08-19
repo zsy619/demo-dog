@@ -1,8 +1,0 @@
-Round 54: frontend admin pages wired to backend parity endpoints
-
-- Add six new pages: Audit, Probes, Retention, SLOs, Webhooks, Replica
-- Each renders the data exposed by Round 53 backend handlers
-- Sidebar + TopBar + Router updated with the new page ids
-- PATCH method added to lib/fetch.ts RequestOptions
-
-Frontend test suite: 41 tests passing (tsc clean)

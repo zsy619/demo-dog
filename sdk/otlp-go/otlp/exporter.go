@@ -108,6 +108,10 @@ func (e *Exporter) Export(ctx context.Context, req Request) (*Response, error) {
 	if e.apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+e.apiKey)
 	}
+	// Inject W3C trace context so the collector can stitch this
+	// export into a caller\'s trace. The Propagator is a no-op when
+	// ctx does not carry a trace id.
+	NewPropagator().Inject(ctx, httpReq.Header)
 
 	resp, err := e.httpClient.Do(httpReq)
 	if err != nil {

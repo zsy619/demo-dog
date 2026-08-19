@@ -142,3 +142,37 @@ const (
 	sampledKey    contextKey = 100
 	tracestateKey contextKey = 101
 )
+
+// WithSampled returns a context carrying a sampled flag. The Propagator
+// uses the flag to pick the traceparent flags byte ("01" when true).
+func WithSampled(ctx context.Context, sampled bool) context.Context {
+	return context.WithValue(ctx, sampledKey, sampled)
+}
+
+// WithTraceID returns a context carrying the given 32-hex trace id.
+// Used by callers that want to start a child of an inbound trace.
+func WithTraceID(ctx context.Context, id string) context.Context {
+	ctx = context.WithValue(ctx, traceKey, id)
+	return ctx
+}
+
+// WithParentSpanID returns a context carrying the 16-hex span id of
+// the caller's parent span. The Propagator emits this as the parent-id
+// component of the next traceparent.
+func WithParentSpanID(ctx context.Context, id string) context.Context {
+	ctx = context.WithValue(ctx, spanKey, id)
+	return ctx
+}
+
+// WithTracestate attaches a vendor-specific tracestate header value.
+func WithTracestate(ctx context.Context, state string) context.Context {
+	return context.WithValue(ctx, tracestateKey, state)
+}
+
+// Sampled reports whether ctx carries a true Sampled flag.
+func Sampled(ctx context.Context) bool {
+	if v, ok := ctx.Value(sampledKey).(bool); ok {
+		return v
+	}
+	return false
+}

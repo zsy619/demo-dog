@@ -75,7 +75,17 @@ class Client {
       duration_ns: Math.round(durationMs * 1_000_000),
       status,
     });
+    // Cache the most recent trace + span so the next flush can emit a
+    // W3C traceparent header. Applications that have their own
+    // tracing context should call .setCurrent(traceId, spanId) instead.
+    this._currentTraceId = traceId;
+    this._currentSpanId = parentSpanId || spanId;
     this._maybeDrop();
+  }
+
+  setCurrent(traceId, spanId) {
+    this._currentTraceId = traceId;
+    this._currentSpanId = spanId;
   }
 
   async flush() {
@@ -118,17 +128,24 @@ class Client {
   _post(path, body) {
     const u = new URL(this.baseUrl + path);
     const data = Buffer.from(JSON.stringify(body), "utf-8");
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Length": data.length,
+      "Authorization": `Bearer ${this.apiKey}`,
+    };
+    // Inject a W3C traceparent when the client was started with one.
+    // The span API records both trace and parent span ids; we surface
+    // the most recently recorded pair as the active trace context.
+    if (this._currentTraceId && this._currentSpanId) {
+      headers["traceparent"] = `00-${this._currentTraceId}-${this._currentSpanId}-01`;
+    }
     return new Promise((resolve, reject) => {
       const req = http.request({
         method: "POST",
         hostname: u.hostname,
         port: u.port || 80,
         path: u.pathname,
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": data.length,
-          "Authorization": `Bearer ${this.apiKey}`,
-        },
+        headers,
         timeout: 5000,
       }, (res) => {
         res.on("data", () => {});
