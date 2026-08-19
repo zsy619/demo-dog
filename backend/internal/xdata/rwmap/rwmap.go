@@ -1,82 +1,60 @@
-// Package rwmap 提供一个支持原子替换快照的 map，
-// 读路径无锁，写路径通过拷贝替换。
+// Package rwmap 提供一个 string -> any 的高并发读写 map。
 package rwmap
 
-import (
-	"sync"
-	"sync/atomic"
-)
+import "sync"
 
-// Map 是一个写少读多的 map：
-// 写入时构造新 map，原子替换；读时无锁访问快照。
-type Map[K comparable, V any] struct {
-	mu     sync.Mutex
-	dataA  atomic.Pointer[map[K]V]
+// Map 是 string->any 并发 map。
+type Map struct {
+	mu sync.RWMutex
+	m  map[string]any
 }
 
 // New 创建一个空 Map。
-func New[K comparable, V any]() *Map[K, V] {
-	m := &Map[K, V]{}
-	empty := make(map[K]V)
-	m.dataA.Store(&empty)
-	return m
+func New() *Map { return &Map{m: make(map[string]any)} }
+
+// Put 设置键值。
+func (m *Map) Put(k string, v any) {
+	m.mu.Lock()
+	m.m[k] = v
+	m.mu.Unlock()
 }
 
-// Get 读取键值（无需锁）。
-func (m *Map[K, V]) Get(k K) (V, bool) {
-	v, ok := m.current()[k]
+// Get 读取键值。
+func (m *Map) Get(k string) (any, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.m[k]
 	return v, ok
 }
 
-// Set 写入键值。
-func (m *Map[K, V]) Set(k K, v V) {
+// Delete 删除键。
+func (m *Map) Delete(k string) {
 	m.mu.Lock()
-	cur := m.dataA.Load()
-	cp := make(map[K]V, len(*cur)+1)
-	for kk, vv := range *cur {
-		cp[kk] = vv
-	}
-	cp[k] = v
-	m.dataA.Store(&cp)
-	m.mu.Unlock()
-}
-
-// Delete 移除一个键。
-func (m *Map[K, V]) Delete(k K) {
-	m.mu.Lock()
-	cur := m.dataA.Load()
-	cp := make(map[K]V, len(*cur))
-	for kk, vv := range *cur {
-		if kk != k {
-			cp[kk] = vv
-		}
-	}
-	m.dataA.Store(&cp)
+	delete(m.m, k)
 	m.mu.Unlock()
 }
 
 // Len 返回元素数。
-func (m *Map[K, V]) current() map[K]V { return *m.dataA.Load() }
-
-// Len 返回元素数。
-func (m *Map[K, V]) Len() int { return len(m.current()) }
-
-// Range 遍历全部元素，回调返回 false 停止。
-func (m *Map[K, V]) Range(fn func(K, V) bool) {
-	cur := m.current()
-	for k, v := range cur {
-		if !fn(k, v) {
-			return
-		}
-	}
+func (m *Map) Len() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.m)
 }
 
-// Snapshot 返回一个浅拷贝 map。
-func (m *Map[K, V]) Snapshot() map[K]V {
-	cur := m.current()
-	out := make(map[K]V, len(cur))
-	for k, v := range cur {
-		out[k] = v
+// Keys 返回所有键的副本。
+func (m *Map) Keys() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.m))
+	for k := range m.m {
+		out = append(out, k)
 	}
 	return out
+}
+
+// Clear 清空。
+func (m *Map) Clear() {
+	m.mu.Lock()
+	m.m = make(map[string]any)
+	m.mu.Unlock()
 }
