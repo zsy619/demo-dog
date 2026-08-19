@@ -403,3 +403,20 @@ func (a *APIKeyAuth) AllowsResource(key, resource string) bool {
 	}
 	return false
 }
+
+// ScopesFor returns the scopes attached to a key. Returns nil if
+// the key is unknown.
+func (a *APIKeyAuth) ScopesFor(key string) []string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	e, ok := a.lookupLocked(key)
+	if !ok {
+		return nil
+	}
+	if len(e.Scopes) == 0 {
+		return nil
+	}
+	out := make([]string, len(e.Scopes))
+	copy(out, e.Scopes)
+	return out
+}
