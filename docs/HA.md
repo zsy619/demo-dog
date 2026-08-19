@@ -95,12 +95,19 @@ switch as long as your service mesh or DNS follows.
 
 ### What you lose during failover
 
-* Writes received on the primary after the last successful
-  replication but before the primary died. These are lost unless
-  the primary's local WAL on `/var/lib/demo-dog/wal.bin` was
-  fsynced. (It is, on every append.)
-* If the primary recovers and rejoins as a follower, those records
-  arrive and are applied; nothing is permanently lost.
+* **Best-effort mode (default):** writes received on the primary
+  after the last successful replication poll but before the
+  primary died. These are lost unless the primary's local WAL on
+  `/var/lib/demo-dog/wal.bin` was fsynced (it is, on every append).
+* **At-least-once mode (recommended for production):** enabled with
+  `--replication-mode=at-least-once`. The primary retains every
+  record until every follower has POSTed `/replica/ack`. A record
+  is only GC'd when min(ack offsets) crosses it. This mode closes
+  the data-loss window in exchange for a bounded retention buffer
+  (default 100k records, configurable via `--retain-records`).
+
+If the primary recovers and rejoins as a follower, those records
+arrive and are applied; nothing is permanently lost in either mode.
 
 ### What you don't lose
 
