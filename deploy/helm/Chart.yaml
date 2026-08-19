@@ -1,0 +1,16 @@
+apiVersion: v2
+name: demo-dog
+description: Demo observability collector for OTLP / Prometheus / Loki / Tempo signals.
+type: application
+version: 0.52.0
+appVersion: "0.52.0"
+home: https://github.com/zsy619/demo-dog
+keywords:
+  - observability
+  - otel
+  - otlp
+  - metrics
+  - logs
+  - traces
+maintainers:
+  - name: demo-dog maintainers

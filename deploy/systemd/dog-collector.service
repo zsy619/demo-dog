@@ -1,0 +1,38 @@
+# systemd unit for demo-dog collector.
+#
+# Round 52 production unit. Runs as a dedicated unprivileged
+# user; Restart=always + RestartSec=5 gives us a 5-second
+# crash loop. LimitNOFILE=65536 for many concurrent
+# connections. OOMScoreAdjust=-100 keeps the collector alive
+# even under memory pressure (it should survive so it can
+# report on its own health).
+
+[Unit]
+Description=demo-dog observability collector
+Documentation=https://github.com/zsy619/demo-dog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dog
+Group=dog
+ExecStart=/usr/local/bin/dog-collector -addr=:8080 -admin-addr=:9100 -data-dir=/var/lib/demo-dog -workers=8
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+OOMScoreAdjust=-100
+OOMPolicy=continue
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/demo-dog
+StateDirectory=demo-dog
+LogsDirectory=demo-dog
+RuntimeDirectory=demo-dog
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
