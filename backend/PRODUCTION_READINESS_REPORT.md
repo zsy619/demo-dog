@@ -360,8 +360,42 @@ from "high-quality demo" to "enterprise-grade application".
 * Operations: k8s manifests + Helm + Dockerfile + systemd + runbook
 * SDKs: 4 languages (Go/Python/Node/Java) zero-dep
 * Protocols: OTLP/HTTP + Prom Remote Write + PromQL
-* Integrations: W3C trace context + multi-notifier (email/PagerDuty/webhook)
+* Integrations: W3C trace context + multi-notifier (email/PagerDuty/Slack/webhook)
+
+### Round 29-32 incremental capabilities
+
+* otelcol drop-in receiver (Round 29): ops/otelcol/dog-collector.yaml
+  routes otelcol receivers to demo-dog via standard OTLP/HTTP.
+* t-digest streaming quantiles + histogram persistence (Round 30):
+  internal/store/tdigest.go with O(delta) memory and 2% accuracy on
+  10k uniform samples; persistVersion bumped to 2 with
+  PersistHistogram round-trip.
+* Multi-node HA mode (Round 31): internal/replica stdlib 2-node
+  WAL replication with manual failover + docs/HA.md playbook.
+  At-most-once by default; upgrade to at-least-once via
+  --replication-mode=at-least-once (Round 33).
+* Grafana provisioning (Round 32): ops/dashboards/provisioning/*
+  YAMLs + validate.sh for drop-in Grafana setup.
+
+### Round 33-37 incremental capabilities
+
+* At-least-once replication (Round 33): POST /replica/ack protocol
+  with retention buffer (default 100k records) + min-ack GC across
+  all followers. /replica/state reports per-follower lag.
+* Bearer-token auth + TLS (Round 34): internal/replica/auth.go
+  with hashed tokens, constant-time compare, Auth.Middleware() wraps
+  the entire /replica/* tree. TLSConfigFromPairs() helper for
+  PEM-encoded cert+key.
+* OpenAPI 3.1 spec (Round 35): internal/openapi/ + cmd/gen-openapi +
+  docs/openapi.json (14 paths, 2 security schemes, 4 schemas).
+* Slack + Retry notifier (Round 36): SlackChannel posts to Incoming
+  Webhook URLs. RetryChannel wraps any Channel with 3-attempt
+  exponential backoff. SeverityColor for Slack attachments.
+* Per-key scope enforcement (Round 37): /api/v1/rules requires
+  rules:read scope. ScopesFor(key) helper + 5 tests.
 
 ### Verdict
 
-After 7 rounds of P0+P1+P2 hardening, demo-dog is enterprise-grade.
+After 11 rounds of P0+P1+P2 hardening plus at-least-once HA,
+enterprise-grade auth, OpenAPI spec, and full per-key scope
+gating, demo-dog is enterprise-grade.
