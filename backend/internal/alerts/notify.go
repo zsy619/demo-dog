@@ -21,9 +21,10 @@ import (
 type ChannelKind string
 
 const (
-	ChannelWebhook ChannelKind = "webhook"
-	ChannelEmail   ChannelKind = "email"
+	ChannelWebhook   ChannelKind = "webhook"
+	ChannelEmail     ChannelKind = "email"
 	ChannelPagerDuty ChannelKind = "pagerduty"
+	ChannelSlack     ChannelKind = "slack"
 )
 
 // NotifyOpts is the per-call options bag for delivery.
@@ -231,4 +232,112 @@ func (m *Multiplexer) Send(ctx context.Context, opts NotifyOpts) error {
 		}
 	}
 	return firstErr
+}
+
+// --- Slack ---
+// SlackChannel posts to an Incoming Webhook URL.
+//
+// Slack Incoming Webhooks accept a JSON body with a `text` field
+// and optional `blocks` for rich formatting. We use a simple text
+// payload that contains subject, severity, and labels.
+type SlackChannel struct {
+	WebhookURL string
+	Channel    string // optional override for #channel
+	Username   string // optional override for display name
+	Client     *http.Client
+}
+
+func (s *SlackChannel) Kind() ChannelKind { return ChannelSlack }
+
+func (s *SlackChannel) Send(ctx context.Context, opts NotifyOpts) error {
+	if s.WebhookURL == "" {
+		return errors.New("empty slack webhook url")
+	}
+	if s.Client == nil {
+		s.Client = &http.Client{Timeout: 5 * time.Second}
+	}
+	text := fmt.Sprintf("*[%s] %s*\n%s", strings.ToUpper(opts.Severity), opts.Subject, opts.Body)
+	payload := map[string]any{"text": text}
+	if s.Channel != "" {
+		payload["channel"] = s.Channel
+	}
+	if s.Username != "" {
+		payload["username"] = s.Username
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", s.WebhookURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("slack status %d: %s", resp.StatusCode, string(b))
+	}
+	return nil
+}
+
+// --- Retry ---
+// RetryChannel wraps another Channel with exponential-backoff
+// retries. Useful for transient network errors on PagerDuty /
+// Slack / webhook sinks. Returns the last error if all attempts
+// fail.
+type RetryChannel struct {
+	Inner    Channel
+	Attempts int
+	BaseWait time.Duration
+}
+
+func (r *RetryChannel) Kind() ChannelKind { return r.Inner.Kind() }
+
+func (r *RetryChannel) Send(ctx context.Context, opts NotifyOpts) error {
+	if r.Attempts < 1 {
+		r.Attempts = 3
+	}
+	if r.BaseWait <= 0 {
+		r.BaseWait = 200 * time.Millisecond
+	}
+	var lastErr error
+	for i := 0; i < r.Attempts; i++ {
+		if i > 0 {
+			wait := r.BaseWait * time.Duration(1<<uint(i-1))
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(wait):
+			}
+		}
+		if err := r.Inner.Send(ctx, opts); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("after %d attempts: %w", r.Attempts, lastErr)
+}
+
+// SeverityColor returns a hex color suitable for Slack attachments
+// or PagerDuty custom details. Maps severity strings to traffic
+// light colors.
+func SeverityColor(severity string) string {
+	switch strings.ToLower(severity) {
+	case "fatal", "critical":
+		return "#dc3545" // red
+	case "error":
+		return "#fd7e14" // orange
+	case "warn", "warning":
+		return "#ffc107" // yellow
+	case "info":
+		return "#0dcaf0" // blue
+	default:
+		return "#6c757d" // gray
+	}
 }
