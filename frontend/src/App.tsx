@@ -30,6 +30,7 @@ const Webhooks = lazy(() => import("@/pages/Webhooks"));
 const Retention = lazy(() => import("@/pages/Retention"));
 const SLOs = lazy(() => import("@/pages/SLOs"));
 const Replica = lazy(() => import("@/pages/Replica"));
+const AdminKeys = lazy(() => import("@/pages/AdminKeys"));
 
 export type Page =
   | "overview"
@@ -50,7 +51,8 @@ export type Page =
   | "webhooks"
   | "retention"
   | "slos"
-  | "replica";
+  | "replica"
+  | "admin-keys";
 
 const VALID_PAGES: Page[] = [
   "overview",
@@ -72,6 +74,7 @@ const VALID_PAGES: Page[] = [
   "retention",
   "slos",
   "replica",
+  "admin-keys",
 ];
 
 function isValid(p: string): p is Page {
@@ -260,6 +263,8 @@ export default function App() {
         return <SLOs />;
       case "replica":
         return <Replica />;
+      case "admin-keys":
+        return <AdminKeys />;
       default:
         return null;
     }

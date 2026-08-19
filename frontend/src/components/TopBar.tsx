@@ -31,6 +31,7 @@ const TITLES: Record<Page, string> = {
   retention: "Retention",
   slos: "SLO budgets",
   replica: "Replica state",
+  "admin-keys": "Admin keys",
 };
 
 interface Props {

@@ -1,0 +1,9 @@
+Round 58: AdminKeys page wiring
+
+The Round 46 /api/admin/keys endpoints had no dedicated UI; the
+admin store was only reachable from CLI. Add an AdminKeys page
+that exposes list / mint / rotate / revoke against the new
+api.createAdminKey / api.rotateAdminKey / api.revokeAdminKey
+helpers, and wire it into the router, sidebar, and TopBar.
+
+Frontend vitest still 41/41 passing; tsc clean.
