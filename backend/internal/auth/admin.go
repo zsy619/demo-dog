@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -68,9 +69,10 @@ func (e *KeyEntry) HasResourceScope(resource string) bool {
 
 // AdminStore owns the API key table. Thread-safe.
 type AdminStore struct {
-	mu    sync.RWMutex
-	keys  map[string]*KeyEntry // by KeyID
+	mu      sync.RWMutex
+	keys    map[string]*KeyEntry // by KeyID
 	hashToID map[string]string // raw token hash -> KeyID
+	counter  atomic.Int64
 }
 
 // NewAdminStore creates an empty store.
@@ -79,6 +81,11 @@ func NewAdminStore() *AdminStore {
 		keys:     make(map[string]*KeyEntry),
 		hashToID: make(map[string]string),
 	}
+}
+
+func (s *AdminStore) nextID() string {
+	n := s.counter.Add(1)
+	return fmt.Sprintf("key-%d-%d", time.Now().UnixNano(), n)
 }
 
 // GenerateToken returns a 32-byte cryptographically random
@@ -106,7 +113,7 @@ func (s *AdminStore) CreateKey(identity, tenant string, scopes []string, ttl tim
 		return "", nil, err
 	}
 	entry = &KeyEntry{
-		KeyID:     fmt.Sprintf("key-%d", time.Now().UnixNano()),
+		KeyID:     s.nextID(),
 		Hash:      hashToken(raw),
 		Identity:  identity,
 		Tenant:    tenant,
@@ -159,7 +166,7 @@ func (s *AdminStore) RotateKey(oldID string, grace time.Duration) (raw string, o
 		return "", nil, nil, err
 	}
 	newEntry = &KeyEntry{
-		KeyID:       fmt.Sprintf("key-%d", time.Now().UnixNano()),
+		KeyID:       s.nextID(),
 		Hash:        hashToken(raw),
 		Identity:    old.Identity,
 		Tenant:      old.Tenant,
