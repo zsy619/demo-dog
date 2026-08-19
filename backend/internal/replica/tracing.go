@@ -48,7 +48,7 @@ func ExtractTrace(r *http.Request) (traceID, spanID, flags string) {
 		return "", "", ""
 	}
 	dashes := []int{}
-	for i := 3; i < len(tp); i++ {
+	for i := 0; i < len(tp); i++ {
 		if tp[i] == '-' {
 			dashes = append(dashes, i)
 			if len(dashes) == 3 {
