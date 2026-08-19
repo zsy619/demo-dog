@@ -1,64 +1,55 @@
 package barrier
 
 import (
-	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestCountBarrier_Reached(t *testing.T) {
-	b := NewCount(2)
-	b.Done()
-	if b.Wait(context.Background()) {
-		t.Fatal("未达 target")
+func TestBarrier(t *testing.T) {
+	b := New(3)
+	var done atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.Wait()
+			done.Add(1)
+		}()
 	}
-	b.Done()
-	if !b.Wait(context.Background()) {
-		t.Fatal("应达 target")
-	}
-}
-
-func TestCountBarrier_Cancel(t *testing.T) {
-	b := NewCount(5)
-	b.Cancel()
-	if b.Wait(context.Background()) {
-		t.Fatal("cancel 应 false")
+	wg.Wait()
+	if done.Load() != 3 {
+		t.Fatal("done", done.Load())
 	}
 }
 
-func TestCountBarrier_Context(t *testing.T) {
-	b := NewCount(5)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if b.Wait(ctx) {
-		t.Fatal("应取消")
+func TestRelease(t *testing.T) {
+	b := New(2)
+	go func() {
+		b.Wait()
+		b.Wait()
+	}()
+	time.Sleep(10 * time.Millisecond)
+	go b.Release()
+	time.Sleep(10 * time.Millisecond)
+	if b.Waiting() < 0 {
+		t.Fatal("waiting")
 	}
 }
 
-func TestCountBarrier_DoneCount(t *testing.T) {
-	b := NewCount(3)
-	b.Done()
-	b.Done()
-	if b.DoneCount() != 2 {
-		t.Fatal("count")
+func TestReset(t *testing.T) {
+	b := New(2)
+	b.Reset()
+	if b.Waiting() != 0 {
+		t.Fatal("reset")
 	}
 }
 
-func TestTimeBarrier_Wait(t *testing.T) {
-	b := NewTime(time.Now().Add(30 * time.Millisecond))
-	start := time.Now()
-	if !b.Wait() {
-		t.Fatal("应达到")
-	}
-	if time.Since(start) < 20*time.Millisecond {
-		t.Fatal("未等到时间")
-	}
-}
-
-func TestTimeBarrier_Cancel(t *testing.T) {
-	b := NewTime(time.Now().Add(time.Second))
-	b.Cancel()
-	if b.Wait() {
-		t.Fatal("应取消")
+func TestWaiting(t *testing.T) {
+	b := New(10)
+	if b.Waiting() != 0 {
+		t.Fatal("empty")
 	}
 }

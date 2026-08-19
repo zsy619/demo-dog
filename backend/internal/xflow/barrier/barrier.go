@@ -1,112 +1,65 @@
-// Package barrier 提供一次性屏障同步原语：
-// - CountBarrier：等待 N 个 Done 或 Cancel
-// - TimeBarrier：阻塞到指定时间点或 Cancel
+// Package barrier 提供一个并发栅栏：等待 N 个协程全部到达后放行。
 package barrier
 
-import (
-	"context"
-	"sync"
-	"sync/atomic"
-	"time"
-)
+import "sync"
 
-// CountBarrier 是 N 个 Done 的屏障。
-type CountBarrier struct {
-	target  int
+// Barrier 是带计数的栅栏。
+type Barrier struct {
 	mu      sync.Mutex
-	done    int
-	closed  chan struct{}
-	cancelC chan struct{}
-	reached atomic.Bool
+	cond    *sync.Cond
+	n       int
+	waiting int
+	release chan struct{}
 }
 
-// NewCount 创建一个等待 target 个 Done 的屏障。
-func NewCount(target int) *CountBarrier {
-	if target <= 0 {
-		target = 1
+// New 创建一个容量 n 的栅栏。
+func New(n int) *Barrier {
+	if n < 1 {
+		n = 1
 	}
-	return &CountBarrier{
-		target:  target,
-		closed:  make(chan struct{}),
-		cancelC: make(chan struct{}),
-	}
+	b := &Barrier{n: n}
+	b.cond = sync.NewCond(&b.mu)
+	b.release = make(chan struct{}, 1)
+	return b
 }
 
-// Done 增加一次计数，达 target 后关闭 closeCh。
-func (b *CountBarrier) Done() {
+// Wait 阻塞直到 n 个并发调用都已 Wait 或 ctx 取消。
+func (b *Barrier) Wait() {
 	b.mu.Lock()
-	if b.reached.Load() {
+	b.waiting++
+	if b.waiting >= b.n {
+		// 放行
+		select {
+		case b.release <- struct{}{}:
+		default:
+		}
+		b.cond.Broadcast()
 		b.mu.Unlock()
 		return
 	}
-	b.done++
-	done := b.done >= b.target
-	if done {
-		b.reached.Store(true)
-		close(b.closed)
-	}
+	b.cond.Wait()
 	b.mu.Unlock()
 }
 
-// Wait 阻塞直到屏障到达或取消。
-func (b *CountBarrier) Wait(ctx context.Context) bool {
-	select {
-	case <-b.closed:
-		return true
-	case <-b.cancelC:
-		return false
-	case <-ctx.Done():
-		return false
-	}
+// Release 阻塞等待放行。
+func (b *Barrier) Release() {
+	<-b.release
 }
 
-// Cancel 主动取消屏障。
-func (b *CountBarrier) Cancel() {
+// Reset 重置栅栏状态。
+func (b *Barrier) Reset() {
 	b.mu.Lock()
-	if !b.reached.Load() {
-		b.reached.Store(true)
-		close(b.cancelC)
+	b.waiting = 0
+	select {
+	case <-b.release:
+	default:
 	}
 	b.mu.Unlock()
 }
 
-// DoneCount 返回当前 Done 调用次数。
-func (b *CountBarrier) DoneCount() int {
+// Waiting 返回当前等待计数。
+func (b *Barrier) Waiting() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.done
+	return b.waiting
 }
-
-// TimeBarrier 阻塞到指定时刻或被取消。
-type TimeBarrier struct {
-	time    time.Time
-	cancel  chan struct{}
-	reached atomic.Bool
-}
-
-// NewTime 创建一个阻塞到 t 的屏障。
-func NewTime(t time.Time) *TimeBarrier {
-	return &TimeBarrier{time: t, cancel: make(chan struct{})}
-}
-
-// Wait 阻塞到指定时刻或被取消。
-func (b *TimeBarrier) Wait() bool {
-	t := time.NewTimer(time.Until(b.time))
-	defer t.Stop()
-	select {
-	case <-t.C:
-		b.reached.Store(true)
-		return true
-	case <-b.cancel:
-		return false
-	}
-}
-
-// Cancel 主动取消时间屏障。
-func (b *TimeBarrier) Cancel() {
-	b.mu()
-	close(b.cancel)
-}
-
-// fake lock helper for cancel
-func (b *TimeBarrier) mu() {}
