@@ -173,7 +173,7 @@ func TestServiceDetailAggregatesEndpointsAndErrors(t *testing.T) {
 		{TraceID: "tr-2", SpanID: "s3", Name: "GET /cart", Service: "checkout", StartTime: now, DurationMs: 12, Status: "ok"},
 	})
 	d.InsertMetrics([]model.MetricPoint{
-		{Timestamp: now, Service: "checkout", Name: "http.server.duration", Value: 100, Type: "histogram"},
+		{Timestamp: now, TenantID: "t1", Service: "checkout", Name: "http.server.duration", Value: 100, Type: "histogram"},
 	})
 
 	det, ok := d.ServiceDetail("checkout")

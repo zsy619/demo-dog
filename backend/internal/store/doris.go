@@ -212,7 +212,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	}
 	d.muMetrics.Lock()
 	for _, p := range in {
-		key := p.Service + "|" + p.Name
+		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		bucket := d.hotMetrics[key]
 		bucket = append(bucket, p)
 		if len(bucket) > d.cfg.HotMetricCap {

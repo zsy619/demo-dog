@@ -781,10 +781,15 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	d.muMetrics.RLock()
 	for key, pts := range d.hotMetrics {
 		if len(pts) == 0 { continue }
-		idx := strings.IndexByte(key, '|')
-		if idx < 0 { continue }
-		if key[:idx] != name { continue }
-		names[key[idx+1:]] = true
+		// key is "<tenant>\x00<service>|<name>". Pull out the service and name.
+		nulIdx := strings.IndexByte(key, 0)
+		if nulIdx < 0 { continue }
+		barIdx := strings.IndexByte(key[nulIdx:], '|')
+		if barIdx < 0 { continue }
+		svc := key[nulIdx+1 : nulIdx+barIdx]
+		metricName := key[nulIdx+barIdx+1:]
+		if svc != name { continue }
+		names[metricName] = true
 	}
 	d.muMetrics.RUnlock()
 	for n := range names {

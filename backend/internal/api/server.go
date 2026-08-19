@@ -150,6 +150,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/logs", s.handleOTLPHTTPLogs)
 	mux.HandleFunc("/v1/metrics", s.handleOTLPHTTPMetrics)
 	mux.HandleFunc("/v1/traces", s.handleOTLPHTTPTraces)
+	// PromQL endpoint for Grafana / Alertmanager. Subset of
+	// PromQL: selectors with label filters, sum/avg/count by (dim),
+	// rate(metric[1m]), histogram_quantile(q, metric).
+	mux.HandleFunc("/api/v1/query", s.handlePromQL)
 	// Prometheus Remote Write 1.0 — accepts both /api/v1/write
 	// (the canonical path) and /api/prom/write (the aliased one).
 	// The protocol is documented at:
