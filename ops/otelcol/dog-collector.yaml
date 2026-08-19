@@ -1,0 +1,89 @@
+# otelcol receiver configuration for the demo-dog collector.
+#
+# The OTel collector already speaks the OTLP protocol. demo-dog
+# accepts OTLP/HTTP on /v1/{logs,metrics,traces}. Point an
+# otelcol exporter at demo-dog and you have a drop-in observability
+# pipeline:
+#
+#   otel-agents --> otelcol --> demo-dog-collector --> /api/v1/query
+#
+# This file shows the smallest working config. Drop it into your
+# otelcol installation (e.g. /etc/otelcol/config.yaml) and restart.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # demo-dog does not need batching. otelcol batches by default; for
+  # the lowest-latency path to demo-dog, disable batch entirely.
+  batch:
+    timeout: 1s
+    send_batch_size: 8192
+
+  # The memory_limiter prevents the collector from ballooning when
+  # demo-dog is unreachable. Without this, a 10-minute outage would
+  # consume gigabytes of queue.
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Demo-dog only needs the service.name attribute for grouping.
+  # Strip everything else to keep ingest payload small.
+  attributes/keep_service:
+    actions:
+      - key: service.name
+        action: keep
+
+exporters:
+  # The demo-dog collector listens on the same OTLP paths the
+  # upstream otelcol would use. The only difference is the host:
+  # point this at the demo-dog-collector service in your cluster.
+  otlphttp/dog:
+    endpoint: http://demo-dog-collector:8088
+    # Per-signal paths (OTLP/HTTP requires the /v1/<signal> suffix).
+    traces_endpoint: http://demo-dog-collector:8088/v1/traces
+    metrics_endpoint: http://demo-dog-collector:8088/v1/metrics
+    logs_endpoint: http://demo-dog-collector:8088/v1/logs
+    compression: gzip
+    # demo-dog honours Authorization: Bearer <key> on every endpoint.
+    headers:
+      Authorization: Bearer ${env:DOG_API_KEY}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+
+  # Optional: also forward to Prometheus Remote Write for long-term
+  # retention. demo-dog accepts Prom Remote Write on /api/v1/write.
+  prometheusremotewrite/dog:
+    endpoint: http://demo-dog-collector:8088/api/v1/write
+    auth:
+      authenticator: bearertoken
+    retry_on_failure:
+      enabled: true
+
+extensions:
+  bearertoken:
+    token: ${env:DOG_API_KEY}
+
+service:
+  extensions: [bearertoken]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/keep_service, batch]
+      exporters: [otlphttp/dog]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/keep_service, batch]
+      exporters: [otlphttp/dog, prometheusremotewrite/dog]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/keep_service, batch]
+      exporters: [otlphttp/dog]
