@@ -1,0 +1,313 @@
+package webhook
+
+// Outbound webhook delivery with HMAC signing + retry.
+//
+// Subscribers register a URL + secret + event filter; the
+// dispatcher signs the payload with HMAC-SHA256 and POSTs it.
+// Failures are retried with exponential backoff up to N
+// attempts; permanently failed deliveries are kept in the
+// dead-letter ring for the operator to inspect.
+//
+// Designed to be wired into the alert manager: when a rule
+// trips, a webhook event is dispatched and the firing
+// webhook ID is captured in the AlertEvent.
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// Event is one delivery payload.
+type Event struct {
+	ID        string            `json:"id"`
+	Type      string            `json:"type"`
+	Timestamp time.Time         `json:"timestamp"`
+	Tenant    string            `json:"tenant"`
+	Payload   map[string]string `json:"payload"`
+}
+
+// Subscriber describes one outbound target.
+type Subscriber struct {
+	ID         string
+	URL        string
+	Secret     string
+	EventTypes []string // empty = all events
+	MaxRetries int
+	Timeout    time.Duration
+	Now        func() time.Time
+}
+
+func (s *Subscriber) now() func() time.Time {
+	if s.Now == nil {
+		return time.Now
+	}
+	return s.Now
+}
+
+func (s *Subscriber) timeout() time.Duration {
+	if s.Timeout <= 0 {
+		return 5 * time.Second
+	}
+	return s.Timeout
+}
+
+func (s *Subscriber) maxRetries() int {
+	if s.MaxRetries < 0 {
+		return 0
+	}
+	if s.MaxRetries > 10 {
+		return 10
+	}
+	return s.MaxRetries
+}
+
+// Accept reports whether the subscriber wants this event type.
+func (s *Subscriber) Accept(eventType string) bool {
+	if len(s.EventTypes) == 0 {
+		return true
+	}
+	for _, t := range s.EventTypes {
+		if t == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+// Delivery is one attempted send.
+type Delivery struct {
+	EventID    string
+	SubscriberID string
+	Attempts   int
+	Status     int    // HTTP status, 0 if no response
+	Error      string // empty on success
+	Latency    time.Duration
+	LastTry    time.Time
+}
+
+// Success reports whether the delivery ultimately succeeded.
+func (d Delivery) Success() bool { return d.Error == "" }
+
+// Dispatcher owns subscribers + the dead-letter ring.
+type Dispatcher struct {
+	mu          sync.RWMutex
+	subscribers map[string]*Subscriber
+	dlq         []Delivery
+	dlqCap      int
+	client      *http.Client
+	countSent   atomic.Int64
+	countFail   atomic.Int64
+	dlqHead     int
+}
+
+// NewDispatcher returns a dispatcher.
+func NewDispatcher(dlqCap int) *Dispatcher {
+	if dlqCap <= 0 {
+		dlqCap = 256
+	}
+	d := &Dispatcher{
+		subscribers: make(map[string]*Subscriber),
+		dlq:         make([]Delivery, 0, dlqCap),
+		dlqCap:      dlqCap,
+		client:      &http.Client{},
+	}
+	return d
+}
+
+// AddSubscriber registers a subscriber.
+func (d *Dispatcher) AddSubscriber(s *Subscriber) error {
+	if s.ID == "" || s.URL == "" {
+		return errors.New("id and url required")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.subscribers[s.ID] = s
+	return nil
+}
+
+// RemoveSubscriber unregisters one.
+func (d *Dispatcher) RemoveSubscriber(id string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.subscribers, id)
+}
+
+// Subscribers returns the current set.
+func (d *Dispatcher) Subscribers() []*Subscriber {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]*Subscriber, 0, len(d.subscribers))
+	for _, s := range d.subscribers {
+		out = append(out, s)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// Dispatch delivers an event to every subscriber that accepts
+// it. The function returns the list of deliveries.
+func (d *Dispatcher) Dispatch(ev Event) []Delivery {
+	if ev.Timestamp.IsZero() {
+		ev.Timestamp = d.now()()
+	}
+	if ev.ID == "" {
+		ev.ID = fmt.Sprintf("evt-%d", ev.Timestamp.UnixNano())
+	}
+	d.mu.RLock()
+	targets := make([]*Subscriber, 0, len(d.subscribers))
+	for _, s := range d.subscribers {
+		if s.Accept(ev.Type) {
+			targets = append(targets, s)
+		}
+	}
+	d.mu.RUnlock()
+	out := make([]Delivery, 0, len(targets))
+	for _, s := range targets {
+		del := d.deliver(ev, s)
+		out = append(out, del)
+	}
+	return out
+}
+
+func (d *Dispatcher) now() func() time.Time { return time.Now }
+
+func (d *Dispatcher) deliver(ev Event, s *Subscriber) Delivery {
+	del := Delivery{EventID: ev.ID, SubscriberID: s.ID}
+	body, err := json.Marshal(ev)
+	if err != nil {
+		del.Error = fmt.Sprintf("marshal: %v", err)
+		d.recordDLQ(del)
+		return del
+	}
+	sig := Sign(body, s.Secret)
+	max := s.maxRetries() + 1
+	var lastErr error
+	for attempt := 1; attempt <= max; attempt++ {
+		del.Attempts = attempt
+		del.LastTry = s.now()()
+		start := s.now()()
+		status, err := d.post(s, body, sig, ev.ID)
+		del.Latency = s.now()().Sub(start)
+		if err == nil && status >= 200 && status < 300 {
+			del.Status = status
+			d.countSent.Add(1)
+			return del
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = fmt.Errorf("status %d", status)
+			del.Status = status
+		}
+		if attempt < max {
+			time.Sleep(backoff(attempt))
+		}
+	}
+	del.Error = lastErr.Error()
+	d.countFail.Add(1)
+	d.recordDLQ(del)
+	return del
+}
+
+// backoff returns the delay before retry n (1-indexed).
+func backoff(attempt int) time.Duration {
+	d := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+	if d > 30*time.Second {
+		d = 30 * time.Second
+	}
+	return d
+}
+
+func (d *Dispatcher) post(s *Subscriber, body []byte, sig, eventID string) (int, error) {
+	client := d.client
+	if client == nil {
+		client = &http.Client{Timeout: s.timeout()}
+	}
+	req, err := http.NewRequest(http.MethodPost, s.URL, strings.NewReader(string(body)))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-DemoDog-Event", eventID)
+	req.Header.Set("X-DemoDog-Signature", sig)
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
+// Sign returns the lowercase hex HMAC-SHA256 of body keyed by
+// secret, formatted as "sha256=<hex>".
+func Sign(body []byte, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+}
+
+// Verify checks a signature produced by Sign.
+func Verify(body []byte, secret, signature string) bool {
+	want := Sign(body, secret)
+	return hmac.Equal([]byte(want), []byte(signature))
+}
+
+func (d *Dispatcher) recordDLQ(del Delivery) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(d.dlq) < d.dlqCap {
+		d.dlq = append(d.dlq, del)
+	} else {
+		d.dlq[d.dlqHead] = del
+		d.dlqHead = (d.dlqHead + 1) % d.dlqCap
+	}
+}
+
+// DeadLetters returns a copy of the ring buffer.
+func (d *Dispatcher) DeadLetters() []Delivery {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	out := make([]Delivery, 0, len(d.dlq))
+	if len(d.dlq) < d.dlqCap {
+		out = append(out, d.dlq...)
+	} else {
+		for i := 0; i < len(d.dlq); i++ {
+			idx := (d.dlqHead + i) % len(d.dlq)
+			out = append(out, d.dlq[idx])
+		}
+	}
+	return out
+}
+
+// Stats is the JSON-stable view.
+type Stats struct {
+	Subscribers int   `json:"subscribers"`
+	Delivered   int64 `json:"delivered"`
+	Failed      int64 `json:"failed"`
+	DLQ         int   `json:"dlq"`
+}
+
+// Stats returns current dispatcher counters.
+func (d *Dispatcher) Stats() Stats {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return Stats{
+		Subscribers: len(d.subscribers),
+		Delivered:   d.countSent.Load(),
+		Failed:      d.countFail.Load(),
+		DLQ:         len(d.dlq),
+	}
+}
