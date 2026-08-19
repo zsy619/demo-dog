@@ -1,0 +1,70 @@
+name: helm-lint
+
+# Render every Helm chart in this repo and verify the manifests
+# parse as valid Kubernetes YAML. Catches the failure mode where
+# someone hand-edits values.yaml with a syntax error and it gets
+# caught at deploy time instead of PR review.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-lint.yml'
+
+jobs:
+  helm-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: helm version
+        run: helm version --short
+      - name: lint each chart
+        run: |
+          set -e
+          for chart in $(find helm -name Chart.yaml -exec dirname {} \;); do
+            echo "==> lint $chart"
+            helm lint "$chart"
+          done
+      - name: render each chart with default values
+        run: |
+          set -e
+          for chart in $(find helm -name Chart.yaml -exec dirname {} \;); do
+            echo "==> template $chart (defaults)"
+            helm template demo-dog "$chart" > /tmp/render.yaml
+            python3 -c "import yaml, sys; list(yaml.safe_load_all(open('/tmp/render.yaml')))"
+          done
+      - name: render with custom values (auth + ingress on)
+        run: |
+          set -e
+          cat > /tmp/values-custom.yaml <<'EOF'
+          ingress:
+            enabled: true
+            hosts:
+              - host: collector.example.com
+                paths: [/]
+          auth:
+            enabled: true
+            apiKeys:
+              - key: dGVzdC1rZXktbm90LWZvci1wcm9k
+                label: ci
+          autoscaling:
+            enabled: true
+            minReplicas: 2
+            maxReplicas: 5
+          EOF
+          for chart in $(find helm -name Chart.yaml -exec dirname {} \;); do
+            echo "==> template $chart (custom values)"
+            helm template demo-dog "$chart" -f /tmp/values-custom.yaml > /tmp/render2.yaml
+            python3 -c "import yaml; list(yaml.safe_load_all(open('/tmp/render2.yaml')))"
+          done
+      - name: kustomize-style yaml lint
+        run: |
+          pip install yamllint
+          yamllint -d '{rules: {line-length: disable, document-start: disable}}' helm/
