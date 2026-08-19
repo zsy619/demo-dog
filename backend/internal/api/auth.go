@@ -86,6 +86,12 @@ type KeyEntry struct {
 	Label    string
 	Role     Role
 	TenantID string
+	// Scopes is a set of resource-level scopes. Empty means no
+	// restriction; the key may access every service / metric under
+	// its tenant. When set, the key may only access resources whose
+	// name appears in this slice. Useful for limiting a partner
+	// integration to specific services.
+	Scopes []string
 }
 
 // APIKeyAuth is a tiny registry of accepted keys. Lookups use
@@ -97,6 +103,7 @@ type APIKeyAuth struct {
 	labels  map[string]string
 	roles   map[string]Role
 	tenants map[string]string
+	scopes  map[string][]string
 }
 
 // NewAPIKeyAuth returns an empty auth registry.
@@ -106,6 +113,7 @@ func NewAPIKeyAuth() *APIKeyAuth {
 		labels:  make(map[string]string),
 		roles:   make(map[string]Role),
 		tenants: make(map[string]string),
+		scopes:  make(map[string][]string),
 	}
 }
 
@@ -327,4 +335,71 @@ func extractKey(r *http.Request) string {
 		return strings.TrimSpace(k)
 	}
 	return strings.TrimSpace(r.URL.Query().Get("api_key"))
+}
+
+
+// AddWithScopes is the same as Add but additionally attaches a
+// list of resource scopes. The key will only be allowed to access
+// resources whose name appears in the scope list.
+func (a *APIKeyAuth) AddWithScopes(key, label, tenant string, role Role, scopes []string) {
+	if key == "" {
+		return
+	}
+	r := role
+	if r == 0 {
+		r = RoleWriter
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.keys[key] = struct{}{}
+	a.labels[key] = label
+	a.roles[key] = r
+	a.tenants[key] = tenant
+	a.scopes[key] = scopes
+}
+
+func (a *APIKeyAuth) lookupLocked(key string) (*KeyEntry, bool) {
+	if _, ok := a.keys[key]; !ok {
+		return nil, false
+	}
+	return &KeyEntry{
+		Key:      key,
+		Label:    a.labels[key],
+		Role:     a.roles[key],
+		TenantID: a.tenants[key],
+		Scopes:   a.scopes[key],
+	}, true
+}
+
+// Lookup returns the full entry for a key, including any scopes.
+func (a *APIKeyAuth) Lookup(key string) (KeyEntry, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	e, ok := a.lookupLocked(key)
+	if !ok {
+		return KeyEntry{}, false
+	}
+	return *e, true
+}
+
+// AllowsResource reports whether the given key is permitted to
+// access a resource of the given name. Empty scope lists permit
+// everything under the tenant; a non-empty list only permits the
+// resources listed.
+func (a *APIKeyAuth) AllowsResource(key, resource string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	e, ok := a.lookupLocked(key)
+	if !ok {
+		return false
+	}
+	if len(e.Scopes) == 0 {
+		return true
+	}
+	for _, s := range e.Scopes {
+		if s == resource {
+			return true
+		}
+	}
+	return false
 }

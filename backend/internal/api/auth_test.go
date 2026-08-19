@@ -200,3 +200,52 @@ func TestAPIKeyAuth_List(t *testing.T) {
 		t.Errorf("role map wrong: %+v", roles)
 	}
 }
+
+
+func TestScopes_AllowsByDefault(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.Add("k1", "default-key")
+	if !a.AllowsResource("k1", "checkout") {
+		t.Fatal("key with no scopes should allow any resource")
+	}
+}
+
+func TestScopes_AllowsListed(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.AddWithScopes("k2", "scoped", "acme", RoleReader, []string{"checkout", "billing"})
+	if !a.AllowsResource("k2", "checkout") {
+		t.Fatal("checkout should be allowed")
+	}
+	if !a.AllowsResource("k2", "billing") {
+		t.Fatal("billing should be allowed")
+	}
+	if a.AllowsResource("k2", "unknown") {
+		t.Fatal("unknown service should be denied")
+	}
+}
+
+func TestScopes_UnknownKey(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.AddWithScopes("k", "", "", RoleReader, []string{"x"})
+	if a.AllowsResource("nope", "x") {
+		t.Fatal("unknown key should be denied")
+	}
+}
+
+func TestScopes_LookupPreservesScopes(t *testing.T) {
+	a := NewAPIKeyAuth()
+	a.AddWithScopes("k", "label", "acme", RoleWriter, []string{"checkout"})
+	e, ok := a.Lookup("k")
+	if !ok {
+		t.Fatal("expected lookup ok")
+	}
+	if e.Label != "label" {
+		t.Fatalf("label: %s", e.Label)
+	}
+	if e.TenantID != "acme" {
+		t.Fatalf("tenant: %s", e.TenantID)
+	}
+	if len(e.Scopes) != 1 || e.Scopes[0] != "checkout" {
+		t.Fatalf("scopes: %v", e.Scopes)
+	}
+}
