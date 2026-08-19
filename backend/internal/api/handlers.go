@@ -187,6 +187,38 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// W3C Trace Context propagation.
+	if tc := ParseTraceContext(r); tc != nil {
+		hopSpan := childSpanID()
+		for i := range norm.Logs {
+			if norm.Logs[i].TraceID == "" {
+				norm.Logs[i].TraceID = tc.TraceID
+			}
+			if norm.Logs[i].SpanID == "" {
+				norm.Logs[i].SpanID = hopSpan
+			}
+		}
+		for i := range norm.Spans {
+			if norm.Spans[i].TraceID == "" {
+				norm.Spans[i].TraceID = tc.TraceID
+			}
+			if norm.Spans[i].SpanID == "" {
+				norm.Spans[i].SpanID = hopSpan
+			}
+			if norm.Spans[i].ParentID == "" {
+				norm.Spans[i].ParentID = tc.SpanID
+			}
+		}
+		respTC := &TraceContext{
+			Version: tc.Version,
+			TraceID: tc.TraceID,
+			SpanID:  hopSpan,
+			Flags:   tc.Flags,
+			Sampled: tc.Sampled,
+		}
+		InjectTraceContext(w, respTC)
+	}
+
 	if !s.ingest.Submit(norm) {
 		// Ingest pipeline is at capacity. We previously degraded to a
 		// synchronous write here, which would block the HTTP handler
