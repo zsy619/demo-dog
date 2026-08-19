@@ -409,10 +409,12 @@ func writeError(w http.ResponseWriter, status int, err error) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	st := s.store.Stats()
+	card := s.store.CardinalityStats()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
 		"uptime":  time.Since(s.started).String(),
 		"engine":  st,
+		"cardinality": card,
 		"version": "demo-dog-0.1.0",
 		"now":     time.Now().Format(time.RFC3339),
 	})

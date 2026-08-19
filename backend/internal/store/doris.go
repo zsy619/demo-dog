@@ -17,6 +17,7 @@
 package store
 
 import (
+	"errors"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -31,16 +32,45 @@ type Config struct {
 	HotLogCap    int           // max hot logs per bucket
 	HotMetricCap int           // max hot metric points per (service, name)
 	ColdCap      int           // max cold rows per signal table
+	// MaxCardinality caps the number of unique (service, name,
+	// label-set) tuples the engine will accept. 0 means unlimited.
+	// When the limit is hit, new series are dropped and the
+	// dropped counter increments. Set this in production to
+	// defend against misconfigured agents emitting high-cardinality
+	// labels (user_id, trace_id, etc.).
+	MaxCardinality int
 }
 
 // DefaultConfig returns sensible defaults for the demo.
 func DefaultConfig() Config {
 	return Config{
-		HotLogTTL:    5 * time.Minute,
-		HotLogCap:    2048,
-		HotMetricCap: 4096,
-		ColdCap:      10_000,
+		HotLogTTL:      5 * time.Minute,
+		HotLogCap:      2048,
+		HotMetricCap:   4096,
+		ColdCap:        10_000,
+		MaxCardinality: 50_000,
 	}
+}
+
+// Validate returns the first configuration error or nil.
+// Callers should fail fast at startup.
+func (c Config) Validate() error {
+	if c.HotLogTTL < 0 {
+		return errors.New("HotLogTTL must be >= 0")
+	}
+	if c.HotLogCap <= 0 {
+		return errors.New("HotLogCap must be > 0")
+	}
+	if c.HotMetricCap <= 0 {
+		return errors.New("HotMetricCap must be > 0")
+	}
+	if c.ColdCap <= 0 {
+		return errors.New("ColdCap must be > 0")
+	}
+	if c.MaxCardinality < 0 {
+		return errors.New("MaxCardinality must be >= 0 (0 = unlimited)")
+	}
+	return nil
 }
 
 // Doris is the in-memory engine backing the demo.
@@ -88,6 +118,13 @@ type Doris struct {
 	metricsAccepted atomic.Int64
 	spansAccepted   atomic.Int64
 	queriesServed   atomic.Int64
+
+	// Cardinality tracking. seriesCardinality counts unique
+	// (service, name, label-set) tuples currently held in hotMetrics.
+	// When cardinality > cfg.MaxCardinality new inserts are dropped
+	// and seriesDropped is incremented.
+	seriesCardinality atomic.Int64
+	seriesDropped     atomic.Int64
 }
 
 // New returns a freshly initialized Doris engine.
@@ -206,14 +243,27 @@ func (d *Doris) InsertLogs(in []model.LogRecord) int {
 }
 
 // InsertMetrics adds metric points and updates the minute-level MV.
+// When the engine has reached cfg.MaxCardinality, new (label-set)
+// variants of an existing metric are silently dropped and
+// seriesDropped is incremented.
 func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	if len(in) == 0 {
 		return 0
 	}
 	d.muMetrics.Lock()
+	accepted := 0
 	for _, p := range in {
 		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		bucket := d.hotMetrics[key]
+		// Cardinality gate: if we have never observed this exact
+		// label-set before AND we are at the cap, drop the point.
+		if d.cfg.MaxCardinality > 0 && !bucketContainsLabelSet(bucket, p.Labels) {
+			if d.seriesCardinality.Load() >= int64(d.cfg.MaxCardinality) {
+				d.seriesDropped.Add(1)
+				continue
+			}
+			d.seriesCardinality.Add(1)
+		}
 		bucket = append(bucket, p)
 		if len(bucket) > d.cfg.HotMetricCap {
 			old := bucket[:len(bucket)-d.cfg.HotMetricCap]
@@ -221,18 +271,67 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 			bucket = bucket[len(bucket)-d.cfg.HotMetricCap:]
 		}
 		d.hotMetrics[key] = bucket
+		accepted++
 	}
 	if len(d.coldMetrics) > d.cfg.ColdCap {
 		d.coldMetrics = d.coldMetrics[len(d.coldMetrics)-d.cfg.ColdCap:]
 	}
 	d.muMetrics.Unlock()
 
-	d.updateMetricMV(in)
-	d.updateHistograms(in)
-	d.metricsAccepted.Add(int64(len(in)))
-	d.touchServicesByMetrics(in)
-	d.appendWAL(opMetric, in)
-	return len(in)
+	if accepted > 0 {
+		d.updateMetricMV(in[:accepted])
+		d.updateHistograms(in[:accepted])
+		d.metricsAccepted.Add(int64(accepted))
+		d.touchServicesByMetrics(in[:accepted])
+		d.appendWAL(opMetric, in[:accepted])
+	}
+	return accepted
+}
+
+// bucketContainsLabelSet returns true if any point in bucket has the
+// same label map as `want`. The check is O(N) but N is bounded by
+// HotMetricCap (default 4096), and label maps are usually small.
+func bucketContainsLabelSet(bucket []model.MetricPoint, want map[string]string) bool {
+	if len(want) == 0 {
+		// Empty label-set always matches the first empty-label point.
+		for _, p := range bucket {
+			if len(p.Labels) == 0 {
+				return true
+			}
+		}
+		return false
+	}
+	for _, p := range bucket {
+		if len(p.Labels) != len(want) {
+			continue
+		}
+		match := true
+		for k, v := range want {
+			if pv, ok := p.Labels[k]; !ok || pv != v {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
+// CardinalityStats surfaces the live series count for /api/health.
+type CardinalityStats struct {
+	Current int64 `json:"current"`
+	Cap     int   `json:"cap"`
+	Dropped int64 `json:"dropped"`
+}
+
+func (d *Doris) CardinalityStats() CardinalityStats {
+	return CardinalityStats{
+		Current: d.seriesCardinality.Load(),
+		Cap:     d.cfg.MaxCardinality,
+		Dropped: d.seriesDropped.Load(),
+	}
 }
 
 // InsertSpans adds trace spans grouped by trace_id.

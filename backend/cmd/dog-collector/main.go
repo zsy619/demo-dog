@@ -73,6 +73,12 @@ func main() {
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
+	cardinalityCap := flag.Int("cardinality-cap", cfg.MaxCardinality, "Max unique series (label sets) the engine will accept. New label sets past this cap are dropped.")
+	cfg.MaxCardinality = *cardinalityCap
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "invalid store config: %v\n", err)
+		os.Exit(2)
+	}
 	s := store.New(cfg)
 
 	// Restore previous state if a snapshot file exists.
