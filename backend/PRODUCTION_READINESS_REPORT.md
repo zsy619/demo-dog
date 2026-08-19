@@ -393,9 +393,46 @@ from "high-quality demo" to "enterprise-grade application".
   exponential backoff. SeverityColor for Slack attachments.
 * Per-key scope enforcement (Round 37): /api/v1/rules requires
   rules:read scope. ScopesFor(key) helper + 5 tests.
+* mTLS for /replica (Round 38): ServerTLSConfig + ClientTLSConfig
+  with RequireAndVerifyClientCert + ClientCAs pool. CertFingerprint,
+  CertSubjectCN, CertAllowedBySAN utilities. NewMTLSClient wraps an
+  http.Client. 14 tests using stdlib x509/ecdsa/rsa certs.
+* Recording rules engine (Round 39): RecordingEngine with
+  per-rule goroutines, pluggable Evaluate closure, Persist
+  callback for /api/v1/rules integration. 8 tests.
+* W3C trace context propagation (Round 40): Tracer interface +
+  TraceRoundTripper http.RoundTripper that injects traceparent on
+  every outbound /replica call. ExtractTrace parser, ctx helpers.
+  10 tests including httptest round-trip.
+* OIDC federation (Round 41): internal/auth/oidc.OIDCProvider.
+  Discovery + JWKS fetch + background refresh. Verify checks
+  RS256/ES256/ES384 signatures, validates issuer/audience/expiry.
+  Claims.AllScopes() maps standard claims into per-resource
+  scopes (with group: prefix). 11 tests using httptest stubs.
+* Multi-tenant quota + Prometheus (Round 42): QuotaTracker with
+  per-tenant MaxRequests/MaxBytes and window rollover.
+  WritePrometheus emits 5 series (requests, bytes, limited,
+  max_requests, max_bytes) tagged with tenant. 14 tests
+  including fake-clock window rollover.
 
 ### Verdict
 
-After 11 rounds of P0+P1+P2 hardening plus at-least-once HA,
-enterprise-grade auth, OpenAPI spec, and full per-key scope
-gating, demo-dog is enterprise-grade.
+After 16 rounds of P0+P1+P2 hardening plus at-least-once HA,
+enterprise-grade auth, OpenAPI spec, full per-key scope gating,
+mTLS replica transport, distributed trace propagation, recording
+rules, OIDC federation, and tenant-aware quota with Prometheus
+metrics, demo-dog is enterprise-grade.
+
+### Test coverage
+
+  alerts           : 100% pass (recording + alert rules + notifiers)
+  api              : 100% pass (auth, ratelimit, rules, quota,
+                              tracing, otel, otlp, query, series,
+                              snapshot, tenants, keys, alerts)
+  auth/oidc        : 100% pass (OIDC federation + JWKS rotation)
+  openapi          : 100% pass (spec generation + validation)
+  replica          : 100% pass (auth, ack, mTLS, tracing)
+  store            : 100% pass (t-digest, histograms, snapshots)
+  tenants          : 100% pass (multi-tenant isolation)
+
+Run: go test ./...
