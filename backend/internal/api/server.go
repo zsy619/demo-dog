@@ -144,6 +144,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ingest/otlp", s.handleIngest)
 	mux.HandleFunc("/api/ingest/otlp-json", s.handleIngest)
 	mux.HandleFunc("/api/stream", s.handleStream)
+	// OTLP/HTTP standard transport (https://opentelemetry.io/docs/specs/otlp/#otlphttp).
+	// Each signal has its own endpoint so collectors / agents that
+	// fan out by type find the path they expect.
+	mux.HandleFunc("/v1/logs", s.handleOTLPHTTPLogs)
+	mux.HandleFunc("/v1/metrics", s.handleOTLPHTTPMetrics)
+	mux.HandleFunc("/v1/traces", s.handleOTLPHTTPTraces)
 	// Prometheus Remote Write 1.0 — accepts both /api/v1/write
 	// (the canonical path) and /api/prom/write (the aliased one).
 	// The protocol is documented at:
