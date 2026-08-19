@@ -144,6 +144,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ingest/otlp", s.handleIngest)
 	mux.HandleFunc("/api/ingest/otlp-json", s.handleIngest)
 	mux.HandleFunc("/api/stream", s.handleStream)
+	// Prometheus Remote Write 1.0 — accepts both /api/v1/write
+	// (the canonical path) and /api/prom/write (the aliased one).
+	// The protocol is documented at:
+	// https://prometheus.io/docs/concepts/remote_write_spec/
+	mux.HandleFunc("/api/v1/write", s.handlePromRemoteWrite)
+	mux.HandleFunc("/api/prom/write", s.handlePromRemoteWrite)
 	mux.HandleFunc("/api/seed", s.handleSeed)
 	mux.HandleFunc("/api/seed/stream", s.handleSeedStream)
 	mux.HandleFunc("/api/ingest/recent", s.handleRecentPayloads)
