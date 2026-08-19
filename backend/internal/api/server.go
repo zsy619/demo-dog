@@ -72,6 +72,20 @@ type Server struct {
 	// pprofHandler is the assembled sub-mux exposed via the auth-
 	// bypass layer. Lazily constructed in Handler().
 	pprofHandler http.Handler
+
+	// seriesCatalog walks the in-memory metric buffers and produces
+	// per-metric, per-label-set cardinality info for the
+	// /api/v1/series endpoint. Lazily constructed on first use.
+	seriesCatalog *store.SeriesCatalog
+	seriesCatalogOnce sync.Once
+}
+
+// SeriesCatalog lazily constructs the series catalog on first use.
+func (s *Server) SeriesCatalog() *store.SeriesCatalog {
+	s.seriesCatalogOnce.Do(func() {
+		s.seriesCatalog = s.store.NewSeriesCatalog(5 * time.Second)
+	})
+	return s.seriesCatalog
 }
 
 // New returns a new Server.
@@ -150,6 +164,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/logs", s.handleOTLPHTTPLogs)
 	mux.HandleFunc("/v1/metrics", s.handleOTLPHTTPMetrics)
 	mux.HandleFunc("/v1/traces", s.handleOTLPHTTPTraces)
+	mux.HandleFunc("/api/v1/series", s.handleSeries)
+	mux.HandleFunc("/api/v1/metadata", s.handleMetadata)
 	// PromQL endpoint for Grafana / Alertmanager. Subset of
 	// PromQL: selectors with label filters, sum/avg/count by (dim),
 	// rate(metric[1m]), histogram_quantile(q, metric).
