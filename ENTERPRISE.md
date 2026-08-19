@@ -162,3 +162,31 @@ load with the default hot-tier caps.
 * Default operational state: standalone with WAL; opt-in HA
   via replica + WAL replication.
 * Operator surface area: env vars + `cmd/dog-collector` flags.
+
+## Round history
+
+* Rounds 38-41: HA replica (primary/follower, mTLS, W3C trace
+  context), OIDC federation (RS256 / ES256 / ES384).
+* Round 42: Per-tenant quota tracker.
+* Round 43: Backup manager with verifiable archives.
+* Round 44: SLO budget engine.
+* Round 45: Schema migration framework.
+* Round 46: Admin API key store.
+* Round 47: Circuit breaker registry.
+* Round 48: Per-key rate limiter.
+* Round 49: Outbound webhook dispatcher.
+* Round 50: Per-tenant retention manager.
+* Round 51: Auth middleware (Bearer + mTLS + OIDC).
+* Round 52: Deployment manifests (Helm, Dockerfile, k8s,
+  systemd).
+* Round 53: Frontend / SDK / API parity audit. Closes 13
+  missing backend endpoints (rules CRUD, quota, slos, admin
+  keys, circuits, ratelimits, webhooks, retention, backups,
+  replica state, OIDC discovery) with `admin_v1.go` and
+  18 dedicated tests.
+* Round 54: Frontend pages (Audit, Probes, Webhooks, Retention,
+  SLOs, Replica) wired into the router, sidebar, and TopBar.
+  41 frontend tests passing.
+* Round 55: W3C trace context propagation in the Go SDK
+  exporter; `setCurrent` + traceparent injection in the Node
+  and Python SDKs.
