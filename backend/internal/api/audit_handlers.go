@@ -4,13 +4,20 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 )
 
-// handleAudit returns the most-recent N events from the audit log.
+// handleAudit returns the most-recent N events from the audit log,
+// optionally filtered.
 // Query parameters:
-//   - n:   optional, default 200, max 10 000
-//   - since: optional RFC3339 timestamp; events older than this are
-//           skipped
+//   - n:        optional, default 200, max 10 000
+//   - since:    optional RFC3339 timestamp
+//   - until:    optional RFC3339 timestamp
+//   - method:   exact match, e.g. POST
+//   - path:     substring match, e.g. "/api/"
+//   - tenant:   exact match
+//   - key:      exact match on label
+//   - status_min, status_max:   HTTP status range
 //
 // Requires admin role (enforced by the route gate in Handler()).
 func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
@@ -28,13 +35,32 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	events := s.auditLog.Recent(n)
+	filter := AuditFilter{
+		Method:   q.Get("method"),
+		Path:     q.Get("path"),
+		Tenant:   q.Get("tenant"),
+		KeyLabel: q.Get("key"),
+	}
+	if raw := q.Get("status_min"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil { filter.StatusMin = v }
+	}
+	if raw := q.Get("status_max"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil { filter.StatusMax = v }
+	}
+	if raw := q.Get("since"); raw != "" {
+		if v, err := time.Parse(time.RFC3339, raw); err == nil { filter.Since = v }
+	}
+	if raw := q.Get("until"); raw != "" {
+		if v, err := time.Parse(time.RFC3339, raw); err == nil { filter.Until = v }
+	}
+	events := s.auditLog.Filter(n, filter)
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(map[string]any{
-		"count":  len(events),
-		"events": events,
+		"count":   len(events),
+		"filter":  filter,
+		"events":  events,
 	})
 }
 
