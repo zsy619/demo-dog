@@ -1,0 +1,517 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "demo-dog",
+    "description": "Lightweight OTel + Prometheus compatible observability backend. Stdlib only, single binary.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "demo-dog maintainers",
+      "url": "https://github.com/zsy619/demo-dog"
+    },
+    "license": {
+      "name": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8088",
+      "description": "Local development"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health check",
+        "tags": [
+          "observability"
+        ],
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/keys": {
+      "get": {
+        "summary": "List API keys",
+        "tags": [
+          "admin"
+        ],
+        "operationId": "keysList",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/snapshot": {
+      "get": {
+        "summary": "Take engine snapshot",
+        "tags": [
+          "observability"
+        ],
+        "operationId": "snapshot",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/tenants": {
+      "get": {
+        "summary": "List / create tenants",
+        "tags": [
+          "admin"
+        ],
+        "operationId": "tenantsList",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ]
+      }
+    },
+    "/api/v1/query": {
+      "get": {
+        "summary": "PromQL query (instant)",
+        "tags": [
+          "query"
+        ],
+        "operationId": "queryInstant",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rules": {
+      "get": {
+        "summary": "Active alerting rules",
+        "tags": [
+          "alerts"
+        ],
+        "operationId": "getRules",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RulesGroup"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/series": {
+      "get": {
+        "summary": "Series discovery",
+        "tags": [
+          "query"
+        ],
+        "operationId": "getSeries",
+        "parameters": [
+          {
+            "name": "match[]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/write": {
+      "post": {
+        "summary": "Prometheus Remote Write",
+        "tags": [
+          "ingest"
+        ],
+        "operationId": "promWrite",
+        "requestBody": {
+          "content": {
+            "application/x-protobuf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/replica/ack": {
+      "post": {
+        "summary": "Follower offset ack",
+        "tags": [
+          "admin"
+        ],
+        "operationId": "replicaAck",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "offset": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "offset"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/replica/state": {
+      "get": {
+        "summary": "Cluster state",
+        "tags": [
+          "admin"
+        ],
+        "operationId": "replicaState",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/replica/wal": {
+      "get": {
+        "summary": "Stream WAL records (NDJSON)",
+        "tags": [
+          "admin"
+        ],
+        "operationId": "replicaWal",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/logs": {
+      "post": {
+        "summary": "OTLP/HTTP logs ingest",
+        "tags": [
+          "ingest"
+        ],
+        "operationId": "ingestLogs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "application/x-protobuf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "post": {
+        "summary": "OTLP/HTTP metrics ingest",
+        "tags": [
+          "ingest"
+        ],
+        "operationId": "ingestMetrics",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/traces": {
+      "post": {
+        "summary": "OTLP/HTTP traces ingest",
+        "tags": [
+          "ingest"
+        ],
+        "operationId": "ingestTraces",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "cardinality": {
+            "type": "object",
+            "properties": {
+              "cap": {
+                "type": "integer"
+              },
+              "current": {
+                "type": "integer"
+              },
+              "dropped": {
+                "type": "integer"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "uptime_seconds": {
+            "type": "number"
+          }
+        }
+      },
+      "QueryResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "resultType": {
+                "type": "string",
+                "enum": [
+                  "vector",
+                  "matrix",
+                  "scalar"
+                ]
+              }
+            }
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "RulesGroup": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "description": "demo-dog API key, configured via /api/keys",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "Bearer": {
+        "type": "http",
+        "description": "Bearer token for /replica/* endpoints",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "ingest",
+      "description": "OTLP and Prometheus ingest"
+    },
+    {
+      "name": "query",
+      "description": "Read APIs (PromQL, labels, series, metadata)"
+    },
+    {
+      "name": "admin",
+      "description": "Tenant, key, and configuration management"
+    },
+    {
+      "name": "alerts",
+      "description": "Rules and firing events"
+    },
+    {
+      "name": "observability",
+      "description": "Health, metrics, snapshot"
+    }
+  ]
+}
