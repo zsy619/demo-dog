@@ -1,104 +1,64 @@
-// Package latch 提供多种粒度的并发锁包装：
-// - RWLatch：包装 sync.RWMutex 并暴露读者/写者计数
-// - Striped：按 key 分片锁，降低热点
-// - Simple：sync.Mutex 的别名包装
+// Package latch 提供一个简单的闩：CountDownLatch 与 StartLatch。
 package latch
 
-import (
-	"hash/fnv"
-	"sync"
-	"sync/atomic"
-)
+import "sync"
 
-// RWLatch 是一个带计数信息的读写锁包装。
-type RWLatch struct {
-	mu       sync.RWMutex
-	readers  atomic.Int32
-	writers  atomic.Int32
-}
-
-// NewRWLatch 创建一个 RWLatch。
-func NewRWLatch() *RWLatch { return &RWLatch{} }
-
-// RLock 加读锁。
-func (r *RWLatch) RLock() {
-	r.mu.RLock()
-	r.readers.Add(1)
-}
-
-// RUnlock 释放读锁。
-func (r *RWLatch) RUnlock() {
-	r.readers.Add(-1)
-	r.mu.RUnlock()
-}
-
-// Lock 加写锁。
-func (r *RWLatch) Lock() {
-	r.mu.Lock()
-	r.writers.Add(1)
-}
-
-// Unlock 释放写锁。
-func (r *RWLatch) Unlock() {
-	r.writers.Add(-1)
-	r.mu.Unlock()
-}
-
-// Stats 返回当前计数。
-func (r *RWLatch) Stats() RWLatchStats {
-	return RWLatchStats{Readers: r.readers.Load(), Writers: r.writers.Load()}
-}
-
-// RWLatchStats 是 RWLatch 状态。
-type RWLatchStats struct {
-	Readers int32 `json:"readers"`
-	Writers int32 `json:"writers"`
-}
-
-// Simple 是 sync.Mutex 的别名。
-type Simple struct {
+// CountDownLatch 等待 N 个事件完成。
+type CountDownLatch struct {
 	mu sync.Mutex
+	c  *sync.Cond
+	n  int
 }
 
-// Lock 锁定。
-func (s *Simple) Lock() { s.mu.Lock() }
-
-// Unlock 释放。
-func (s *Simple) Unlock() { s.mu.Unlock() }
-
-// Striped 提供按 key 分片的锁集合，减少全局竞争。
-type Striped struct {
-	size  int
-	locks []sync.Mutex
+// NewCountDown 创建计数为 n 的 CountDownLatch。
+func NewCountDown(n int) *CountDownLatch {
+	c := sync.NewCond(&sync.Mutex{})
+	return &CountDownLatch{n: n, c: c}
 }
 
-// NewStriped 创建一个 size 条 mutex 的 Striped。
-func NewStriped(size int) *Striped {
-	if size <= 0 {
-		size = 16
+// Wait 阻塞直到计数归零。
+func (l *CountDownLatch) Wait() {
+	l.c.L.Lock()
+	for l.n > 0 {
+		l.c.Wait()
 	}
-	return &Striped{size: size, locks: make([]sync.Mutex, size)}
+	l.c.L.Unlock()
 }
 
-// Lock 锁定 key 对应的分片。
-func (s *Striped) Lock(key string) {
-	s.locks[s.index(key)].Lock()
+// CountDown 把计数减 1。
+func (l *CountDownLatch) CountDown() {
+	l.c.L.Lock()
+	l.n--
+	if l.n <= 0 {
+		l.c.Broadcast()
+	}
+	l.c.L.Unlock()
 }
 
-// Unlock 释放 key 对应的分片。
-func (s *Striped) Unlock(key string) {
-	s.locks[s.index(key)].Unlock()
+// StartLatch 等待一个启动信号。
+type StartLatch struct {
+	mu  sync.Mutex
+	done bool
+	ch   chan struct{}
 }
 
-// Do 在 key 对应的分片锁内执行 fn。
-func (s *Striped) Do(key string, fn func()) {
-	s.Lock(key)
-	defer s.Unlock(key)
-	fn()
+// NewStartLatch 创建 StartLatch。
+func NewStartLatch() *StartLatch {
+	return &StartLatch{ch: make(chan struct{})}
 }
 
-func (s *Striped) index(key string) int {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return int(h.Sum32()) % s.size
+// Release 发出启动信号。
+func (l *StartLatch) Release() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.done {
+		return
+	}
+	l.done = true
+	close(l.ch)
+}
+
+// Wait 阻塞直到 Release 被调用。
+func (l *StartLatch) Wait() {
+	<-l.ch
 }
