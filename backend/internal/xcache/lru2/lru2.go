@@ -1,6 +1,4 @@
-// Package lru2 提供一个近似 LRU-2 的缓存实现：
-// 维护两个 LRU 队列，新条目进入 probation（试用）区，
-// 二次访问晋升到 protected 区，从 protected 区淘汰的条目降级。
+// Package lru2 提供泛型 LRU：基于 container/list。
 package lru2
 
 import (
@@ -8,128 +6,89 @@ import (
 	"sync"
 )
 
-// Cache 是 LRU-2 缓存。
-type Cache struct {
-	mu       sync.Mutex
-	capacity int
-	items    map[string]*list.Element
-	probation *list.List
-	protected *list.List
+// Cache 是一个泛型 LRU。
+type Cache[K comparable, V any] struct {
+	mu    sync.Mutex
+	cap   int
+	e     *list.List
+	index map[K]*list.Element
 }
 
-type entry struct {
-	key   string
-	value any
-	inList *list.List
+type entry[K comparable, V any] struct {
+	k K
+	v V
 }
 
-// New 创建一个容量为 capacity 的 LRU-2 缓存。
-func New(capacity int) *Cache {
-	if capacity < 2 {
-		capacity = 2
+// New 创建一个容量为 cap 的 LRU。
+func New[K comparable, V any](cap int) *Cache[K, V] {
+	if cap <= 0 {
+		cap = 128
 	}
-	return &Cache{
-		capacity: capacity,
-		items:    make(map[string]*list.Element, capacity),
-		probation: list.New(),
-		protected: list.New(),
+	return &Cache[K, V]{
+		cap:   cap,
+		e:     list.New(),
+		index: make(map[K]*list.Element, cap),
 	}
 }
 
-// Get 读取并把条目移动到 protected 队列头。
-func (c *Cache) Get(key string) (any, bool) {
+// Get 读取并提升。
+func (c *Cache[K, V]) Get(k K) (V, bool) {
+	var zero V
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	el, ok := c.items[key]
-	if !ok {
-		return nil, false
+	if el, ok := c.index[k]; ok {
+		c.e.MoveToFront(el)
+		return el.Value.(*entry[K, V]).v, true
 	}
-	if el.Value.(*entry).inList == c.probation {
-		c.probation.Remove(el)
-		c.items[key] = c.protected.PushFront(el.Value)
-	} else {
-		c.protected.MoveToFront(el)
-	}
-	return el.Value.(*entry).value, true
+	return zero, false
 }
 
 // Put 写入键值。
-func (c *Cache) Put(key string, value any) {
+func (c *Cache[K, V]) Put(k K, v V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if el, ok := c.items[key]; ok {
-		el.Value.(*entry).value = value
-		if el.Value.(*entry).inList == c.probation {
-			c.probation.Remove(el)
-			c.items[key] = c.protected.PushFront(el.Value)
-		} else {
-			c.protected.MoveToFront(el)
-		}
+	if el, ok := c.index[k]; ok {
+		el.Value.(*entry[K, V]).v = v
+		c.e.MoveToFront(el)
 		return
 	}
-	ent := &entry{key: key, value: value}
-	el := c.probation.PushFront(ent)
-	c.items[key] = el
-	c.enforce()
-}
-
-func (c *Cache) enforce() {
-	protectedCap := c.capacity * 4 / 5
-	if protectedCap < 1 {
-		protectedCap = 1
-	}
-	for c.protected.Len() > protectedCap {
-		// 降级
-		v := c.protected.Back()
-		if v == nil {
-			break
+	el := c.e.PushFront(&entry[K, V]{k: k, v: v})
+	c.index[k] = el
+	if c.e.Len() > c.cap {
+		back := c.e.Back()
+		if back != nil {
+			ent := back.Value.(*entry[K, V])
+			c.e.Remove(back)
+			delete(c.index, ent.k)
 		}
-		ent := v.Value.(*entry)
-		c.protected.Remove(v)
-		c.items[ent.key] = c.probation.PushFront(ent)
-	}
-	for c.totalLen() > c.capacity {
-		// 从 probation 淘汰
-		v := c.probation.Back()
-		if v == nil {
-			break
-		}
-		ent := v.Value.(*entry)
-		c.probation.Remove(v)
-		delete(c.items, ent.key)
 	}
 }
 
-func (c *Cache) totalLen() int {
-	return c.probation.Len() + c.protected.Len()
-}
-
-// Len 返回总条目数。
-func (c *Cache) Len() int {
+// Len 返回元素数。
+func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.totalLen()
+	return c.e.Len()
 }
 
-// Clear 清空缓存。
-func (c *Cache) Clear() {
+// Cap 返回容量。
+func (c *Cache[K, V]) Cap() int { return c.cap }
+
+// Clear 清空。
+func (c *Cache[K, V]) Clear() {
 	c.mu.Lock()
-	c.items = make(map[string]*list.Element, c.capacity)
-	c.probation = list.New()
-	c.protected = list.New()
+	c.e = list.New()
+	c.index = make(map[K]*list.Element, c.cap)
 	c.mu.Unlock()
 }
 
-// Stats 是缓存统计视图。
-type Stats struct {
-	Probation  int `json:"probation"`
-	Protected  int `json:"protected"`
-	Capacity   int `json:"capacity"`
-}
-
-// Stats 返回各队列长度。
-func (c *Cache) Stats() Stats {
+// Keys 按访问顺序返回所有键。
+func (c *Cache[K, V]) Keys() []K {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return Stats{Probation: c.probation.Len(), Protected: c.protected.Len(), Capacity: c.capacity}
+	out := make([]K, 0, c.e.Len())
+	for el := c.e.Front(); el != nil; el = el.Next() {
+		out = append(out, el.Value.(*entry[K, V]).k)
+	}
+	return out
 }
