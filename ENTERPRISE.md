@@ -190,3 +190,9 @@ load with the default hot-tier caps.
 * Round 55: W3C trace context propagation in the Go SDK
   exporter; `setCurrent` + traceparent injection in the Node
   and Python SDKs.
+* Round 56: ENTERPRISE.md round history update.
+* Round 57: `X-Tenant-Id` header parity across all SDKs
+  (Go `WithTenantHeader`, Node `_post()`, Python `_post()`,
+  Java `HttpRequest.Builder`). New tests for each SDK.
+* Round 58: AdminKeys page wiring (Round 46 admin key
+  endpoints finally reachable from the UI).
