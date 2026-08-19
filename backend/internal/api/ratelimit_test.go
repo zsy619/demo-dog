@@ -66,3 +66,57 @@ func TestRateLimiter_Middleware(t *testing.T) {
 		t.Fatalf("expected 3 denied, got %d", denied)
 	}
 }
+
+
+func TestRateLimiter_AllowByKey(t *testing.T) {
+	rl := NewRateLimiter(10, 3)
+	for i := 0; i < 3; i++ {
+		allowed, _, _ := rl.AllowByKey("key-a")
+		if !allowed {
+			t.Fatalf("burst slot %d denied", i)
+		}
+	}
+	allowed, remaining, retry := rl.AllowByKey("key-a")
+	if allowed {
+		t.Fatal("4th request should be denied")
+	}
+	if remaining != 0 {
+		t.Fatalf("remaining: %d", remaining)
+	}
+	if retry <= 0 {
+		t.Fatalf("retry should be positive: %v", retry)
+	}
+}
+
+func TestRateLimiter_AllowByKey_IndependentKeys(t *testing.T) {
+	rl := NewRateLimiter(1, 1)
+	if ok, _, _ := rl.AllowByKey("alpha"); !ok {
+		t.Fatal("alpha should pass")
+	}
+	if ok, _, _ := rl.AllowByKey("beta"); !ok {
+		t.Fatal("beta should pass (independent bucket)")
+	}
+}
+
+func TestRateLimiter_AllowByKey_EmptyKey(t *testing.T) {
+	rl := NewRateLimiter(1, 1)
+	// Empty key bypasses the limiter — used for unauthenticated paths.
+	for i := 0; i < 100; i++ {
+		if ok, _, _ := rl.AllowByKey(""); !ok {
+			t.Fatalf("empty key should always pass (iteration %d)", i)
+		}
+	}
+}
+
+func TestRateLimiter_Stats(t *testing.T) {
+	rl := NewRateLimiter(7, 14)
+	rl.AllowByKey("a")
+	rl.AllowByKey("b")
+	s := rl.Stats()
+	if s.Keys != 2 {
+		t.Fatalf("keys=%d", s.Keys)
+	}
+	if s.Rate != 7 || s.Burst != 14 {
+		t.Fatalf("got %+v", s)
+	}
+}

@@ -199,7 +199,16 @@ func (s *Server) Handler() http.Handler {
 		h = s.buildPProfMux(h)
 	}
 	if s.rateLimiter != nil {
+		// Inner: per-API-key bucket (after auth middleware resolves the
+		// bearer token). Outer: per-IP bucket (for unauthenticated abuse
+		// protection). Both are short-circuit so the cost is bounded.
 		h = s.rateLimiter.Middleware()(h)
+		h = s.rateLimiter.KeyedMiddleware(func(r *http.Request) string {
+			if k := r.Header.Get("Authorization"); k != "" {
+				return k
+			}
+			return r.Header.Get("X-Dog-Tenant")
+		})(h)
 	}
 	if s.auditLog != nil {
 		h = AuditMiddleware(s.auditLog, false)(h)
