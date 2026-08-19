@@ -15,6 +15,9 @@ import (
 // PersistSnapshot is the serializable representation of the Doris engine.
 // It is intentionally limited to the hot tier + service summaries + MV
 // buckets so cold tiers can be rebuilt on next ingest.
+//
+// Round 30 adds Histograms (OTel bucket aggregates + t-digest
+// centroids) so percentile state survives restart.
 type PersistSnapshot struct {
 	Version    int
 	SavedAt    time.Time
@@ -24,9 +27,24 @@ type PersistSnapshot struct {
 	MV1m       map[string][]model.MVBucket
 	MV5m       map[string][]model.MVBucket
 	Services   map[string]*model.ServiceSummary
+	Histograms map[string]*PersistHistogram
 }
 
-const persistVersion = 1
+// PersistHistogram is the on-disk form of a histogramAgg.
+type PersistHistogram struct {
+	Bounds  []float64
+	Counts  []int64
+	Sum     float64
+	Total   int64
+	Min     float64
+	Max     float64
+	Centroids []CentroidSnapshot
+	TDTotal    int64
+	TDMin      float64
+	TDMax      float64
+}
+
+const persistVersion = 2
 
 var persistOnce sync.Once
 
@@ -39,6 +57,9 @@ func persistRegister() {
 		gob.Register(map[string][]model.MVBucket(nil))
 		gob.Register(&model.MVBucket{})
 		gob.Register(&model.ServiceSummary{})
+		gob.Register([]CentroidSnapshot(nil))
+		gob.Register(&PersistHistogram{})
+		gob.Register(map[string]*PersistHistogram(nil))
 	})
 }
 
@@ -60,9 +81,21 @@ func (d *Doris) PersistSnapshotBytes() ([]byte, error) {
 	d.muMetrics.RUnlock()
 
 	d.muHistograms.RLock()
-	histograms := make(map[string]*histogramAgg, len(d.histograms))
+	histograms := make(map[string]*PersistHistogram, len(d.histograms))
 	for k, v := range d.histograms {
-		histograms[k] = v
+		centroids, total, min, max := v.td.Snapshot()
+		histograms[k] = &PersistHistogram{
+			Bounds:    append([]float64(nil), v.bounds...),
+			Counts:    append([]int64(nil), v.counts...),
+			Sum:       v.sum,
+			Total:     v.total,
+			Min:       v.min,
+			Max:       v.max,
+			Centroids: centroids,
+			TDTotal:   total,
+			TDMin:     min,
+			TDMax:     max,
+		}
 	}
 	d.muHistograms.RUnlock()
 
@@ -95,6 +128,7 @@ func (d *Doris) PersistSnapshotBytes() ([]byte, error) {
 		MV1m:       mv1m,
 		MV5m:       mv5m,
 		Services:   services,
+		Histograms: histograms,
 	}
 	if err := enc.Encode(&snap); err != nil {
 		return nil, err
@@ -134,6 +168,26 @@ func (d *Doris) RestoreSnapshot(r io.Reader) error {
 	d.muSum.Lock()
 	d.sum = snap.Services
 	d.muSum.Unlock()
+
+	if len(snap.Histograms) > 0 {
+		d.muHistograms.Lock()
+		d.histograms = make(map[string]*histogramAgg, len(snap.Histograms))
+		for k, h := range snap.Histograms {
+			agg := &histogramAgg{
+				bounds:  h.Bounds,
+				counts:  h.Counts,
+				sum:     h.Sum,
+				total:   h.Total,
+				min:     h.Min,
+				max:     h.Max,
+				hasData: h.Total > 0,
+				td:      NewTDigest(100),
+			}
+			agg.td.Restore(h.Centroids, h.TDTotal, h.TDMin, h.TDMax)
+			d.histograms[k] = agg
+		}
+		d.muHistograms.Unlock()
+	}
 	return nil
 }
 

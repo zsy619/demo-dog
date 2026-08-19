@@ -8,19 +8,27 @@ import (
 )
 
 // histogramAgg aggregates histogram data points for a single (service, name)
-// series. It tracks the latest explicit bucket boundaries, per-bucket
-// counts, plus running totals. Reads return values suitable for a Sparkline
-// or quantile computation.
+// series. It tracks:
+//   * the latest explicit bucket boundaries + per-bucket counts (OTel format)
+//   * a t-digest of raw scalar observations (Round 30) so quantile
+//     answers are available even when exporters send scalar streams
+//     without explicit buckets
+//   * running totals
 type histogramAgg struct {
 	mu sync.Mutex
 
-	bounds  []float64 // upper bounds (exclusive), ascending; last is +Inf marker
-	counts  []int64   // per-bucket counts (length == len(bounds))
-	total   int64     // == sum(counts)
-	sum     float64   // sum of all observations
+	bounds  []float64
+	counts  []int64
+	total   int64
+	sum     float64
 	min     float64
 	max     float64
 	hasData bool
+
+	// td is the streaming quantile estimator. Updated by ObserveRaw()
+	// (callers feeding scalar metric points) and by add() when the
+	// exporter provided a sum/n for an explicit-bucket histogram.
+	td *TDigest
 }
 
 // newHistogramAgg builds a histogramAgg from a single OTel-style data
@@ -37,6 +45,7 @@ func newHistogramAgg(p model.MetricPoint) *histogramAgg {
 		sum:    p.HistogramSum,
 		min:    p.HistogramMin,
 		max:    p.HistogramMax,
+		td:     NewTDigest(100),
 	}
 	if !h.hasData {
 		h.min = p.HistogramMin
@@ -68,6 +77,22 @@ func (h *histogramAgg) add(p model.MetricPoint) {
 		h.hasData = true
 		return
 	}
+	// Also feed the t-digest with the bucket midpoints so quantile
+	// answers remain accurate when the OTel bucket bounds shift
+	// between snapshots. We approximate each bucket by its midpoint.
+	if len(p.BucketCounts) == len(h.bounds) {
+		for i, c := range p.BucketCounts {
+			if c > 0 {
+				lower := 0.0
+				if i > 0 {
+					lower = h.bounds[i-1]
+				}
+				upper := h.bounds[i]
+				mid := (lower + upper) / 2
+				h.td.ObserveBatch(mid, c)
+			}
+		}
+	}
 	for i, c := range p.BucketCounts {
 		if i < len(h.counts) {
 			h.counts[i] += c
@@ -82,6 +107,35 @@ func (h *histogramAgg) add(p model.MetricPoint) {
 		h.max = p.HistogramMax
 	}
 	h.hasData = true
+}
+
+// ObserveRaw feeds a single scalar observation into the t-digest.
+// Used by non-histogram metric streams that need quantile answers.
+func (h *histogramAgg) ObserveRaw(x float64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.td == nil {
+		h.td = NewTDigest(100)
+	}
+	h.td.Observe(x)
+	h.hasData = true
+	if !h.hasData || x < h.min { h.min = x }
+	if !h.hasData || x > h.max { h.max = x }
+	h.sum += x
+	h.total++
+}
+
+// QuantileStreaming returns the q-th quantile (0..1) computed from
+// the t-digest of raw observations. Use this when the upstream
+// exporter does not supply explicit bucket bounds (scalar metric
+// streams). Returns 0 if no data.
+func (h *histogramAgg) QuantileStreaming(q float64) float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.td == nil {
+		return 0
+	}
+	return h.td.Quantile(q)
 }
 
 // snapshot returns a copy of the current aggregate state for safe
