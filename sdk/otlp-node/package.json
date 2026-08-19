@@ -1,0 +1,13 @@
+{
+  "name": "@demo-dog/sdk",
+  "version": "0.1.0",
+  "description": "Zero-dep OTLP-style client for the demo-dog collector.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": ["otlp", "metrics", "logs", "tracing", "demo-dog"],
+  "license": "Apache-2.0",
+  "engines": { "node": ">=18" }
+}
