@@ -25,6 +25,12 @@ const TITLES: Record<Page, string> = {
   "service-detail": "Service",
   alerts: "Alerts",
   tenants: "Tenants",
+  audit: "Audit log",
+  probes: "Probes",
+  webhooks: "Webhooks",
+  retention: "Retention",
+  slos: "SLO budgets",
+  replica: "Replica state",
 };
 
 interface Props {

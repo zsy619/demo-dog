@@ -24,6 +24,12 @@ const ServiceMapPage = lazy(() => import("@/pages/ServiceMapPage"));
 const ServiceDetailPage = lazy(() => import("@/pages/ServiceDetailPage"));
 const Alerts = lazy(() => import("@/pages/Alerts"));
 const Tenants = lazy(() => import("@/pages/Tenants"));
+const Audit = lazy(() => import("@/pages/Audit"));
+const Probes = lazy(() => import("@/pages/Probes"));
+const Webhooks = lazy(() => import("@/pages/Webhooks"));
+const Retention = lazy(() => import("@/pages/Retention"));
+const SLOs = lazy(() => import("@/pages/SLOs"));
+const Replica = lazy(() => import("@/pages/Replica"));
 
 export type Page =
   | "overview"
@@ -38,7 +44,13 @@ export type Page =
   | "service-map"
   | "service-detail"
   | "alerts"
-  | "tenants";
+  | "tenants"
+  | "audit"
+  | "probes"
+  | "webhooks"
+  | "retention"
+  | "slos"
+  | "replica";
 
 const VALID_PAGES: Page[] = [
   "overview",
@@ -54,6 +66,12 @@ const VALID_PAGES: Page[] = [
   "service-detail",
   "alerts",
   "tenants",
+  "audit",
+  "probes",
+  "webhooks",
+  "retention",
+  "slos",
+  "replica",
 ];
 
 function isValid(p: string): p is Page {
@@ -230,6 +248,18 @@ export default function App() {
         return <Alerts />;
       case "tenants":
         return <Tenants />;
+      case "audit":
+        return <Audit />;
+      case "probes":
+        return <Probes />;
+      case "webhooks":
+        return <Webhooks />;
+      case "retention":
+        return <Retention />;
+      case "slos":
+        return <SLOs />;
+      case "replica":
+        return <Replica />;
       default:
         return null;
     }

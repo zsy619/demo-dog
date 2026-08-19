@@ -32,6 +32,12 @@ const ADMIN_ITEMS: Array<{ id: Page; label: string; icon: string }> = [
   { id: "ingest", label: "Ingest demo", icon: "⇄" },
   { id: "alerts", label: "Alerts", icon: "⚑" },
   { id: "tenants", label: "Tenants", icon: "⌹" },
+  { id: "audit", label: "Audit", icon: "◉" },
+  { id: "probes", label: "Probes", icon: "↗" },
+  { id: "webhooks", label: "Webhooks", icon: "⚡" },
+  { id: "retention", label: "Retention", icon: "♻" },
+  { id: "slos", label: "SLOs", icon: "%" },
+  { id: "replica", label: "Replica", icon: "⇄" },
 ];
 
 function NavItem({
