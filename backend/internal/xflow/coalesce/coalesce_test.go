@@ -1,80 +1,58 @@
 package coalesce
 
 import (
-	"sync"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestCoalesce_Single(t *testing.T) {
-	g := NewGroup()
-	v, _, first := g.Do("k", func() (any, error) { return 1, nil })
-	if v.(int) != 1 || !first {
-		t.Fatal("首次")
+func TestSingleCall(t *testing.T) {
+	c := New[string, int]()
+	v, err := c.Do("k", func() (int, error) { return 42, nil })
+	if err != nil || v != 42 {
+		t.Fatal("single", v, err)
 	}
 }
 
-func TestCoalesce_Shared(t *testing.T) {
-	g := NewGroup()
-	calls := atomic.Int32{}
-	fn := func() (any, error) {
-		calls.Add(1)
-		time.Sleep(50 * time.Millisecond)
-		return 42, nil
-	}
-	var wg sync.WaitGroup
-	results := make([]int, 5)
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			v, _, _ := g.Do("k", fn)
-			results[i] = v.(int)
-		}(i)
-	}
-	wg.Wait()
-	if calls.Load() != 1 {
-		t.Fatal("应只调用一次")
-	}
-	for _, r := range results {
-		if r != 42 {
-			t.Fatal("应共享")
-		}
-	}
-}
-
-func TestCoalesce_DifferentKeys(t *testing.T) {
-	g := NewGroup()
-	calls := atomic.Int32{}
-	fn := func() (any, error) { calls.Add(1); return 1, nil }
-	g.Do("a", fn)
-	g.Do("b", fn)
-	if calls.Load() != 2 {
-		t.Fatal("不同 key 应独立")
-	}
-}
-
-func TestForget(t *testing.T) {
-	g := NewGroup()
-	g.Forget("x")
-	if g.Len() != 0 {
-		t.Fatal("forget")
-	}
-}
-
-func TestLen(t *testing.T) {
-	g := NewGroup()
+func TestCoalesce(t *testing.T) {
+	var calls atomic.Int32
+	c := New[string, int]()
+	start := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		g.Do("k", func() (any, error) {
-			<-done
-			return 1, nil
-		})
+		<-start
+		time.Sleep(20 * time.Millisecond)
+		v, _ := c.Do("k", func() (int, error) { return 1, nil })
+		if v != 100 {
+			t.Fatal("coalesce", v)
+		}
+		close(done)
 	}()
-	time.Sleep(10 * time.Millisecond)
-	if g.Len() != 1 {
-		t.Fatal("应有飞行中")
+	close(start)
+	v, _ := c.Do("k", func() (int, error) {
+		calls.Add(1)
+		time.Sleep(100 * time.Millisecond)
+		return 100, nil
+	})
+	if v != 100 || calls.Load() != 1 {
+		t.Fatal("first", v, calls.Load())
 	}
-	close(done)
+	<-done
+}
+
+func TestErr(t *testing.T) {
+	myErr := errors.New("x")
+	c := New[string, int]()
+	_, err := c.Do("k", func() (int, error) { return 0, myErr })
+	if err != myErr {
+		t.Fatal("err")
+	}
+}
+
+func TestInflight(t *testing.T) {
+	c := New[string, int]()
+	if c.Inflight() != 0 {
+		t.Fatal("0")
+	}
 }

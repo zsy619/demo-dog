@@ -1,69 +1,49 @@
-// Package coalesce 提供按 key 合并多个并发调用的工具：
-// 同一 key 的并发请求只执行一次回调，其余等待者共享结果。
+// Package coalesce 把短时间内重复的同 key 请求合并为一次实际调用。
 package coalesce
 
-import (
-	"sync"
-	"sync/atomic"
-)
+import "sync"
 
-// Result 是合并调用的结果。
-type Result struct {
-	Value any
-	Err   error
+// Coalescer 是请求合并器。
+type Coalescer[K comparable, V any] struct {
+	mu sync.Mutex
+	m  map[K]*flight[V]
 }
 
-// Flight 是单 key 的飞行中调用记录。
-type Flight struct {
-	done  chan struct{}
-	res   Result
-	mu    sync.Mutex
-	wait  atomic.Int32
+type flight[V any] struct {
+	wg  sync.WaitGroup
+	val V
+	err error
 }
 
-// Group 持有多个 key 的 Flight。
-type Group struct {
-	mu       sync.Mutex
-	table    map[string]*Flight
+// New 创建一个合并器。
+func New[K comparable, V any]() *Coalescer[K, V] {
+	return &Coalescer[K, V]{m: make(map[K]*flight[V])}
 }
 
-// NewGroup 创建一个空 Group。
-func NewGroup() *Group {
-	return &Group{table: make(map[string]*Flight)}
-}
-
-// Do 在 key 上执行 fn；并发请求共享同一结果。
-func (g *Group) Do(key string, fn func() (any, error)) (any, error, bool) {
-	g.mu.Lock()
-	if f, ok := g.table[key]; ok {
-		f.wait.Add(1)
-		g.mu.Unlock()
-		<-f.done
-		return f.res.Value, f.res.Err, false
+// Do 执行 key 的 fn；同一 key 在执行中再次调用时，等待上一次完成并复用结果。
+func (c *Coalescer[K, V]) Do(key K, fn func() (V, error)) (V, error) {
+	c.mu.Lock()
+	f, ok := c.m[key]
+	if ok {
+		c.mu.Unlock()
+		f.wg.Wait()
+		return f.val, f.err
 	}
-	f := &Flight{done: make(chan struct{}), wait: atomic.Int32{}}
-	f.wait.Add(1)
-	g.table[key] = f
-	g.mu.Unlock()
-	v, err := fn()
-	f.res = Result{Value: v, Err: err}
-	close(f.done)
-	g.mu.Lock()
-	delete(g.table, key)
-	g.mu.Unlock()
-	return v, err, true
+	f = &flight[V]{}
+	f.wg.Add(1)
+	c.m[key] = f
+	c.mu.Unlock()
+	f.val, f.err = fn()
+	c.mu.Lock()
+	delete(c.m, key)
+	c.mu.Unlock()
+	f.wg.Done()
+	return f.val, f.err
 }
 
-// Len 返回当前飞行中的 key 数。
-func (g *Group) Len() int {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return len(g.table)
-}
-
-// Forget 主动取消一个 key 的合并（后续 Do 重新执行）。
-func (g *Group) Forget(key string) {
-	g.mu.Lock()
-	delete(g.table, key)
-	g.mu.Unlock()
+// Inflight 返回当前正在执行的 key 数。
+func (c *Coalescer[K, V]) Inflight() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.m)
 }
