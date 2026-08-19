@@ -133,6 +133,7 @@ class Client {
       "Content-Length": data.length,
       "Authorization": `Bearer ${this.apiKey}`,
     };
+    if (this.tenant) headers["X-Tenant-Id"] = this.tenant;
     // Inject a W3C traceparent when the client was started with one.
     // The span API records both trace and parent span ids; we surface
     // the most recently recorded pair as the active trace context.

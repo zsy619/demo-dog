@@ -32,6 +32,11 @@ type Exporter struct {
 	// same value via X-API-Key or ?api_key=... for debug use, but
 	// the bearer header is the recommended path for production.
 	apiKey string
+
+	// tenantID, when non-empty, is attached as the X-Tenant-Id
+	// header on every export. The collector reads this header
+	// before consulting the request body for tenant_id.
+	tenantID string
 }
 
 // ExporterOption mutates the Exporter during construction.
@@ -76,6 +81,17 @@ func WithAPIKey(key string) ExporterOption {
 	}
 }
 
+// WithTenantHeader stamps every export with the X-Tenant-Id header.
+// The collector prefers the header over the request body tenant_id.
+// The SDK-side WithTenant lives in sdk.go and embeds the tenant in
+// the resource attributes; this option adds the header form so the
+// collector can route traffic before decoding the body.
+func WithTenantHeader(tenantID string) ExporterOption {
+	return func(e *Exporter) {
+		e.tenantID = tenantID
+	}
+}
+
 // NewExporter builds a default Exporter. By default the SDK talks to the
 // simplified JSON ingest endpoint (/api/ingest/otlp) using the
 // otlp.Request wire schema. Set WithEndpoint to switch to the OTel JSON
@@ -107,6 +123,9 @@ func (e *Exporter) Export(ctx context.Context, req Request) (*Response, error) {
 	httpReq.Header.Set("Accept", "application/json")
 	if e.apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+e.apiKey)
+	}
+	if e.tenantID != "" {
+		httpReq.Header.Set("X-Tenant-Id", e.tenantID)
 	}
 	// Inject W3C trace context so the collector can stitch this
 	// export into a caller\'s trace. The Propagator is a no-op when

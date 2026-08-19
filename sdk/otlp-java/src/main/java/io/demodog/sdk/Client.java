@@ -147,12 +147,15 @@ public final class Client implements AutoCloseable {
         }
         sb.append("]}");
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/api/ingest/otlp"))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + "/api/ingest/otlp"))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(sb.toString()))
-                .timeout(Duration.ofSeconds(5))
-                .build();
+                .timeout(Duration.ofSeconds(5));
+            if (tenant != null && !tenant.isEmpty()) {
+                builder.header("X-Tenant-Id", tenant);
+            }
+            HttpRequest req = builder.build();
             HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
             return r.statusCode() >= 200 && r.statusCode() < 300;
         } catch (Exception e) {

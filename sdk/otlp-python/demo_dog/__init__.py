@@ -181,6 +181,8 @@ class Client:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
+        if self.tenant:
+            headers["X-Tenant-Id"] = self.tenant
         if getattr(self, "_current_trace_id", None) and getattr(self, "_current_span_id", None):
             headers["traceparent"] = (
                 f"00-{self._current_trace_id}-{self._current_span_id}-01"
