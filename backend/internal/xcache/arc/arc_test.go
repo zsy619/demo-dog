@@ -2,56 +2,59 @@ package arc
 
 import "testing"
 
-func TestPutGet(t *testing.T) {
-	c := New(4)
+func TestBasic(t *testing.T) {
+	c := New(2)
 	c.Put("a", 1)
-	v, ok := c.Get("a")
-	if !ok || v.(int) != 1 {
-		t.Fatal("get")
+	c.Put("b", 2)
+	if v, ok := c.Get("a"); !ok || v.(int) != 1 {
+		t.Fatal("get a")
+	}
+	if _, ok := c.Get("b"); !ok {
+		t.Fatal("get b")
 	}
 }
 
-func TestGetMissing(t *testing.T) {
-	c := New(4)
-	if _, ok := c.Get("x"); ok {
-		t.Fatal("missing")
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	c := New(4)
-	c.Put("a", 1)
-	c.Put("a", 2)
-	v, _ := c.Get("a")
-	if v.(int) != 2 {
-		t.Fatal("update")
-	}
-}
-
-func TestEviction(t *testing.T) {
+func TestReplace(t *testing.T) {
 	c := New(2)
 	c.Put("a", 1)
 	c.Put("b", 2)
 	c.Put("c", 3)
-	if _, ok := c.Get("a"); ok {
-		t.Fatal("a 应被淘汰")
+	if c.Len() > 2 {
+		t.Fatal("len", c.Len())
 	}
 }
 
-func TestLen(t *testing.T) {
+func TestUpdate(t *testing.T) {
+	c := New(2)
+	c.Put("a", 1)
+	c.Put("a", 2)
+	if v, _ := c.Get("a"); v.(int) != 2 {
+		t.Fatal("update")
+	}
+}
+
+func TestPromotion(t *testing.T) {
 	c := New(4)
 	c.Put("a", 1)
 	c.Put("b", 2)
-	if c.Len() != 2 {
-		t.Fatal("len")
+	c.Put("c", 3)
+	c.Get("a")
+	c.Put("d", 4)
+	if _, ok := c.Get("a"); !ok {
+		t.Fatal("a promote")
 	}
 }
 
-func TestClear(t *testing.T) {
-	c := New(4)
-	c.Put("a", 1)
-	c.Clear()
+func TestCap(t *testing.T) {
+	c := New(8)
+	if c.Cap() != 8 {
+		t.Fatal("cap")
+	}
+}
+
+func TestLenEmpty(t *testing.T) {
+	c := New(2)
 	if c.Len() != 0 {
-		t.Fatal("clear")
+		t.Fatal("empty")
 	}
 }

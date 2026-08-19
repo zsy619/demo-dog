@@ -1,5 +1,5 @@
-// Package arc 提供 Adaptive Replacement Cache (ARC) 的简化实现。
-// 它使用 4 个 LRU 列表：T1, T2, B1, B2，根据访问模式动态调整 T1 与 T2 的比例。
+// Package arc 提供一个简化版 ARC（自适应替换）缓存：
+// 在 LRU 和 LFU 之间动态平衡，适应访问模式。
 package arc
 
 import (
@@ -7,107 +7,98 @@ import (
 	"sync"
 )
 
-// Cache 是 ARC 缓存。
+// Cache 是一个 ARC 缓存。
 type Cache struct {
-	mu       sync.Mutex
-	capacity int
-	p        int // T1 的目标大小
-	t1, t2   *list.List
-	b1, b2   *list.List
-	idx      map[string]*list.Element
+	mu   sync.Mutex
+	cap  int
+	t1   *list.List // 最近访问
+	t2   *list.List // 高频访问
+	b1   *list.List // T1 历史淘汰
+	b2   *list.List // T2 历史淘汰
+	idx  map[string]*list.Element
+	p    int // 平衡参数
 }
 
 type entry struct {
-	key   string
-	value any
-	inList *list.List
+	k   string
+	v   any
+	isfreq bool
 }
 
-// New 创建一个容量为 capacity 的 ARC 缓存。
-func New(capacity int) *Cache {
-	if capacity < 2 {
-		capacity = 2
+// New 创建一个容量 cap 的 ARC 缓存。
+func New(cap int) *Cache {
+	if cap <= 0 {
+		cap = 128
 	}
 	return &Cache{
-		capacity: capacity,
-		p:        0,
-		t1:       list.New(),
-		t2:       list.New(),
-		b1:       list.New(),
-		b2:       list.New(),
-		idx:      make(map[string]*list.Element, capacity),
+		cap: cap,
+		t1:  list.New(),
+		t2:  list.New(),
+		b1:  list.New(),
+		b2:  list.New(),
+		idx: make(map[string]*list.Element, cap),
 	}
 }
 
-// Get 读取并把命中项移到 T2 头。
-func (c *Cache) Get(key string) (any, bool) {
+// Get 读取并提升到 T2。
+func (c *Cache) Get(k string) (any, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	el, ok := c.idx[key]
-	if !ok {
-		return nil, false
-	}
-	if el.Value.(*entry).inList == c.t1 {
-		c.t1.Remove(el)
-		delete(c.idx, key)
+	if el, ok := c.idx[k]; ok {
 		ent := el.Value.(*entry)
-		ent.inList = c.t2
-		c.idx[key] = c.t2.PushFront(ent)
-	} else {
-		c.t2.MoveToFront(el)
+		if !ent.isfreq {
+			c.t1.Remove(el)
+			ent.isfreq = true
+			c.t2.PushFront(el)
+		}
+		return ent.v, true
 	}
-	return el.Value.(*entry).value, true
+	return nil, false
 }
 
 // Put 写入键值。
-func (c *Cache) Put(key string, value any) {
+func (c *Cache) Put(k string, v any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if el, ok := c.idx[key]; ok {
+	if el, ok := c.idx[k]; ok {
 		ent := el.Value.(*entry)
-		ent.value = value
-		if el.Value.(*entry).inList == c.t1 {
+		ent.v = v
+		if !ent.isfreq {
 			c.t1.Remove(el)
-			ent.inList = c.t2
-		c.idx[key] = c.t2.PushFront(ent)
-		} else {
-			c.t2.MoveToFront(el)
+			ent.isfreq = true
+			c.t2.PushFront(el)
 		}
 		return
 	}
-	ent := &entry{key: key, value: value}
-	ent.inList = c.t1
-		c.idx[key] = c.t1.PushFront(ent)
-	c.replace(false)
-}
-
-func (c *Cache) replace(adaptB2 bool) {
-	for c.totalLen() > c.capacity {
-		if !adaptB2 && c.t1.Len() > 0 && (c.t1.Len() > c.p || c.t2.Len() == 0) {
-			v := c.t1.Back()
-			if v == nil {
-				return
+	// 缺失：替换流程
+	sz := c.t1.Len() + c.b1.Len()
+	if el := c.t1.Back(); el != nil && sz >= c.cap {
+		c.replace(false)
+	}
+	el := c.t1.PushFront(&entry{k: k, v: v, isfreq: false})
+	c.idx[k] = el
+	for c.t1.Len()+c.t2.Len() > c.cap {
+		if back := c.t1.Back(); back != nil {
+			ent := back.Value.(*entry)
+			c.t1.Remove(back)
+			if c.b1.Len() >= c.cap {
+				o := c.b1.Back()
+				if o != nil {
+					delete(c.idx, o.Value.(*entry).k)
+					c.b1.Remove(o)
+				}
 			}
-			ent := v.Value.(*entry)
-			c.t1.Remove(v)
-			delete(c.idx, ent.key)
-			if c.b1.Len() >= c.capacity {
-				c.b1.Remove(c.b1.Front())
-			}
-			ent.inList = nil
 			c.b1.PushFront(ent)
-		} else if c.t2.Len() > 0 {
-			v := c.t2.Back()
-			if v == nil {
-				return
+		} else if back := c.t2.Back(); back != nil {
+			ent := back.Value.(*entry)
+			c.t2.Remove(back)
+			if c.b2.Len() >= c.cap {
+				o := c.b2.Back()
+				if o != nil {
+					delete(c.idx, o.Value.(*entry).k)
+					c.b2.Remove(o)
+				}
 			}
-			ent := v.Value.(*entry)
-			c.t2.Remove(v)
-			delete(c.idx, ent.key)
-			if c.b2.Len() >= c.capacity {
-				c.b2.Remove(c.b2.Front())
-			}
-			ent.inList = nil
 			c.b2.PushFront(ent)
 		} else {
 			break
@@ -115,22 +106,43 @@ func (c *Cache) replace(adaptB2 bool) {
 	}
 }
 
-func (c *Cache) totalLen() int { return c.t1.Len() + c.t2.Len() }
+func (c *Cache) replace(inB2 bool) {
+	// 根据 p 决定淘汰 T1 还是 T2 的尾部
+	if inB2 {
+		if el := c.t2.Back(); el != nil {
+			ent := el.Value.(*entry)
+			c.t2.Remove(el)
+			if c.b2.Len() >= c.cap {
+				o := c.b2.Back()
+				if o != nil {
+					delete(c.idx, o.Value.(*entry).k)
+					c.b2.Remove(o)
+				}
+			}
+			c.b2.PushFront(ent)
+		}
+		return
+	}
+	if el := c.t1.Back(); el != nil {
+		ent := el.Value.(*entry)
+		c.t1.Remove(el)
+		if c.b1.Len() >= c.cap {
+			o := c.b1.Back()
+			if o != nil {
+				delete(c.idx, o.Value.(*entry).k)
+				c.b1.Remove(o)
+			}
+		}
+		c.b1.PushFront(ent)
+	}
+}
 
-// Len 返回当前条目数。
+// Len 返回 T1+T2 总条目数。
 func (c *Cache) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.totalLen()
+	return c.t1.Len() + c.t2.Len()
 }
 
-// Clear 清空。
-func (c *Cache) Clear() {
-	c.mu.Lock()
-	c.t1 = list.New()
-	c.t2 = list.New()
-	c.b1 = list.New()
-	c.b2 = list.New()
-	c.idx = make(map[string]*list.Element, c.capacity)
-	c.mu.Unlock()
-}
+// Cap 返回容量。
+func (c *Cache) Cap() int { return c.cap }
