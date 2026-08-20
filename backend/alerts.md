@@ -60,7 +60,7 @@ edits go through git.
 
 ## Tests
 
-cd backend && go test -race -count=1 ./internal/alerts
+cd backend && go test -race -count=1 ./xflow/alerts
 
 Covers fire-on-fast-burn, no-fire-when-budget, empty-window skip,
 and per-rule dedupe.

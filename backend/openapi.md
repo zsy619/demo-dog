@@ -49,5 +49,5 @@ Three roles apply per API key:
 | admin  | yes   | yes    | yes   |
 
 Register via `-api-keys k1:admin:ops,k2:writer:checkout,k3:reader:grafana`
-or `DOG_API_KEYS` env var. See `internal/api/auth.go` for the canonical
+or `DOG_API_KEYS` env var. See `xnet/api/auth.go` for the canonical
 parser.

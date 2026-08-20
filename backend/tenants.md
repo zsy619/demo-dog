@@ -74,7 +74,7 @@ a tenant at registration. An empty label is fine.
 cd backend && go test -race -count=1 ./...
 ```
 
-`./internal/tenants` covers create / duplicate / mint / lookup.
-`./internal/store` covers WAL round-trip + repair + rotate +
-replay-on-restart. `./internal/api` covers tenant isolation in
+`./xdata/tenants` covers create / duplicate / mint / lookup.
+`./xdata/store` covers WAL round-trip + repair + rotate +
+replay-on-restart. `./xnet/api` covers tenant isolation in
 filter and admin endpoints.

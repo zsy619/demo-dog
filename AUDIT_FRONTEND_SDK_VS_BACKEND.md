@@ -57,29 +57,29 @@ Backend mounts 37 main routes + 11 pprof + 3 debug + replica sub-routes.
 
 | Module | Status |
 |---|---|
-| internal/audit | no page |
-| internal/auth/oidc | LoginModal not bound to OIDC |
-| internal/auth/middleware | only X-API-Key sent, no bearer |
-| internal/breaker | no surface |
-| internal/ratelimit | no surface |
-| internal/webhook | no surface |
-| internal/retention | no surface |
-| internal/alerts/slo | no surface |
-| internal/replica | no surface |
-| internal/replica/tracing | SDKs do not propagate W3C |
-| internal/store/backup | no surface |
-| internal/store/migrate | no surface |
-| internal/health | admin port not exposed |
-| internal/rbac | not wired to UI |
-| internal/oauth | no surface |
-| internal/secretrot | no surface |
-| internal/vault | no surface |
-| internal/feature | no surface |
-| internal/session | no surface |
+| xcore/audit | no page |
+| xsecure/auth/oidc | LoginModal not bound to OIDC |
+| xsecure/auth/middleware | only X-API-Key sent, no bearer |
+| xcache/breaker | no surface |
+| xcache/ratelimit | no surface |
+| xnet/webhook | no surface |
+| xdata/retention | no surface |
+| xflow/alerts/slo | no surface |
+| xdata/replica | no surface |
+| xdata/replica/tracing | SDKs do not propagate W3C |
+| xdata/store/backup | no surface |
+| xdata/store/migrate | no surface |
+| xcore/health | admin port not exposed |
+| xsecure/rbac | not wired to UI |
+| xnet/oauth | no surface |
+| xsecure/secretrot | no surface |
+| xdata/vault | no surface |
+| xdata/feature | no surface |
+| xsecure/session | no surface |
 
 ## 3. Type drift
 
-backend/internal/api/otlp_http.go decodes JSON envelope. Field shapes match frontend MetricPoint/LogRecord. ✅
+backend/xnet/api/otlp_http.go decodes JSON envelope. Field shapes match frontend MetricPoint/LogRecord. ✅
 
 ## 4. SDK ingest path consistency
 

@@ -26,8 +26,8 @@
 ## 1. 身份认证与授权（Authentication & Authorization）
 
 ### 已具备
-- internal/api/server.go:76 路由层允许 Authorization 头穿透 CORS（仅表明支持，但未做校验）。
-- internal/api/handlers.go 中 parseFilter 与服务路由均未注入租户字段，说明项目刻意保持"零权限"模型。
+- xnet/api/server.go:76 路由层允许 Authorization 头穿透 CORS（仅表明支持，但未做校验）。
+- xnet/api/handlers.go 中 parseFilter 与服务路由均未注入租户字段，说明项目刻意保持"零权限"模型。
 
 ### 半成品 / 简陋
 - 无租户隔离：model/signal.go 中 LogRecord / MetricPoint / SpanRecord 完全没有 tenant / org / project 字段，所有数据全局共享。
@@ -45,7 +45,7 @@
 > 结论：名为 Doris，实为 Go 进程内 slice。零持久化能力。
 
 ### 已具备
-- store.Doris 在 internal/store/doris.go:46-77 模仿了 Doris 的概念：三张表（__dog_logs、__dog_metrics、__dog_traces，见 handlers.go:88）、冷热分层、物化视图（1m / 5m）。
+- store.Doris 在 xdata/store/doris.go:46-77 模仿了 Doris 的概念：三张表（__dog_logs、__dog_metrics、__dog_traces，见 handlers.go:88）、冷热分层、物化视图（1m / 5m）。
 - 暴露了 HotLogs / ColdLogs / HotMetrics / ColdMetrics / HotSpans / ColdSpans 容量上限（DefaultConfig at doris.go:37-44）。
 
 ### 半成品 / 简陋
@@ -313,9 +313,9 @@ from "high-quality demo" to "enterprise-grade application".
 
 ### P0 (all done)
 
-* API Key auth: internal/api/auth.go, all 4 SDKs support
+* API Key auth: xnet/api/auth.go, all 4 SDKs support
 * Rate limiting (per-IP + per-key): ratelimit.go Round 27.1
-* Multi-tenant isolation: internal/tenants/, Round 23.1+23.2
+* Multi-tenant isolation: xdata/tenants/, Round 23.1+23.2
 * WAL + snapshot persistence: wal.go Round 23.3
 * WAL crash recovery: wal_chaos_test.go Round 28.3
 * CORS + WS origin: Round 22.5
@@ -367,10 +367,10 @@ from "high-quality demo" to "enterprise-grade application".
 * otelcol drop-in receiver (Round 29): ops/otelcol/dog-collector.yaml
   routes otelcol receivers to demo-dog via standard OTLP/HTTP.
 * t-digest streaming quantiles + histogram persistence (Round 30):
-  internal/store/tdigest.go with O(delta) memory and 2% accuracy on
+  xdata/store/tdigest.go with O(delta) memory and 2% accuracy on
   10k uniform samples; persistVersion bumped to 2 with
   PersistHistogram round-trip.
-* Multi-node HA mode (Round 31): internal/replica stdlib 2-node
+* Multi-node HA mode (Round 31): xdata/replica stdlib 2-node
   WAL replication with manual failover + docs/HA.md playbook.
   At-most-once by default; upgrade to at-least-once via
   --replication-mode=at-least-once (Round 33).
@@ -382,11 +382,11 @@ from "high-quality demo" to "enterprise-grade application".
 * At-least-once replication (Round 33): POST /replica/ack protocol
   with retention buffer (default 100k records) + min-ack GC across
   all followers. /replica/state reports per-follower lag.
-* Bearer-token auth + TLS (Round 34): internal/replica/auth.go
+* Bearer-token auth + TLS (Round 34): xdata/replica/auth.go
   with hashed tokens, constant-time compare, Auth.Middleware() wraps
   the entire /replica/* tree. TLSConfigFromPairs() helper for
   PEM-encoded cert+key.
-* OpenAPI 3.1 spec (Round 35): internal/openapi/ + cmd/gen-openapi +
+* OpenAPI 3.1 spec (Round 35): xnet/openapi/ + cmd/gen-openapi +
   docs/openapi.json (14 paths, 2 security schemes, 4 schemas).
 * Slack + Retry notifier (Round 36): SlackChannel posts to Incoming
   Webhook URLs. RetryChannel wraps any Channel with 3-attempt
@@ -404,7 +404,7 @@ from "high-quality demo" to "enterprise-grade application".
   TraceRoundTripper http.RoundTripper that injects traceparent on
   every outbound /replica call. ExtractTrace parser, ctx helpers.
   10 tests including httptest round-trip.
-* OIDC federation (Round 41): internal/auth/oidc.OIDCProvider.
+* OIDC federation (Round 41): xsecure/auth/oidc.OIDCProvider.
   Discovery + JWKS fetch + background refresh. Verify checks
   RS256/ES256/ES384 signatures, validates issuer/audience/expiry.
   Claims.AllScopes() maps standard claims into per-resource
