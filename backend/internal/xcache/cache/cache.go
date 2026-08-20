@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Entry is one cached value.
+// Entry 表示一个缓存值。
 type Entry struct {
 	Value     any
 	ExpiresAt time.Time
@@ -17,7 +17,7 @@ func (e *Entry) expired(now time.Time) bool {
 	return !e.ExpiresAt.IsZero() && !now.Before(e.ExpiresAt)
 }
 
-// Cache is a simple TTL cache with GetOrLoad singleflight.
+// Cache 是一个简单的 TTL 缓存，支持 GetOrLoad singleflight 模式。
 type Cache struct {
 	mu       sync.RWMutex
 	items    map[string]*Entry
@@ -35,13 +35,13 @@ type Cache struct {
 	}
 }
 
-// Config configures the cache.
+// Config 用于配置缓存。
 type Config struct {
 	TTL      time.Duration
 	MaxItems int
 }
 
-// New constructs a Cache.
+// New 构造一个 Cache。
 func New(cfg Config) *Cache {
 	if cfg.MaxItems <= 0 {
 		cfg.MaxItems = 1024
@@ -58,7 +58,7 @@ func New(cfg Config) *Cache {
 	}
 }
 
-// Get returns the cached value or (nil, false) on miss.
+// Get 返回缓存值，未命中时返回 (nil, false)。
 func (c *Cache) Get(key string) (any, bool) {
 	c.mu.RLock()
 	e, ok := c.items[key]
@@ -79,12 +79,12 @@ func (c *Cache) Get(key string) (any, bool) {
 	return e.Value, true
 }
 
-// Set inserts a value with the default TTL.
+// Set 以默认 TTL 插入一个值。
 func (c *Cache) Set(key string, v any) {
 	c.SetTTL(key, v, c.ttl)
 }
 
-// SetTTL inserts a value with a custom TTL.
+// SetTTL 以自定义 TTL 插入一个值。
 func (c *Cache) SetTTL(key string, v any, ttl time.Duration) {
 	c.mu.Lock()
 	if _, ok := c.items[key]; !ok && len(c.items) >= c.maxItems {
@@ -99,21 +99,21 @@ func (c *Cache) SetTTL(key string, v any, ttl time.Duration) {
 	c.mu.Unlock()
 }
 
-// Delete removes a key.
+// Delete 删除一个 key。
 func (c *Cache) Delete(key string) {
 	c.mu.Lock()
 	delete(c.items, key)
 	c.mu.Unlock()
 }
 
-// Len returns the number of items currently stored.
+// Len 返回当前存储的元素数量。
 func (c *Cache) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.items)
 }
 
-// Stats is a snapshot of counters.
+// Stats 是计数器的一份快照。
 type Stats struct {
 	Items   int    `json:"items"`
 	Max     int    `json:"max"`
@@ -123,7 +123,7 @@ type Stats struct {
 	Expired uint64 `json:"expired"`
 }
 
-// Stats returns a Stats snapshot.
+// Stats 返回 Stats 快照。
 func (c *Cache) Stats() Stats {
 	return Stats{
 	Items:   c.Len(),
@@ -135,14 +135,12 @@ func (c *Cache) Stats() Stats {
 	}
 }
 
-// ErrLoadInProgress is returned when a load for this key is
-// already in flight in another goroutine.
+// ErrLoadInProgress 在已有其他协程正在为该 key 执行加载时返回。
 var ErrLoadInProgress = errors.New("load already in progress")
 
-// GetOrLoad returns the cached value, or calls load() if the
-// key is missing. Concurrent calls for the same missing key
-// share a single in-flight load and return ErrLoadInProgress
-// to all but the first caller.
+// GetOrLoad 返回缓存值；若 key 不存在则调用 load()。
+// 同一缺失 key 的并发调用共享一次 in-flight 加载，
+// 除首个调用者外，其余调用者均返回 ErrLoadInProgress。
 func (c *Cache) GetOrLoad(key string, load func() (any, error)) (any, error) {
 	if v, ok := c.Get(key); ok {
 		return v, nil
@@ -177,15 +175,15 @@ func (c *Cache) GetOrLoad(key string, load func() (any, error)) (any, error) {
 	return v, err
 }
 
-// Flush removes all entries.
+// Flush 清空所有条目。
 func (c *Cache) Flush() {
 	c.mu.Lock()
 	c.items = make(map[string]*Entry)
 	c.mu.Unlock()
 }
 
-// evictOne removes the most recently inserted key (cheap LRU
-// approximation; sufficient for a small bounded cache).
+// evictOne 移除最近插入的 key（廉价的 LRU 近似；
+// 足以应对小容量有界缓存）。
 func (c *Cache) evictOne() {
 	var newest string
 	var newestAt time.Time

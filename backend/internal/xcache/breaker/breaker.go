@@ -37,12 +37,12 @@ type Breaker struct {
 
 // New 创建并初始化一个 Breaker。
 //
-// 当 cfg 中某个字段为零或负时，自动填充默认值：
-//   - Window:        10 * time.Second
-//   - MinSamples:    5
-//   - FailureRatio:  0.5
-//   - OpenTimeout:   30 * time.Second
-//   - HalfOpenCalls: 1
+// 当 cfg 中某个字段为零或负时，自动填充默认值（Window、MinSamples、FailureRatio、OpenTimeout、HalfOpenCalls）：
+//   - Window:        10 * time.Second（滑动窗口时长）
+//   - MinSamples:    5（触发评估所需的最小样本数）
+//   - FailureRatio:  0.5（失败率阈值）
+//   - OpenTimeout:   30 * time.Second（Open 状态持续时间）
+//   - HalfOpenCalls: 1（半开状态允许的试探调用数）
 func New(cfg Config) *Breaker {
 	if cfg.Window <= 0 {
 		cfg.Window = 10 * time.Second

@@ -10,15 +10,14 @@ import (
 	"time"
 )
 
-// bucket holds the per-IP state.
+// bucket 保存单个 IP 的状态。
 type bucket struct {
 	tokens    float64
 	lastRefil time.Time
 }
 
-// Limiter enforces a token-bucket rate limit per IP address.
-// The bucket fills at `rate` requests per second up to `burst`
-// burst capacity.
+// Limiter 按 IP 维度实施令牌桶限流。
+// 桶以 rate 个/秒的速率补充令牌，最大容量为 burst。
 type Limiter struct {
 	mu       sync.Mutex
 	buckets  map[string]*bucket
@@ -30,8 +29,7 @@ type Limiter struct {
 	cleaned  atomic.Uint64
 }
 
-// New creates a Limiter. Rate is requests/second; burst is
-// the maximum bucket size.
+// New 创建一个 Limiter。rate 为每秒请求数；burst 为桶的最大容量。
 func New(rate, burst float64) *Limiter {
 	if rate <= 0 {
 		rate = 10
@@ -47,13 +45,13 @@ func New(rate, burst float64) *Limiter {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖时间源（用于测试）。
 func (l *Limiter) WithTime(now func() time.Time) *Limiter {
 	l.now = now
 	return l
 }
 
-// Allow consumes one token for ip. Returns true if allowed.
+// Allow 为指定 ip 消费一个令牌。允许时返回 true。
 func (l *Limiter) Allow(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -80,8 +78,8 @@ func (l *Limiter) Allow(ip string) bool {
 	return false
 }
 
-// Cleanup removes buckets older than maxIdle. Returns the
-// number removed. Call from a timer.
+// Cleanup 删除空闲时间超过 maxIdle 的桶。
+// 返回被移除的数量。请从定时器中调用。
 func (l *Limiter) Cleanup(maxIdle time.Duration) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -97,7 +95,7 @@ func (l *Limiter) Cleanup(maxIdle time.Duration) int {
 	return n
 }
 
-// Stats returns the counters.
+// Stats 表示计数器集合。
 type Stats struct {
 	Rate     float64 `json:"rate"`
 	Burst    float64 `json:"burst"`
@@ -107,7 +105,7 @@ type Stats struct {
 	Cleaned  uint64  `json:"cleaned"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回当前快照。
 func (l *Limiter) Stats() Stats {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -120,8 +118,8 @@ func (l *Limiter) Stats() Stats {
 	}
 }
 
-// Middleware returns the http.Handler that enforces the rate
-// limit. IP is read from X-Forwarded-For or RemoteAddr.
+// Middleware 返回一个强制实施限流的 http.Handler。
+// IP 从 X-Forwarded-For 或 RemoteAddr 中读取。
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)

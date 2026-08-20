@@ -7,9 +7,8 @@ import (
 	"math"
 )
 
-// Filter is a Bloom-filter-style probabilistic membership
-// test. False positives are possible; false negatives are
-// not.
+// Filter 是一种基于布隆过滤器的概率性成员判定结构。
+// 可能产生误报，但绝不会漏报。
 type Filter struct {
 	bits  []byte
 	size  uint64
@@ -17,8 +16,7 @@ type Filter struct {
 	count uint64
 }
 
-// New returns a Filter sized to hold n items with fpRate
-// false-positive probability.
+// New 返回一个 Filter，容量可容纳 n 个元素，误报率为 fpRate。
 func New(n uint64, fpRate float64) *Filter {
 	if n == 0 {
 		n = 1
@@ -39,7 +37,7 @@ func New(n uint64, fpRate float64) *Filter {
 	}
 }
 
-// Add inserts an item.
+// Add 添加一个元素。
 func (f *Filter) Add(item []byte) {
 	for i := uint64(0); i < f.hashN; i++ {
 		pos := hashAt(item, i) % f.size
@@ -48,8 +46,7 @@ func (f *Filter) Add(item []byte) {
 	f.count++
 }
 
-// Contains reports whether item may be present. False
-// positives are possible.
+// Contains 报告元素是否可能存在。可能产生误报。
 func (f *Filter) Contains(item []byte) bool {
 	for i := uint64(0); i < f.hashN; i++ {
 		pos := hashAt(item, i) % f.size
@@ -60,17 +57,16 @@ func (f *Filter) Contains(item []byte) bool {
 	return true
 }
 
-// Count returns the number of items added.
+// Count 返回已添加的元素数量。
 func (f *Filter) Count() uint64 { return f.count }
 
-// Size returns the bit size.
+// Size 返回位大小。
 func (f *Filter) Size() uint64 { return f.size }
 
-// HashN returns the number of hashes per item.
+// HashN 返回每个元素的哈希次数。
 func (f *Filter) HashN() uint64 { return f.hashN }
 
-// EstimatedFPRate returns the current estimated false
-// positive rate based on count + size.
+// EstimatedFPRate 返回基于当前元素数量与位大小估算出的误报率。
 func (f *Filter) EstimatedFPRate() float64 {
 	if f.size == 0 || f.count == 0 {
 		return 0

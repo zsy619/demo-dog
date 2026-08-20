@@ -1,4 +1,4 @@
-// Package circuit provides a small circuit-breaker.
+// Package circuit 提供了一个轻量的断路器实现。
 package circuit
 
 import (
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// State is the breaker state.
+// State 表示断路器的状态。
 type State int32
 
 const (
@@ -29,18 +29,17 @@ func (s State) String() string {
 	return "unknown"
 }
 
-// ErrOpen is returned when the breaker is open and rejected
-// the call.
+// ErrOpen 在断路器处于 Open 状态并拒绝调用时返回。
 var ErrOpen = errors.New("circuit breaker is open")
 
-// Settings configures the breaker.
+// Settings 用于配置断路器。
 type Settings struct {
 	FailureThreshold int
 	CoolDown         time.Duration
 	Now              func() time.Time
 }
 
-// Breaker is a single circuit breaker.
+// Breaker 是一个独立的断路器实例。
 type Breaker struct {
 	settings Settings
 	mu       sync.Mutex
@@ -49,7 +48,7 @@ type Breaker struct {
 	openedAt atomic.Int64
 }
 
-// New constructs a Breaker.
+// New 构造一个 Breaker。
 func New(s Settings) *Breaker {
 	if s.FailureThreshold <= 0 {
 		s.FailureThreshold = 5
@@ -63,7 +62,7 @@ func New(s Settings) *Breaker {
 	return &Breaker{settings: s}
 }
 
-// State returns the current state.
+// State 返回当前状态。
 func (b *Breaker) State() State {
 	s := State(b.state.Load())
 	if s == StateOpen {
@@ -80,7 +79,7 @@ func (b *Breaker) State() State {
 	return s
 }
 
-// Allow returns nil if the call should proceed.
+// Allow 在调用应继续时返回 nil。
 func (b *Breaker) Allow() error {
 	switch b.State() {
 	case StateClosed:
@@ -100,7 +99,7 @@ func (b *Breaker) Allow() error {
 	return ErrOpen
 }
 
-// Success records a successful call.
+// Success 记录一次成功的调用。
 func (b *Breaker) Success() {
 	s := State(b.state.Load())
 	if s == StateHalfOpen || s == StateOpen {
@@ -111,7 +110,7 @@ func (b *Breaker) Success() {
 	b.fails.Store(0)
 }
 
-// Failure records a failed call.
+// Failure 记录一次失败的调用。
 func (b *Breaker) Failure() {
 	n := b.fails.Add(1)
 	if n >= int64(b.settings.FailureThreshold) {
@@ -124,7 +123,7 @@ func (b *Breaker) Failure() {
 	}
 }
 
-// Snapshot is the JSON-stable view.
+// Snapshot 是 JSON 稳定的视图。
 type Snapshot struct {
 	State         string `json:"state"`
 	Failures      int64  `json:"failures"`
@@ -133,7 +132,7 @@ type Snapshot struct {
 	OpenedAt      string `json:"opened_at,omitempty"`
 }
 
-// Snapshot returns the current breaker view.
+// Snapshot 返回当前断路器的视图。
 func (b *Breaker) Snapshot() Snapshot {
 	snap := Snapshot{
 		State:         b.State().String(),
