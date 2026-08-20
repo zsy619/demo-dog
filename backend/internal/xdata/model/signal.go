@@ -68,7 +68,7 @@ type MetricPoint struct {
 	Type      string            `json:"type"` // gauge|counter|histogram
 	Labels    map[string]string `json:"labels,omitempty"`
 
-	// Histogram fields — only set when Type == "histogram". When the
+	// 直方图字段——仅当 Type 为 histogram 时设置。当
 	// exporter supplies explicit bucket boundaries we keep them so the
 	// store can compute true quantiles instead of falling back to a
 	// log-bucketed approximation.

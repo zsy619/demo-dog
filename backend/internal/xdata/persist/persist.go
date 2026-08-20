@@ -55,7 +55,7 @@ func (d *DB) load() error {
 		}
 		rec := buf[off : off+n]
 		off += n
-		// rec: [klen][k][vlen][v]
+		// rec：[klen][k][vlen][v]
 		if len(rec) < 4 {
 			break
 		}

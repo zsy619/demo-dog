@@ -773,7 +773,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 			Name: e.name, Count: e.count, Errors: e.acc.errors, AvgMs: avg, P99Ms: p99,
 		})
 	}
-	// TopOps is the same data but ordered descending — frontend can use either.
+	// TopOps 是相同数据但按降序排序——前端可任选使用。
 	detail.TopOps = detail.Endpoints
 
 	// 该服务的指标名称。
