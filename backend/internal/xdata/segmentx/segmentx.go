@@ -32,18 +32,33 @@ func (s *Set) Add(lo, hi int64) {
 	out := make([]Segment, 0, len(s.segments)+1)
 	inserted := false
 	for _, sg := range s.segments {
-		if !inserted && newSeg.Lo < sg.Lo {
-			// 合并 newSeg 与 sg（若相邻）
-			if newSeg.Hi >= sg.Lo {
-				if newSeg.Hi > sg.Hi {
-					newSeg.Hi = newSeg.Hi
-				} else {
-					newSeg.Hi = sg.Hi
+		// newSeg 早于或等于 sg.Lo：先尝试与前一段（out 末尾）合并
+		if !inserted && newSeg.Lo <= sg.Lo {
+			if len(out) > 0 && newSeg.Lo <= out[len(out)-1].Hi {
+				last := &out[len(out)-1]
+				if newSeg.Hi > last.Hi {
+					last.Hi = newSeg.Hi
 				}
+				// 合并后 newSeg 用 last 替代，不再单独追加
+				newSeg.Lo = last.Lo
+				newSeg.Hi = last.Hi
 			}
-			out = append(out, newSeg)
+			// 与 sg 合并
+			if newSeg.Hi < sg.Hi {
+				newSeg.Hi = sg.Hi
+			}
+			// 如果 out[-1] 已经被扩到 sg.Hi 之上，新值已合并进 out[-1
+			if len(out) > 0 && out[len(out)-1].Hi >= newSeg.Hi {
+				inserted = true
+				continue
+			}
+			// 否则替换 out[-1]（若同 Lo）或追加
+			if len(out) > 0 && out[len(out)-1].Lo == newSeg.Lo {
+				out[len(out)-1].Hi = newSeg.Hi
+			} else {
+				out = append(out, newSeg)
+			}
 			inserted = true
-			// 继续处理 sg（可能要再次合并）
 			if newSeg.Hi >= sg.Hi {
 				continue
 			}

@@ -1,10 +1,14 @@
-// Package lrukv 提供一个 string -> []byte 的 LRU 缓存（container/list 实现）。
+// Package lrukv 提供一个 string -> []byte 的并发 LRU 缓存（container/list 实现）。
 package lrukv
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
-// KV 是 string->[]byte 的 LRU。
+// KV 是 string->[]byte 的并发 LRU。
 type KV struct {
+	mu    sync.Mutex
 	cap   int
 	ll    *list.List
 	index map[string]*list.Element
@@ -29,6 +33,8 @@ func New(cap int) *KV {
 
 // Put 放入键值。
 func (k *KV) Put(key string, val []byte) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	if el, ok := k.index[key]; ok {
 		el.Value.(*kvEntry).val = val
 		k.ll.MoveToFront(el)
@@ -47,6 +53,8 @@ func (k *KV) Put(key string, val []byte) {
 
 // Get 读取键值。
 func (k *KV) Get(key string) ([]byte, bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	el, ok := k.index[key]
 	if !ok {
 		return nil, false
@@ -57,22 +65,29 @@ func (k *KV) Get(key string) ([]byte, bool) {
 
 // Delete 删除键。
 func (k *KV) Delete(key string) {
+	k.mu.Lock()
 	el, ok := k.index[key]
-	if !ok {
-		return
+	if ok {
+		k.ll.Remove(el)
+		delete(k.index, key)
 	}
-	k.ll.Remove(el)
-	delete(k.index, key)
+	k.mu.Unlock()
 }
 
 // Len 返回元素数。
-func (k *KV) Len() int { return k.ll.Len() }
+func (k *KV) Len() int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.ll.Len()
+}
 
 // Cap 返回容量。
 func (k *KV) Cap() int { return k.cap }
 
 // Keys 按访问顺序返回所有 key。
 func (k *KV) Keys() []string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	out := make([]string, 0, k.ll.Len())
 	for e := k.ll.Front(); e != nil; e = e.Next() {
 		out = append(out, e.Value.(*kvEntry).key)

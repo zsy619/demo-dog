@@ -27,7 +27,7 @@ func Merge[T any](out chan<- T, srcs ...<-chan T) {
 func Fanout[T any](in <-chan T, n int) []<-chan T {
 	outs := make([]chan T, n)
 	for i := 0; i < n; i++ {
-		outs[i] = make(chan T)
+		outs[i] = make(chan T, n)
 	}
 	go func() {
 		defer func() {

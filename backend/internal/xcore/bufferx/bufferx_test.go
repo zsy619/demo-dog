@@ -33,7 +33,7 @@ func TestReset(t *testing.T) {
 
 func TestWriteByte(t *testing.T) {
 	b := New(8)
-	b.WriteByte('a')
+	if err := b.WriteByte('a'); err != nil { t.Fatal(err) }
 	if b.Len() != 1 {
 		t.Fatal("byte")
 	}

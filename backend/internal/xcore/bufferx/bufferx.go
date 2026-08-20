@@ -26,11 +26,12 @@ func (b *Buffer) Write(p []byte) {
 	b.mu.Unlock()
 }
 
-// WriteByte 追加单字节。
-func (b *Buffer) WriteByte(c byte) {
+// WriteByte 追加单字节（实现 io.ByteWriter）。
+func (b *Buffer) WriteByte(c byte) error {
 	b.mu.Lock()
 	b.d = append(b.d, c)
 	b.mu.Unlock()
+	return nil
 }
 
 // Bytes 返回副本。

@@ -1,10 +1,14 @@
 // Package probation 提供 W-TinyLFU 风格的二级保护缓存。
 package probation
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
-// Cache 是二级保护缓存。
+// Cache 是二级保护缓存（并发安全）。
 type Cache struct {
+	mu      sync.Mutex
 	mainCap int
 	protCap int
 	main    map[string]*list.Element
@@ -35,6 +39,8 @@ func New(mainCap int) *Cache {
 
 // Put 放入键值。
 func (c *Cache) Put(k string, v any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if el, ok := c.prot[k]; ok {
 		el.Value.(*entry).val = v
 		c.protLL.MoveToFront(el)
@@ -58,6 +64,8 @@ func (c *Cache) Put(k string, v any) {
 
 // Get 读取键值。
 func (c *Cache) Get(k string) (any, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if el, ok := c.prot[k]; ok {
 		c.protLL.MoveToFront(el)
 		return el.Value.(*entry).val, true
@@ -85,12 +93,18 @@ func (c *Cache) admitProtected(e *entry) {
 }
 
 // Len 返回元素总数。
-func (c *Cache) Len() int { return len(c.main) + len(c.prot) }
+func (c *Cache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.main) + len(c.prot)
+}
 
 // Clear 清空。
 func (c *Cache) Clear() {
+	c.mu.Lock()
 	c.main = make(map[string]*list.Element)
 	c.prot = make(map[string]*list.Element)
 	c.mainLL.Init()
 	c.protLL.Init()
+	c.mu.Unlock()
 }

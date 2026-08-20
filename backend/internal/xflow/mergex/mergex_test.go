@@ -18,18 +18,18 @@ func TestMerge(t *testing.T) {
 	out := make(chan int)
 	var wg sync.WaitGroup
 	wg.Add(1)
+	var got int
 	go func() {
 		defer wg.Done()
-		sum := 0
 		for v := range out {
-			sum += v
-		}
-		if sum != 33 {
-			t.Fatal("sum", sum)
+			got += v
 		}
 	}()
 	Merge(out, a, b)
 	wg.Wait()
+	if got != 33 {
+		t.Fatal("sum", got)
+	}
 }
 
 func TestFanout(t *testing.T) {

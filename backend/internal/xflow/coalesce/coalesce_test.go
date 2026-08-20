@@ -20,13 +20,11 @@ func TestCoalesce(t *testing.T) {
 	c := New[string, int]()
 	start := make(chan struct{})
 	done := make(chan struct{})
+	var gotV int
 	go func() {
 		<-start
 		time.Sleep(20 * time.Millisecond)
-		v, _ := c.Do("k", func() (int, error) { return 1, nil })
-		if v != 100 {
-			t.Fatal("coalesce", v)
-		}
+		gotV, _ = c.Do("k", func() (int, error) { return 1, nil })
 		close(done)
 	}()
 	close(start)
@@ -39,6 +37,9 @@ func TestCoalesce(t *testing.T) {
 		t.Fatal("first", v, calls.Load())
 	}
 	<-done
+	if gotV != 100 {
+		t.Fatal("coalesce", gotV)
+	}
 }
 
 func TestErr(t *testing.T) {
