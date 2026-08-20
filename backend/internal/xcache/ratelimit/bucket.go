@@ -1,95 +1,48 @@
-// Package ratelimit 速率限制：令牌桶与漏桶，支持按 key 隔离。
 package ratelimit
 
-// Token bucket + leaky bucket rate limiter.
+// bucket.go：Limiter 主体与令牌桶 / 漏桶算法实现。
 //
-// Two distinct algorithms:
-//
-//   - TokenBucket: capacity is the burst; refill is the steady
-//     rate. Allow up to (capacity) instantly, then refill at
-//     `rate` tokens per second. The classic shape for an API
-//     gateway.
-//
-//   - LeakyBucket: queue of pending requests; drain at a fixed
-//     rate. Smooth bursty traffic into a constant stream.
-//
-// Both are sharded by a key (tenant id, IP, API key id) and
-// have a maximum number of shards to bound memory.
-//
-// All public methods are goroutine-safe.
+// 内部类型 tokenBucket / leakyBucket 仅在 Limiter 内部使用，
+// 不对外暴露。Limiter 的所有公共方法都是 goroutine 安全的。
 
 import (
-	"errors"
 	"sync"
 	"time"
 )
 
-// ErrLimited is returned when a request is denied.
-var ErrLimited = errors.New("rate limit exceeded")
-
-// Settings configures one limiter.
-type Settings struct {
-	Capacity     int
-	RefillPerSec float64
-	LeakPerSec   float64
-	MaxShards    int
-	Now          func() time.Time
-}
-
-func (s *Settings) now() func() time.Time {
-	if s.Now == nil {
-		return time.Now
-	}
-	return s.Now
-}
-
-func (s *Settings) capacity() int {
-	if s.Capacity <= 0 {
-		return 100
-	}
-	return s.Capacity
-}
-
-func (s *Settings) refill() float64 {
-	if s.RefillPerSec <= 0 {
-		return 10
-	}
-	return s.RefillPerSec
-}
-
-func (s *Settings) leak() float64 {
-	if s.LeakPerSec <= 0 {
-		return 10
-	}
-	return s.LeakPerSec
-}
-
-func (s *Settings) maxShards() int {
-	if s.MaxShards <= 0 {
-		return 10_000
-	}
-	return s.MaxShards
-}
-
+// tokenBucket 是令牌桶算法的内部状态。
+//
+// 每次调用 AllowTokenBucket 时：
+//  - 计算自上次填充以来的时间增量；
+//  - 累加令牌（不超过 capacity）；
+//  - 若剩余令牌 < 1 则拒绝；否则扣减 1 个令牌。
 type tokenBucket struct {
-	tokens   float64
-	lastFill time.Time
+	tokens   float64   // 当前令牌数
+	lastFill time.Time // 上次填充时间
 }
 
+// leakyBucket 是漏桶算法的内部状态。
+//
+// 每次调用 AllowLeakyBucket 时：
+//  - 计算自上次漏出以来的时间；
+//  - 减去对应漏出量（不低于 0）；
+//  - 若 level >= 1 则拒绝；否则 level += 1。
 type leakyBucket struct {
-	level   float64
-	lastDec time.Time
+	level   float64   // 当前积压请求数
+	lastDec time.Time // 上次漏出时间
 }
 
-// Limiter is the public type.
+// Limiter 是按 key 隔离的令牌桶 + 漏桶复合限流器。
+//
+// 线程安全：所有方法都使用 sync.Mutex 保护内部 map。
 type Limiter struct {
-	mu       sync.Mutex
-	settings Settings
-	tb       map[string]*tokenBucket
-	lb       map[string]*leakyBucket
+	mu       sync.Mutex                 // 保护 tb / lb map
+	settings Settings                   // 配置
+	tb       map[string]*tokenBucket    // 令牌桶分片
+	lb       map[string]*leakyBucket    // 漏桶分片
 }
 
-// New returns a Limiter.
+// New 创建一个 Limiter。
 func New(s Settings) *Limiter {
 	return &Limiter{
 		settings: s,
@@ -98,8 +51,10 @@ func New(s Settings) *Limiter {
 	}
 }
 
-// AllowTokenBucket returns nil if the key has tokens available,
-// else ErrLimited.
+// AllowTokenBucket 在 key 仍有令牌时返回 nil，否则返回 ErrLimited。
+//
+// 首次调用会创建一个满容量（capacity）的桶；
+// 当分片数达到 MaxShards 时拒绝新 key。
 func (l *Limiter) AllowTokenBucket(key string) error {
 	now := l.settings.now()()
 	l.mu.Lock()
@@ -128,8 +83,10 @@ func (l *Limiter) AllowTokenBucket(key string) error {
 	return nil
 }
 
-// AllowLeakyBucket returns nil if the bucket can accept the
-// request, else ErrLimited.
+// AllowLeakyBucket 在 key 桶未满时返回 nil，否则返回 ErrLimited。
+//
+// 首次调用会创建一个空（level=0）的桶；
+// 当分片数达到 MaxShards 时拒绝新 key。
 func (l *Limiter) AllowLeakyBucket(key string) error {
 	now := l.settings.now()()
 	l.mu.Lock()
@@ -158,7 +115,9 @@ func (l *Limiter) AllowLeakyBucket(key string) error {
 	return nil
 }
 
-// Tokens returns the current token count for the key.
+// Tokens 返回 key 当前令牌数（按当前时刻刷新后的值）。
+//
+// 不存在的 key 视为满容量。
 func (l *Limiter) Tokens(key string) float64 {
 	now := l.settings.now()()
 	l.mu.Lock()
@@ -178,7 +137,7 @@ func (l *Limiter) Tokens(key string) float64 {
 	return v
 }
 
-// Reset clears the bucket for one key.
+// Reset 清除 key 对应的令牌桶与漏桶状态。
 func (l *Limiter) Reset(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -186,58 +145,13 @@ func (l *Limiter) Reset(key string) {
 	delete(l.lb, key)
 }
 
-// Snapshot is the JSON-stable view.
-type Snapshot struct {
-	Shards    int                `json:"shards"`
-	TokenKeys []TokenBucketEntry `json:"token_buckets,omitempty"`
-	LeakKeys  []LeakyBucketEntry `json:"leak_buckets,omitempty"`
-}
-
-// TokenBucketEntry is one row.
-type TokenBucketEntry struct {
-	Key    string  `json:"key"`
-	Tokens float64 `json:"tokens"`
-}
-
-// LeakyBucketEntry is one row.
-type LeakyBucketEntry struct {
-	Key   string  `json:"key"`
-	Level float64 `json:"level"`
-}
-
-// Snapshot returns the current state.
-func (l *Limiter) Snapshot() Snapshot {
-	now := l.settings.now()()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	out := Snapshot{}
-	for k, b := range l.tb {
-		elapsed := now.Sub(b.lastFill).Seconds()
-		tokens := b.tokens
-		if elapsed > 0 {
-			tokens = b.tokens + elapsed*l.settings.refill()
-			if tokens > float64(l.settings.capacity()) {
-				tokens = float64(l.settings.capacity())
-			}
-		}
-		out.TokenKeys = append(out.TokenKeys, TokenBucketEntry{Key: k, Tokens: tokens})
-	}
-	for k, b := range l.lb {
-		elapsed := now.Sub(b.lastDec).Seconds()
-		level := b.level
-		if elapsed > 0 {
-			level = b.level - elapsed*l.settings.leak()
-			if level < 0 {
-				level = 0
-			}
-		}
-		out.LeakKeys = append(out.LeakKeys, LeakyBucketEntry{Key: k, Level: level})
-	}
-	out.Shards = len(l.tb) + len(l.lb)
-	return out
-}
-
-// gcLocked evicts shards that have been idle.
+// gcLocked 淘汰空闲超过 1 分钟的分片。
+//
+// 淘汰条件：
+//  - tokenBucket：lastFill 早于 1 分钟前，且 tokens 接近满（capacity - 1）；
+//  - leakyBucket：lastDec 早于 1 分钟前，且 level ≈ 0。
+//
+// 必须在持锁状态下调用。
 func (l *Limiter) gcLocked(now time.Time) {
 	cutoff := now.Add(-time.Minute)
 	for k, b := range l.tb {
