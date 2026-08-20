@@ -43,13 +43,13 @@ func New(name string, max int) *Bulkhead {
 // Acquire takes one permit. If no permit is free, returns
 // ErrFull immediately (the caller should shed load).
 func (b *Bulkhead) Acquire() error {
-	if b.cur.Load() >= int64(b.max) {
+	if int64(len(b.sem)) >= int64(b.max) {
 		b.rejected.Add(1)
 		return ErrFull
 	}
+	b.sem <- struct{}{}
 	b.cur.Add(1)
 	b.pending.Add(1)
-	b.sem <- struct{}{}
 	b.acquired.Add(1)
 	return nil
 }
@@ -57,19 +57,6 @@ func (b *Bulkhead) Acquire() error {
 // AcquireCtx blocks until a permit is free or ctx is done.
 // On timeout, returns ctx.Err() and increments timeouts.
 func (b *Bulkhead) AcquireCtx(ctx context.Context) error {
-	if b.cur.Load() >= int64(b.max) {
-		// Wait for one to free.
-		select {
-		case <-ctx.Done():
-			b.rejected.Add(1)
-			return ctx.Err()
-		case <-b.sem:
-			b.cur.Add(1)
-			b.pending.Add(1)
-			b.acquired.Add(1)
-			return nil
-		}
-	}
 	select {
 	case b.sem <- struct{}{}:
 		b.cur.Add(1)
@@ -83,12 +70,17 @@ func (b *Bulkhead) AcquireCtx(ctx context.Context) error {
 }
 
 // Release returns one permit. Safe to call exactly once per
-// successful Acquire.
-func (b *Bulkhead) Release() {
-	<-b.sem
-	b.cur.Add(-1)
-	b.pending.Add(-1)
-	b.released.Add(1)
+// successful Acquire. No-op (returns false) if no permit held.
+func (b *Bulkhead) Release() bool {
+	select {
+	case <-b.sem:
+		b.cur.Add(-1)
+		b.pending.Add(-1)
+		b.released.Add(1)
+		return true
+	default:
+		return false
+	}
 }
 
 // Run executes op with a permit held for its duration.

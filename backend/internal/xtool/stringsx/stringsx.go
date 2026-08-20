@@ -23,9 +23,8 @@ func (b *Builder) Write(s string) *Builder {
 }
 
 // WriteByte 写入字节。
-func (b *Builder) WriteByte(c byte) *Builder {
-	b.b.WriteByte(c)
-	return b
+func (b *Builder) WriteByte(c byte) error {
+	return b.b.WriteByte(c)
 }
 
 // WriteInt 写入整数十进制。

@@ -58,5 +58,3 @@ func TestNilValue(t *testing.T) {
 		t.Fatal("nil")
 	}
 }
-GOEOF
-export PATH=/opt/homebrew/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH && go test -race -count=1 ./internal/xtool/inspect/ 2>&1 | tail

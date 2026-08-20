@@ -31,34 +31,42 @@ func Nanos(n int, fn func()) {
 type Backoff struct {
 	attempt  int
 	maxSpin  int
+	maxTries int
 	baseNs   int
 	maxSleep time.Duration
 }
 
 // NewBackoff 构造一个退避器。
 func NewBackoff() *Backoff {
-	return &Backoff{maxSpin: 16, baseNs: 100, maxSleep: 10 * time.Millisecond}
+	return &Backoff{maxSpin: 16, maxTries: 100, baseNs: 100, maxSleep: 100 * time.Microsecond}
 }
 
 // Do 自旋一次：根据 attempt 决定是否短暂 sleep。
+// 达到 maxTries 仍不满足 cond 时返回 false（避免死循环）。
 func (b *Backoff) Do(cond func() bool) bool {
 	if cond() {
 		return true
 	}
-	for {
+	for b.attempt < b.maxTries {
 		if cond() {
 			return true
 		}
 		b.attempt++
 		if b.attempt > b.maxSpin {
-			time.Sleep(time.Duration(b.baseNs<<min(b.attempt-b.maxSpin, 20)) * time.Nanosecond)
-			if b.maxSleep > 0 && time.Duration(b.baseNs<<min(b.attempt-b.maxSpin, 20)) > b.maxSleep {
-				time.Sleep(b.maxSleep)
+			shift := b.attempt - b.maxSpin
+			if shift > 20 {
+				shift = 20
 			}
+			wait := time.Duration(b.baseNs<<shift) * time.Nanosecond
+			if b.maxSleep > 0 && wait > b.maxSleep {
+				wait = b.maxSleep
+			}
+			time.Sleep(wait)
 		} else {
 			runtime.Gosched()
 		}
 	}
+	return cond()
 }
 
 // Reset 重置退避器。

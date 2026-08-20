@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -34,6 +35,7 @@ type Watcher struct {
 	stop     chan struct{}
 	stopped  chan struct{}
 	Events   chan Event
+	started  atomic.Bool
 }
 
 type fileSnap struct {
@@ -77,13 +79,18 @@ func (w *Watcher) Unwatch(path string) {
 	w.mu.Unlock()
 }
 
-// Start 启动轮询循环。
+// Start 启动轮询循环。重复调用只生效一次。
 func (w *Watcher) Start() {
-	go w.run()
+	if w.started.CompareAndSwap(false, true) {
+		go w.run()
+	}
 }
 
-// Stop 停止轮询循环。
+// Stop 停止轮询循环。Start 未调用时立即返回。
 func (w *Watcher) Stop() {
+	if !w.started.Load() {
+		return
+	}
 	select {
 	case <-w.stop:
 	default:

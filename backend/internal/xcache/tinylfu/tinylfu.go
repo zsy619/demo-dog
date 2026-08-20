@@ -137,6 +137,9 @@ func (c *Cache) Put(key string, value any) {
 }
 
 func (c *Cache) evict() {
+	// 限制尝试次数。每个 victim 最多被复活一次（保留高频），
+	// 之后强行淘汰最老的。
+	tried := make(map[string]bool)
 	for c.lru.Len() > c.capacity {
 		victim := c.lru.Back()
 		if victim == nil {
@@ -144,11 +147,10 @@ func (c *Cache) evict() {
 		}
 		cand := victim.Value.(*entry)
 		sketch := c.sketch.Estimate([]byte(cand.key))
-		// 简化 TinyLFU：被频繁访问的 victim 保留（这里判 0）
-		if sketch > 0 && cand != nil {
-			// 把 victim 移到前面，避免反复选到它
+		// 简化 TinyLFU：被频繁访问且未尝试过的 victim 保留
+		if sketch > 0 && !tried[cand.key] {
+			tried[cand.key] = true
 			c.lru.MoveToFront(victim)
-			// 下一个被选的是更早的
 			continue
 		}
 		c.lru.Remove(victim)

@@ -29,6 +29,9 @@ type Summary struct {
 // Of 返回一个值的概要信息。
 func Of(v any) Summary {
 	rt := reflect.TypeOf(v)
+	if rt == nil {
+		return Summary{Type: "<nil>", Kind: "Invalid", Path: ""}
+	}
 	return Summary{
 		Type:   rt.String(),
 		Kind:   rt.Kind().String(),
@@ -53,7 +56,11 @@ func Fields(v any, maxDepth int) []Field {
 func String(v any) string {
 	s := Of(v)
 	var b strings.Builder
-	fmt.Fprintf(&b, "type=%s kind=%s depth=%d fields=%d", s.Type, s.Kind, s.Depth, s.Fields)
+	short := s.Type
+	if dot := strings.LastIndex(short, "."); dot >= 0 {
+		short = short[dot+1:]
+	}
+fmt.Fprintf(&b, "type=%s kind=%s depth=%d fields=%d", short, s.Kind, s.Depth, s.Fields)
 	return b.String()
 }
 

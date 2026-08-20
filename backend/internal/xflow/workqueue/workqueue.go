@@ -54,15 +54,15 @@ func (q *Queue) AddAfter(k string, v any, d time.Duration) {
 	q.Add(k, v, time.Now().Add(d))
 }
 
-// Len 返回项目数。
-func (q *Queue) Len() int {
+// Size 返回项目数（线程安全）。
+func (q *Queue) Size() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.hp)
 }
 
 // Len implements heap.Interface.
-func (q *Queue) LenHeap() int { return len(q.hp) }
+func (q *Queue) Len() int { return len(q.hp) }
 
 // Less implements heap.Interface.
 func (q *Queue) Less(i, j int) bool { return q.hp[i].At.Before(q.hp[j].At) }
