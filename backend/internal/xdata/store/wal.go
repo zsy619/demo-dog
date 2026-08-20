@@ -15,27 +15,26 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// WAL is a tiny append-only log that records every insert operation
-// as a length-prefixed gob blob. On startup the snapshot restores the
-// in-memory state and the WAL is replayed to bring the engine up to
-// date without losing the last few seconds of writes between
-// checkpoints.
+// WAL 是一个极简的仅追加日志，将每次插入操作
+// 记录为带长度前缀的 gob 二进制块。启动时，快照用于恢复
+// 内存中的状态，然后重放 WAL 以使引擎追平最新数据，
+// 避免在两次检查点之间丢失最后几秒的写入。
 //
-// The format is intentionally dead simple:
+// 该格式有意做到极简：
 //
-//	header  8 bytes magic 0xD06
-//         4 bytes version (currently 1)
-//         4 bytes op code (1=log, 2=metric, 3=span)
-//         4 bytes length of the gob payload
-//         N bytes of gob-encoded model.{LogRecord,MetricPoint,SpanRecord}
+//	header  8 字节 magic 0xD06
+//         4 字节 version（当前为 1）
+//         4 字节 op code（1=log，2=metric，3=span）
+//         4 字节 gob 负载的长度
+//         N 字节经 gob 编码的 model.{LogRecord,MetricPoint,SpanRecord}
 //
-// Reads skip unknown op codes (forward compat) and corrupt frames are
-// truncated at the end of the file so the next open truncates them.
+// 读取时跳过未知的 op code（向前兼容），文件末尾的损坏帧
+// 会被截断，以便下次打开时将其丢弃。
 //
-// The WAL is fsynced on every Append. That is enough for demo-dog
-// because the bottleneck is the in-memory hot tier; the WAL only needs
-// to survive crashes between snapshots. Round 23.4 can swap in batched
-// fsync if write amplification becomes a problem.
+// WAL 在每次 Append 时都会执行 fsync。对 demo-dog 来说这已经足够，
+// 因为瓶颈在内存热层级；WAL 只需在两次快照之间
+// 抗住崩溃即可。第 23.4 轮可在写放大成为问题时
+// 切换到批量 fsync。
 type WAL struct {
 	mu sync.Mutex
 	f  *os.File
@@ -51,9 +50,9 @@ const (
 	opSpan   uint32 = 3
 )
 
-// OpenWAL opens (or creates) the WAL file at path. The file is
-// truncated to the last good record on open so a partial write at the
-// end is silently discarded.
+// OpenWAL 打开（或创建）位于 path 的 WAL 文件。打开时会
+// 将文件截断到最后一个完整记录处，末尾的不完整写入
+// 会被静默丢弃。
 func OpenWAL(path string) (*WAL, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
@@ -67,9 +66,9 @@ func OpenWAL(path string) (*WAL, error) {
 }
 
 func repairWAL(f *os.File) error {
-	// Walk the file from the start, locating the last truncated frame
-	// (if any). We do this in a single linear pass; for the demo
-	// workload a WAL rarely exceeds a few MB between snapshots.
+	// 从文件头开始遍历，定位最后一个被截断的帧
+	//（如有）。我们通过单次线性扫描完成此操作；
+	// 对于 demo 的负载而言，两次快照之间 WAL 很少超过几 MB。
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -86,7 +85,7 @@ func repairWAL(f *os.File) error {
 		}
 		magic := binary.BigEndian.Uint32(hdr[0:4])
 		if magic != walMagic {
-			// Corrupt frame: stop here and truncate.
+			// 损坏的帧：在此停止并截断。
 			break
 		}
 		_ = binary.BigEndian.Uint32(hdr[4:8])  // version

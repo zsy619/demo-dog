@@ -110,7 +110,7 @@ func TestScheduler_Tick(t *testing.T) {
 	if called != 1 {
 		t.Fatalf("called: %d", called)
 	}
-	// Same time = no re-fire.
+	// 时间相同，不重复触发。
 	if n2 := s.Tick(); n2 != 0 {
 		t.Fatalf("expected 0 on second tick, got %d", n2)
 	}

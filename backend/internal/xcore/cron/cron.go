@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// Schedule is a 5-field cron expression.
-// minute hour dom month dow
+// Schedule 是 5 段的 cron 表达式。
+// 字段顺序：minute hour dom month dow（分钟 小时 日 月 星期）
 type Schedule struct {
 	Minute map[int]bool
 	Hour   map[int]bool
@@ -20,8 +20,7 @@ type Schedule struct {
 	DOW    map[int]bool
 }
 
-// Parse parses a 5-field cron expression. Supports *, N,
-// N-M, */N, and comma lists.
+// Parse 解析一个 5 段 cron 表达式。支持 *、N、N-M、*/N 以及逗号列表。
 func Parse(expr string) (*Schedule, error) {
 	fields := strings.Fields(expr)
 	if len(fields) != 5 {
@@ -105,7 +104,7 @@ func parsePart(part string, lo, hi int, dst *map[int]bool) error {
 	return nil
 }
 
-// Match returns true when t satisfies the schedule.
+// Match 在 t 满足 schedule 时返回 true。
 func (s *Schedule) Match(t time.Time) bool {
 	if !s.Minute[t.Minute()] {
 		return false
@@ -122,8 +121,7 @@ func (s *Schedule) Match(t time.Time) bool {
 	return true
 }
 
-// Next returns the next time the schedule matches, strictly
-// after t.
+// Next 返回 schedule 匹配的下一次时间，严格在 t 之后。
 func (s *Schedule) Next(t time.Time) time.Time {
 	cur := t.Add(time.Minute)
 	cur = time.Date(cur.Year(), cur.Month(), cur.Day(), cur.Hour(), cur.Minute(), 0, 0, cur.Location())
@@ -136,7 +134,7 @@ func (s *Schedule) Next(t time.Time) time.Time {
 	return time.Time{}
 }
 
-// Task is a named scheduled job.
+// Task 表示一个具名定时任务。
 type Task struct {
 	Name string
 	Expr string
@@ -145,25 +143,25 @@ type Task struct {
 	run func(time.Time)
 }
 
-// Scheduler owns scheduled tasks.
+// Scheduler 持有定时任务集合。
 type Scheduler struct {
 	mu    sync.Mutex
 	tasks []*Task
 	now   func() time.Time
 }
 
-// New constructs an empty Scheduler.
+// New 构造一个空的 Scheduler。
 func New() *Scheduler {
 	return &Scheduler{now: time.Now}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖时间源（用于测试）。
 func (s *Scheduler) WithTime(now func() time.Time) *Scheduler {
 	s.now = now
 	return s
 }
 
-// Add registers a new task.
+// Add 注册一个新任务。
 func (s *Scheduler) Add(name, expr string, run func(time.Time)) error {
 	sched, err := Parse(expr)
 	if err != nil {
@@ -175,8 +173,7 @@ func (s *Scheduler) Add(name, expr string, run func(time.Time)) error {
 	return nil
 }
 
-// Tick evaluates every task and fires due ones. Returns the
-// number of tasks fired.
+// Tick 评估每个任务并触发到期任务，返回触发的任务数量。
 func (s *Scheduler) Tick() int {
 	s.mu.Lock()
 	tasks := make([]*Task, len(s.tasks))
@@ -194,7 +191,7 @@ func (s *Scheduler) Tick() int {
 	return n
 }
 
-// List returns the task names.
+// List 返回所有任务的名称。
 func (s *Scheduler) List() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

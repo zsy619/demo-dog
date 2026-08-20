@@ -34,7 +34,7 @@ func TestBucket_RefillCapped(t *testing.T) {
 	now := time.Now()
 	b := &Bucket{Capacity: 5, Refill: 100, Tokens: 5, LastRefil: now}
 	later := now.Add(1 * time.Hour)
-	// Burn all 5 quickly.
+	// 快速消耗全部 5 个令牌。
 	for i := 0; i < 5; i++ {
 		if !b.Allow(later) {
 			t.Fatal("should allow")
@@ -78,7 +78,7 @@ func TestManager_Remove(t *testing.T) {
 	m := NewManager(10, 1)
 	m.Set("acme", 1, 0)
 	m.Remove("acme")
-	// Now falls back to default.
+	// 现在回退到默认值。
 	ok, _ := m.Allow("acme")
 	if !ok {
 		t.Fatal("default fallback")

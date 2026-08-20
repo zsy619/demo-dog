@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-// Pool is a sync.Pool-style object pool with reuse hooks.
+// Pool 是一个类似 sync.Pool 风格、带复用钩子的对象池。
 type Pool[T any] struct {
 	pool      sync.Pool
 	new       func() T
@@ -16,15 +16,15 @@ type Pool[T any] struct {
 	discarded atomic.Uint64
 }
 
-// New constructs a Pool with the given factory and reset
-// hook. reset may be nil if no reset is needed.
+// New 使用给定的工厂函数和 reset 钩子构造一个 Pool。
+// 如果不需要 reset，可传入 nil。
 func New[T any](new func() T, reset func(T)) *Pool[T] {
 	p := &Pool[T]{new: new, reset: reset}
 	p.pool.New = func() any { p.created.Add(1); return new() }
 	return p
 }
 
-// Get retrieves an object from the pool.
+// Get 从池中取出一个对象。
 func (p *Pool[T]) Get() T {
 	v := p.pool.Get()
 	if v != nil {
@@ -33,8 +33,8 @@ func (p *Pool[T]) Get() T {
 	return v.(T)
 }
 
-// Put returns an object to the pool. Calls reset first if
-// set.
+// Put 将一个对象归还到池中。
+// 如果设置了 reset，则先调用 reset。
 func (p *Pool[T]) Put(v T) {
 	if p.reset != nil {
 		p.reset(v)
@@ -42,20 +42,19 @@ func (p *Pool[T]) Put(v T) {
 	p.pool.Put(v)
 }
 
-// Stats returns counter snapshot.
+// Stats 返回计数器快照。
 type Stats struct {
 	Created   uint64 `json:"created"`
 	Reused    uint64 `json:"reused"`
 	Discarded uint64 `json:"discarded"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回当前快照。
 func (p *Pool[T]) Stats() Stats {
 	return Stats{Created: p.created.Load(), Reused: p.reused.Load(), Discarded: p.discarded.Load()}
 }
 
-// Discard returns an object to GC and bumps the discarded
-// counter.
+// Discard 将一个对象归还给 GC，并递增 discarded 计数器。
 func (p *Pool[T]) Discard() {
 	p.discarded.Add(1)
 }

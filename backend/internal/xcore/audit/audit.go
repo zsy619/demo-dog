@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Event is one audit record.
+// Event 表示一条审计记录。
 type Event struct {
 	Tenant    string
 	Action    string
@@ -22,9 +22,9 @@ type Event struct {
 	Seq       uint64
 }
 
-// Chain maintains a per-tenant tamper-evident audit log.
-// Each event includes the SHA256 hash of the previous event
-// so any tampering breaks the chain.
+// Chain 为每个租户维护一条防篡改审计日志。
+// 每条事件都包含前一条事件的 SHA256 校验和，
+// 任何篡改都会导致链断裂。
 type Chain struct {
 	mu       sync.Mutex
 	tails    map[string]string   // tenant -> last hash
@@ -33,7 +33,7 @@ type Chain struct {
 	now      func() time.Time
 }
 
-// New constructs an empty chain.
+// New 构造一个空的 Chain。
 func New() *Chain {
 	return &Chain{
 		tails:   make(map[string]string),
@@ -43,13 +43,13 @@ func New() *Chain {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖时间源（用于测试）。
 func (c *Chain) WithTime(now func() time.Time) *Chain {
 	c.now = now
 	return c
 }
 
-// Append records an event for tenant.
+// Append 为租户记录一条事件。
 func (c *Chain) Append(tenant, action, actor, target string, meta map[string]string) *Event {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -67,8 +67,8 @@ func (c *Chain) Append(tenant, action, actor, target string, meta map[string]str
 	return e
 }
 
-// Verify walks the chain for tenant and returns the index
-// of the first broken event, or -1 if all OK.
+// Verify 检查指定租户的链，返回第一个被破坏的事件下标；
+// 若全部正常则返回 -1。
 func (c *Chain) Verify(tenant string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -86,7 +86,7 @@ func (c *Chain) Verify(tenant string) int {
 	return -1
 }
 
-// Events returns a copy of events for tenant.
+// Events 返回指定租户事件的副本。
 func (c *Chain) Events(tenant string) []*Event {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -107,25 +107,25 @@ func (c *Chain) Events(tenant string) []*Event {
 	return out
 }
 
-// TenantSeq returns the last seq for tenant (0 if empty).
+// TenantSeq 返回指定租户最后的事件序号（若为空则为 0）。
 func (c *Chain) TenantSeq(tenant string) uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.seqs[tenant]
 }
 
-// TenantTail returns the last hash for tenant ("" if empty).
+// TenantTail 返回指定租户最后的事件哈希（若为空则为 ""）。
 func (c *Chain) TenantTail(tenant string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.tails[tenant]
 }
 
-// ErrMissing is returned when no events exist for tenant.
+// ErrMissing 在租户没有任何事件时返回。
 var ErrMissing = errors.New("no events for tenant")
 
-// VerifyAll verifies every tenant chain and returns the first
-// broken tenant + index, or nil.
+// VerifyAll 校验所有租户的链，返回首个被破坏的租户与下标；
+// 若全部正常则返回 nil。
 func (c *Chain) VerifyAll() map[string]int {
 	c.mu.Lock()
 	tenants := make([]string, 0, len(c.history))

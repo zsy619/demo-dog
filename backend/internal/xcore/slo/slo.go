@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// SLO is one service-level objective.
+// SLO 表示一项服务等级目标。
 type SLO struct {
 	Name        string
 	Description string
@@ -18,7 +18,7 @@ type SLO struct {
 	Window      time.Duration
 }
 
-// Validate runs integrity checks on the SLO.
+// Validate 对 SLO 执行完整性检查。
 func (s *SLO) Validate() error {
 	if s.Name == "" {
 		return errors.New("name required")
@@ -32,17 +32,17 @@ func (s *SLO) Validate() error {
 	return nil
 }
 
-// Sample is one observation:
-//   Success = true if the request was successful.
-//   Took   = the request duration.
+// Sample 表示一次观测：
+//   Success = true 表示请求成功。
+//   Took   = 请求耗时。
 type Sample struct {
 	Success bool
 	Took    time.Duration
 	At      time.Time
 }
 
-// Tracker aggregates samples per SLO and produces a Status
-// (current success ratio, error budget remaining).
+// Tracker 按 SLO 聚合样本并产出 Status
+//（当前成功率、剩余错误预算）。
 type Tracker struct {
 	mu       sync.Mutex
 	defs     map[string]*SLO
@@ -52,14 +52,14 @@ type Tracker struct {
 	now      func() time.Time
 }
 
-// Event is the stored form of a Sample.
+// Event 是 Sample 的存储形态。
 type Event struct {
 	Success bool
 	Took    time.Duration
 	At      time.Time
 }
 
-// NewTracker constructs an empty tracker.
+// NewTracker 构造一个空的 Tracker。
 func NewTracker() *Tracker {
 	return &Tracker{
 		defs:   make(map[string]*SLO),
@@ -68,13 +68,13 @@ func NewTracker() *Tracker {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖时间源（用于测试）。
 func (t *Tracker) WithTime(now func() time.Time) *Tracker {
 	t.now = now
 	return t
 }
 
-// Register adds an SLO definition.
+// Register 添加一个 SLO 定义。
 func (t *Tracker) Register(s *SLO) error {
 	if err := s.Validate(); err != nil {
 		return err
@@ -89,14 +89,14 @@ func (t *Tracker) Register(s *SLO) error {
 	return nil
 }
 
-// MustRegister panics on error.
+// MustRegister 在出错时直接 panic。
 func (t *Tracker) MustRegister(s *SLO) {
 	if err := t.Register(s); err != nil {
 		panic(err)
 	}
 }
 
-// Record stores a sample for an SLO.
+// Record 为某个 SLO 存储一次样本。
 func (t *Tracker) Record(name string, sample Sample) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -107,7 +107,7 @@ func (t *Tracker) Record(name string, sample Sample) {
 	t.evictLocked(name)
 }
 
-// Status returns the current SLO status.
+// Status 表示当前 SLO 的状态。
 type Status struct {
 	Name       string        `json:"name"`
 	Target     float64       `json:"target"`
@@ -124,7 +124,7 @@ type Status struct {
 	P99        time.Duration `json:"p99"`
 }
 
-// Compute returns the Status for one SLO.
+// Compute 返回某个 SLO 的 Status。
 func (t *Tracker) Compute(name string) (Status, bool) {
 	t.mu.Lock()
 	def, ok := t.defs[name]
@@ -180,7 +180,7 @@ func (t *Tracker) Compute(name string) (Status, bool) {
 	}, true
 }
 
-// Snapshot returns the status of every SLO.
+// Snapshot 返回所有 SLO 的状态。
 func (t *Tracker) Snapshot() []Status {
 	t.mu.Lock()
 	names := make([]string, 0, len(t.defs))
@@ -198,10 +198,10 @@ func (t *Tracker) Snapshot() []Status {
 	return out
 }
 
-// Alerts returns alert count.
+// Alerts 返回告警计数。
 func (t *Tracker) Alerts() uint64 { return t.alerts.Load() }
 
-// Reports returns the total Compute call count.
+// Reports 返回 Compute 的累计调用次数。
 func (t *Tracker) Reports() uint64 { return t.reports.Load() }
 
 func (t *Tracker) evictLocked(name string) {

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Bucket is one tenant's token bucket.
+// Bucket 表示某个租户的令牌桶。
 type Bucket struct {
 	Tenant    string
 	Capacity  float64
@@ -16,8 +16,8 @@ type Bucket struct {
 	LastRefil time.Time
 }
 
-// Allow returns true when one token can be consumed; it
-// refills the bucket based on elapsed time.
+// Allow 在可消费一个令牌时返回 true；
+// 它会根据经过的时间补充令牌。
 func (b *Bucket) Allow(now time.Time) bool {
 	elapsed := now.Sub(b.LastRefil).Seconds()
 	if elapsed > 0 {
@@ -34,19 +34,18 @@ func (b *Bucket) Allow(now time.Time) bool {
 	return false
 }
 
-// ErrTenantNotConfigured is returned when Allow is called for
-// a tenant without a configured bucket.
+// ErrTenantNotConfigured 在对一个未配置桶的租户调用 Allow 时返回。
 var ErrTenantNotConfigured = errors.New("tenant quota not configured")
 
-// Manager owns per-tenant buckets.
+// Manager 管理各个租户的桶。
 type Manager struct {
 	mu       sync.RWMutex
 	buckets  map[string]*Bucket
 	defaults Bucket
 }
 
-// NewManager returns a Manager with a default bucket for
-// tenants that have no per-tenant override.
+// NewManager 返回一个 Manager，并为没有
+// 单独覆盖的租户提供默认桶。
 func NewManager(defaultCap, defaultRefill float64) *Manager {
 	return &Manager{
 		buckets: make(map[string]*Bucket),
@@ -57,7 +56,7 @@ func NewManager(defaultCap, defaultRefill float64) *Manager {
 	}
 }
 
-// Set configures or replaces a tenant bucket.
+// Set 配置或替换一个租户桶。
 func (m *Manager) Set(tenant string, cap, refill float64) {
 	m.mu.Lock()
 	m.buckets[tenant] = &Bucket{
@@ -67,14 +66,14 @@ func (m *Manager) Set(tenant string, cap, refill float64) {
 	m.mu.Unlock()
 }
 
-// Remove drops a tenant override (falls back to default).
+// Remove 删除某个租户的自定义配置（回退到默认值）。
 func (m *Manager) Remove(tenant string) {
 	m.mu.Lock()
 	delete(m.buckets, tenant)
 	m.mu.Unlock()
 }
 
-// Allow consumes one token from the tenant's bucket.
+// Allow 从该租户的桶中消费一个令牌。
 func (m *Manager) Allow(tenant string) (bool, error) {
 	m.mu.RLock()
 	b, ok := m.buckets[tenant]
@@ -88,8 +87,8 @@ func (m *Manager) Allow(tenant string) (bool, error) {
 	return b.Allow(time.Now()), nil
 }
 
-// Tokens returns the current token count (after a virtual
-// refill). For observability.
+// Tokens 返回当前令牌数量（经过虚拟补充后）。
+// 用于可观测性。
 func (m *Manager) Tokens(tenant string) float64 {
 	m.mu.RLock()
 	b, ok := m.buckets[tenant]
@@ -106,7 +105,7 @@ func (m *Manager) Tokens(tenant string) float64 {
 	return t
 }
 
-// Stats returns per-tenant current state.
+// Stats 表示单个租户的当前状态。
 type Stats struct {
 	Tenant   string  `json:"tenant"`
 	Capacity float64 `json:"capacity"`
@@ -114,8 +113,8 @@ type Stats struct {
 	Tokens   float64 `json:"tokens"`
 }
 
-// Snapshot returns one Stats entry per configured tenant +
-// the default.
+// Snapshot 为每个已配置的租户返回一条 Stats，
+// 同时包含默认桶的条目。
 func (m *Manager) Snapshot() []Stats {
 	m.mu.RLock()
 	tenants := make([]string, 0, len(m.buckets))

@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// HistogramVec is a labelled histogram.
+// HistogramVec 是一个带标签的直方图。
 type HistogramVec struct {
 	mu        sync.RWMutex
 	name      string
@@ -18,12 +18,12 @@ type HistogramVec struct {
 	values    map[string]*histogramSeries
 }
 
-// DefaultBuckets are the Prometheus default bucket boundaries.
+// DefaultBuckets 是 Prometheus 默认的桶边界。
 var DefaultBuckets = []float64{
 	0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 }
 
-// NewHistogramVec constructs a labelled histogram.
+// NewHistogramVec 构造一个带标签的直方图。
 func NewHistogramVec(name, help string, labelKeys []string, buckets []float64) *HistogramVec {
 	if len(buckets) == 0 {
 		buckets = DefaultBuckets
@@ -44,7 +44,7 @@ func (h *HistogramVec) Help() string         { return h.help }
 func (h *HistogramVec) Type() string         { return "histogram" }
 func (h *HistogramVec) LabelNames() []string { return h.labelKeys }
 
-// WithLabelValues returns the histogram series.
+// WithLabelValues 返回直方图序列。
 func (h *HistogramVec) WithLabelValues(values ...string) (*HistogramSeries, error) {
 	if len(values) != len(h.labelKeys) {
 		return nil, fmt.Errorf("histogram %q wants %d label values, got %d", h.name, len(h.labelKeys), len(values))
@@ -63,7 +63,7 @@ func (h *HistogramVec) WithLabelValues(values ...string) (*HistogramSeries, erro
 	return &HistogramSeries{s, h}, nil
 }
 
-// HistogramSeries is one labelled histogram.
+// HistogramSeries 表示一条带标签的直方图序列。
 type HistogramSeries struct {
 	*histogramSeries
 	vec *HistogramVec
@@ -76,7 +76,7 @@ type histogramSeries struct {
 	sum      float64
 }
 
-// Observe records a single value.
+// Observe 记录一次观测值。
 func (s *HistogramSeries) Observe(v float64) {
 	s.histogramSeries.count++
 	s.histogramSeries.sum += v
@@ -87,13 +87,13 @@ func (s *HistogramSeries) Observe(v float64) {
 	}
 }
 
-// Count returns the number of observations.
+// Count 返回观测次数。
 func (s *HistogramSeries) Count() uint64 { return s.histogramSeries.count }
 
-// Sum returns the sum of observations.
+// Sum 返回观测值的总和。
 func (s *HistogramSeries) Sum() float64 { return s.histogramSeries.sum }
 
-// WriteText emits the histogram lines.
+// WriteText 输出直方图的文本行。
 func (h *HistogramVec) WriteText(w io.Writer) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -124,7 +124,7 @@ func (h *HistogramVec) WriteText(w io.Writer) error {
 				return err
 			}
 		}
-		// +Inf bucket = total count
+		// +Inf 桶 = 总样本数
 		lvs := append([]string{}, s.labels...)
 		lvs = append(lvs, "+Inf")
 		if _, err := io.WriteString(w, h.name+"_bucket"); err != nil {

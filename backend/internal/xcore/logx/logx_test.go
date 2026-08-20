@@ -162,7 +162,7 @@ func TestLogger_ConcurrentSafe(t *testing.T) {
 	if buf.Len() == 0 {
 		t.Fatal("expected output")
 	}
-	// Verify each line parses.
+	// 校验每一行都能解析。
 	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
 		var x map[string]any
 		if err := json.Unmarshal([]byte(line), &x); err != nil {

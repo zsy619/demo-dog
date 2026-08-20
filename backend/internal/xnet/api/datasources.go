@@ -2,10 +2,10 @@ package api
 
 import "sync"
 
-// Datasource describes one logical backend that the collector can route
-// queries to. The classic Doris simulation is registered by default;
-// the registry can be extended by future backends (ClickHouse, ES,
-// Timescale, etc.) without touching the HTTP handler.
+// Datasource 描述采集器可以路由查询的一个逻辑后端。
+// 默认注册经典的 Doris 模拟器；
+// 注册表可以在不改动 HTTP 处理器的前提下，
+// 由未来的后端（ClickHouse、ES、Timescale 等）进行扩展。
 type Datasource struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
@@ -20,12 +20,12 @@ type Datasource struct {
 	PluginVersion string   `json:"plugin_version,omitempty"`
 }
 
-// datasourceRegistry is a tiny in-memory registry. Operations are
-// thread-safe so other packages (e.g. an external Doris driver plugin)
-// can register at startup.
+// datasourceRegistry 是一个轻量的内存注册表。操作是线程安全的，
+// 以便其他包（例如外部的 Doris 驱动插件）
+// 可以在启动时进行注册。
 type datasourceRegistry struct {
-	mu       sync.RWMutex
-	sources  []Datasource
+	mu      sync.RWMutex
+	sources []Datasource
 }
 
 func newDatasourceRegistry() *datasourceRegistry {
@@ -48,9 +48,9 @@ func newDatasourceRegistry() *datasourceRegistry {
 	}
 }
 
-// Add registers a new datasource. Caller-supplied IDs override any
-// pre-existing entry with the same ID (so plugins can replace the
-// built-in Doris simulator with a real connection at startup).
+// Add 注册一个新的数据源。调用方提供的 ID 会覆盖
+// 任何已存在且 ID 相同的条目
+// （因此插件可以在启动时用真实的连接替换内置的 Doris 模拟器）。
 func (r *datasourceRegistry) Add(d Datasource) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -63,7 +63,7 @@ func (r *datasourceRegistry) Add(d Datasource) {
 	r.sources = append(r.sources, d)
 }
 
-// List returns a snapshot of registered datasources.
+// List 返回已注册数据源的快照。
 func (r *datasourceRegistry) List() []Datasource {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

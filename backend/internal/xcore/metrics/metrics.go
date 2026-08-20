@@ -1,20 +1,19 @@
 // Package metrics Prometheus 指标注册器：Counter / Gauge / Histogram。
 package metrics
 
-// Prometheus-compatible metrics registry.
+// Prometheus 兼容的指标注册器。
 //
-// Implements just enough of the Prometheus exposition format
-// to ship a working /metrics endpoint without third-party deps.
-// Supports Counter / Gauge / Histogram with multi-tenant
-// labels.
+// 仅实现 Prometheus 文本暴露格式的关键部分，
+// 即可在不使用第三方依赖的前提下提供可用的 /metrics 端点。
+// 支持 Counter / Gauge / Histogram，并支持多租户标签。
 //
-// The exposition format follows the OpenMetrics text format:
+// 暴露格式遵循 OpenMetrics 文本格式：
 //
 //   # HELP <name> <description>
 //   # TYPE <name> counter|gauge|histogram
 //   <name>{label="value"} 7
 //
-// Histograms emit the standard _bucket / _count / _sum series.
+// 直方图会输出标准的 _bucket / _count / _sum 三类序列。
 
 import (
 	"fmt"
@@ -24,7 +23,7 @@ import (
 	"sync"
 )
 
-// Metric is the contract every metric type implements.
+// Metric 是每种指标类型都必须实现的契约。
 type Metric interface {
 	Name() string
 	Help() string
@@ -33,19 +32,18 @@ type Metric interface {
 	LabelNames() []string
 }
 
-// Registry owns the metric table.
+// Registry 持有指标表。
 type Registry struct {
 	mu      sync.RWMutex
 	metrics map[string]Metric
 }
 
-// NewRegistry returns an empty registry.
+// NewRegistry 返回一个空的注册器。
 func NewRegistry() *Registry {
 	return &Registry{metrics: make(map[string]Metric)}
 }
 
-// Register adds a metric; returns error on name conflict or
-// invalid name.
+// Register 添加一个指标；若名称冲突或非法则返回错误。
 func (r *Registry) Register(m Metric) error {
 	if !validName(m.Name()) {
 		return fmt.Errorf("invalid metric name %q", m.Name())
@@ -59,14 +57,14 @@ func (r *Registry) Register(m Metric) error {
 	return nil
 }
 
-// MustRegister panics on duplicate / invalid name.
+// MustRegister 在重名或名称非法时直接 panic。
 func (r *Registry) MustRegister(m Metric) {
 	if err := r.Register(m); err != nil {
 		panic(err)
 	}
 }
 
-// Get returns a registered metric by name.
+// Get 按名称返回一个已注册的指标。
 func (r *Registry) Get(name string) (Metric, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -74,7 +72,7 @@ func (r *Registry) Get(name string) (Metric, bool) {
 	return m, ok
 }
 
-// Names returns the registered metric names sorted.
+// Names 返回已注册指标名称（已排序）。
 func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -86,7 +84,7 @@ func (r *Registry) Names() []string {
 	return out
 }
 
-// WriteText writes the Prometheus text exposition format.
+// WriteText 按 Prometheus 文本暴露格式输出。
 func (r *Registry) WriteText(w io.Writer) error {
 	r.mu.RLock()
 	metrics := make([]Metric, 0, len(r.metrics))
@@ -135,7 +133,7 @@ func escapeHelp(s string) string {
 	return s
 }
 
-// WriteLabels formats a label set for the text format.
+// WriteLabels 为文本格式格式化一组标签。
 func WriteLabels(w io.Writer, names []string, values []string) error {
 	if len(names) == 0 {
 		return nil

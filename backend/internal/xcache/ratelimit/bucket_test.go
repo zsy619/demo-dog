@@ -17,7 +17,7 @@ func TestTokenBucket_BurstAndRefill(t *testing.T) {
 	if err := l.AllowTokenBucket("k"); !errors.Is(err, ErrLimited) {
 		t.Fatal("expected limited after burst")
 	}
-	// Advance 3 seconds; refill = 3 tokens.
+	// 推进 3 秒；补充令牌数 = 3。
 	fakeNow = fakeNow.Add(3 * time.Second)
 	for i := 0; i < 3; i++ {
 		if err := l.AllowTokenBucket("k"); err != nil {
@@ -31,7 +31,7 @@ func TestTokenBucket_BurstAndRefill(t *testing.T) {
 
 func TestTokenBucket_DefaultSettings(t *testing.T) {
 	l := New(Settings{})
-	// Should allow at least the default capacity.
+	// 至少应允许达到默认容量。
 	for i := 0; i < 100; i++ {
 		if err := l.AllowTokenBucket("k"); err != nil {
 			t.Fatalf("default burst %d: %v", i, err)
@@ -67,15 +67,15 @@ func TestTokenBucket_Tokens(t *testing.T) {
 func TestLeakyBucket_Smooth(t *testing.T) {
 	fakeNow := time.Unix(1700000000, 0)
 	l := New(Settings{Capacity: 1, LeakPerSec: 1, Now: func() time.Time { return fakeNow }})
-	// First request goes through (bucket capacity 1).
+	// 第一个请求通过（桶容量为 1）。
 	if err := l.AllowLeakyBucket("k"); err != nil {
 		t.Fatal(err)
 	}
-	// Second one is queued (level=1, fill = 1).
+	// 第二个被限流（level=1, fill = 1）。
 	if err := l.AllowLeakyBucket("k"); !errors.Is(err, ErrLimited) {
 		t.Fatal("second should be limited")
 	}
-	// 1 second later, the level has leaked down to 0.
+	// 1 秒后，level 漏至 0。
 	fakeNow = fakeNow.Add(2 * time.Second)
 	if err := l.AllowLeakyBucket("k"); err != nil {
 		t.Fatal(err)

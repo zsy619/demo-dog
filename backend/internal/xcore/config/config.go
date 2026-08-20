@@ -1,18 +1,16 @@
 // Package config 配置加载：从环境变量 / 配置文件 / 默认值按优先级读取。
 package config
 
-// Hot-reload configuration.
+// 热加载配置。
 //
-// The collector holds a runtime config struct that the
-// operator can update without restarting. Round 57 introduces
-// the Watcher that polls a file every Interval, parses it
-// (JSON or YAML), and runs a callback when the value changes.
+// Collector 持有一份运行时配置结构，运维可以在不重启的前提下更新它。
+// Round 57 引入的 Watcher 会每隔 Interval 轮询一次文件，
+// 解析其内容（JSON 或 YAML），并在值发生变化时触发回调。
 //
-// YAML support requires gopkg.in/yaml.v2 which is a third
-// party dependency. To honour the stdlib-only constraint the
-// default format is JSON; YAML support is conditional on the
-// caller wiring a YAML parser. The Config struct here is the
-// JSON-friendly shape.
+// YAML 支持依赖于第三方包 gopkg.in/yaml.v2。
+// 为遵循"仅使用标准库"的约束，默认格式为 JSON；
+// YAML 支持需由调用方自行接入 YAML 解析器。本文件中的 Config 结构
+// 采用 JSON 友好的形态。
 
 import (
 	"context"
@@ -26,9 +24,8 @@ import (
 	"time"
 )
 
-// Config is the runtime configuration shape used by the
-// collector. It is intentionally small so the operator can
-// understand the whole surface at a glance.
+// Config 是 collector 使用的运行时配置结构。
+// 故意保持精简，便于运维一眼掌握全部配置项。
 type Config struct {
 	LogLevel    string        `json:"log_level"`
 	IngestAddr  string        `json:"ingest_addr"`
@@ -39,7 +36,7 @@ type Config struct {
 	PeerTimeout time.Duration `json:"peer_timeout"`
 }
 
-// Validate runs basic checks on the config.
+// Validate 对配置执行基本的合法性检查。
 func (c *Config) Validate() error {
 	if c.IngestAddr == "" {
 		return errors.New("ingest_addr required")
@@ -53,7 +50,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Default returns the production defaults.
+// Default 返回生产环境默认值。
 func Default() Config {
 	return Config{
 		LogLevel:    "info",
@@ -66,8 +63,7 @@ func Default() Config {
 	}
 }
 
-// Parse reads JSON bytes into a Config, applying defaults
-// for missing fields.
+// Parse 将 JSON 字节解析为 Config，并对缺失字段填充默认值。
 func Parse(data []byte) (Config, error) {
 	var c Config
 	if len(data) == 0 {
@@ -103,7 +99,7 @@ func Parse(data []byte) (Config, error) {
 	return c, nil
 }
 
-// Load reads a file from disk and returns a parsed Config.
+// Load 从磁盘读取文件并返回解析后的 Config。
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -112,16 +108,14 @@ func Load(path string) (Config, error) {
 	return Parse(data)
 }
 
-// Hash computes a stable hash of the config (used to detect
-// reload without doing deep equality).
+// Hash 计算配置的稳定哈希（用于在不进行深度比较的前提下检测重载）。
 func (c *Config) Hash() string {
 	b, _ := json.Marshal(c)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
 
-// Watcher polls a file and fires OnChange when its hash
-// differs from the last applied hash.
+// Watcher 轮询文件，当哈希与上一次应用的哈希不一致时触发 OnChange。
 type Watcher struct {
 	mu        sync.Mutex
 	path      string
@@ -136,7 +130,7 @@ type Watcher struct {
 	applyNew  bool
 }
 
-// NewWatcher returns a watcher that polls path every interval.
+// NewWatcher 返回一个每隔 interval 轮询一次 path 的 Watcher。
 func NewWatcher(path string, interval time.Duration, onChange func(Config)) *Watcher {
 	return &Watcher{
 		path:     path,
@@ -146,7 +140,7 @@ func NewWatcher(path string, interval time.Duration, onChange func(Config)) *Wat
 	}
 }
 
-// Run starts the polling loop. Cancelling ctx stops it.
+// Run 启动轮询循环。取消 ctx 即可停止。
 func (w *Watcher) Run(ctx context.Context) error {
 	w.mu.Lock()
 	if w.runOnce {
@@ -155,8 +149,8 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 	w.runOnce = true
 	w.mu.Unlock()
-	// Apply once at start so onChange always gets called
-	// with a non-zero config.
+	// 启动时先应用一次，确保 onChange 始终
+	// 收到一个非零配置。
 	cfg, err := Load(w.path)
 	if err != nil {
 		w.errors++
@@ -182,7 +176,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 }
 
-// Stop signals Run to return.
+// Stop 通知 Run 返回。
 func (w *Watcher) Stop() {
 	select {
 	case <-w.stopCh:
@@ -191,14 +185,14 @@ func (w *Watcher) Stop() {
 	}
 }
 
-// Current returns the most recently applied config snapshot.
+// Current 返回最近一次应用的配置快照。
 func (w *Watcher) Current() Config {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.cur
 }
 
-// Stats returns reload + error counters.
+// Stats 表示重载与错误计数器。
 type Stats struct {
 	Path      string `json:"path"`
 	Interval  string `json:"interval"`
@@ -207,7 +201,7 @@ type Stats struct {
 	Hash      string `json:"hash"`
 }
 
-// Stats returns the watcher counters.
+// Stats 返回 Watcher 的计数器。
 func (w *Watcher) Stats() Stats {
 	w.mu.Lock()
 	defer w.mu.Unlock()

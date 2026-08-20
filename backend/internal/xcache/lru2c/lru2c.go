@@ -6,10 +6,9 @@ import (
 	"sync"
 )
 
-// Cache is a bounded LRU with second-chance eviction. Each
-// entry has a referenced bit; eviction evicts the first
-// unreferenced entry found in LRU order, granting a second
-// chance (clearing the bit) if all are referenced.
+// Cache 是带有二次机会淘汰策略的有界 LRU 缓存。
+// 每个条目都有一个 referenced 位；淘汰时按 LRU 顺序查找
+// 第一个未引用条目，若全部被引用则给予二次机会（清除该位）。
 type Cache[K comparable, V any] struct {
 	mu       sync.Mutex
 	capacity int
@@ -27,7 +26,7 @@ type entry[K comparable, V any] struct {
 	elem  *list.Element
 }
 
-// New creates a Cache with the given capacity.
+// New 创建一个指定容量的 Cache。
 func New[K comparable, V any](capacity int) *Cache[K, V] {
 	if capacity <= 0 {
 		capacity = 64
@@ -39,8 +38,7 @@ func New[K comparable, V any](capacity int) *Cache[K, V] {
 	}
 }
 
-// Get returns the value for key. Moves the entry to the
-// front and sets the referenced bit.
+// Get 返回 key 对应的值。会将条目移到队首并设置 referenced 位。
 func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -56,7 +54,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return e.value, true
 }
 
-// Peek returns the value without updating LRU order.
+// Peek 返回值但不会更新 LRU 顺序。
 func (c *Cache[K, V]) Peek(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -68,7 +66,7 @@ func (c *Cache[K, V]) Peek(key K) (V, bool) {
 	return e.value, true
 }
 
-// Put inserts or updates an entry. Evicts if over capacity.
+// Put 插入或更新一个条目。超出容量时进行淘汰。
 func (c *Cache[K, V]) Put(key K, value V) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -86,7 +84,7 @@ func (c *Cache[K, V]) Put(key K, value V) {
 	}
 }
 
-// Delete removes a key.
+// Delete 删除一个 key。
 func (c *Cache[K, V]) Delete(key K) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -96,14 +94,14 @@ func (c *Cache[K, V]) Delete(key K) {
 	}
 }
 
-// Len returns the current size.
+// Len 返回当前大小。
 func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.order.Len()
 }
 
-// Stats returns counters.
+// Stats 表示计数器集合。
 type Stats struct {
 	Hits    int `json:"hits"`
 	Misses  int `json:"misses"`
@@ -112,7 +110,7 @@ type Stats struct {
 	Cap     int `json:"cap"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回当前快照。
 func (c *Cache[K, V]) Stats() Stats {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -130,7 +128,7 @@ func (c *Cache[K, V]) evictLocked() {
 		}
 		ent.ref = false
 	}
-	// If everything was referenced, evict the back (LRU).
+	// 若全部条目都被引用，则淘汰队尾（LRU）。
 	if e := c.order.Back(); e != nil {
 		ent := e.Value.(*entry[K, V])
 		c.order.Remove(e)

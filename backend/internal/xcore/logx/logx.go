@@ -1,19 +1,17 @@
 // Package logx 结构化日志接口：键值对风格的轻量日志输出。
 package logx
 
-// JSON structured logger.
+// JSON 结构化日志器。
 //
-// Single-line JSON output: ts, level, msg, plus caller-attached
-// fields. Designed for ship-to-Loki / ship-to-Elastic use
-// cases. Stdlib-only, no third-party deps.
+// 单行 JSON 输出：ts、level、msg，再加上调用方附加的字段。
+// 面向 ship-to-Loki / ship-to-Elastic 等场景设计。
+// 仅使用标准库，不引入第三方依赖。
 //
-// Logger is safe for concurrent use. The With* family
-// returns a derived logger that always emits those fields.
-// The Err / Bool / Int / Str / Dur / Time helpers are chainable.
+// Logger 支持并发安全使用。With* 系列方法返回一个派生 Logger，
+// 它会始终输出这些字段。Err / Bool / Int / Str / Dur / Time 辅助函数均可链式调用。
 //
-// Levels: trace < debug < info < warn < error < fatal. The
-// minimum level is settable per logger; the package level
-// controls the default minimum for new loggers.
+// 日志级别：trace < debug < info < warn < error < fatal。
+// 最小级别可在每个 Logger 上单独设置；包级最小级别则控制新 Logger 的默认值。
 
 import (
 	"encoding/json"
@@ -26,7 +24,7 @@ import (
 	"time"
 )
 
-// Level is a log level.
+// Level 表示日志级别。
 type Level int
 
 const (
@@ -56,7 +54,7 @@ func (l Level) String() string {
 	return "unknown"
 }
 
-// ParseLevel maps a string to a Level. Empty -> LevelInfo.
+// ParseLevel 将字符串映射为 Level。空字符串映射为 LevelInfo。
 func ParseLevel(s string) Level {
 	switch s {
 	case "trace":
@@ -75,12 +73,12 @@ func ParseLevel(s string) Level {
 	return LevelInfo
 }
 
-// Encoder serialises a record to bytes.
+// Encoder 将一条日志记录序列化为字节。
 type Encoder interface {
 	Encode(*Record) ([]byte, error)
 }
 
-// Record is one log event.
+// Record 表示一条日志事件。
 type Record struct {
 	Time    time.Time
 	Level   Level
@@ -88,13 +86,13 @@ type Record struct {
 	Fields  []Field
 }
 
-// Field is one key/value pair.
+// Field 表示一对键值。
 type Field struct {
 	Key   string
 	Value any
 }
 
-// Field constructors.
+// Field 构造函数集合。
 func Str(k, v string) Field        { return Field{k, v} }
 func Int(k string, v int) Field    { return Field{k, v} }
 func Int64(k string, v int64) Field { return Field{k, v} }
@@ -111,11 +109,10 @@ func Time(k string, v time.Time) Field {
 }
 func Any(k string, v any) Field { return Field{k, v} }
 
-// JSONEncoder is the default encoder.
+// JSONEncoder 是默认的编码器。
 type JSONEncoder struct{}
 
-// Encode marshals r to a single JSON line (no trailing
-// newline; the writer adds one).
+// Encode 将 r 编码为单行 JSON（不含结尾换行，由写入器补上）。
 func (JSONEncoder) Encode(r *Record) ([]byte, error) {
 	m := make(map[string]any, len(r.Fields)+3)
 	m["ts"] = r.Time.UTC().Format(time.RFC3339Nano)
@@ -127,7 +124,7 @@ func (JSONEncoder) Encode(r *Record) ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// Logger writes records to an io.Writer with a minimum level.
+// Logger 将记录写入 io.Writer，并按最小级别过滤。
 type Logger struct {
 	mu      sync.Mutex
 	w       io.Writer
@@ -138,7 +135,7 @@ type Logger struct {
 	pool    sync.Pool
 }
 
-// New returns a Logger that writes to w with the given level.
+// New 返回一个将日志写入 w 的 Logger，并指定最小级别。
 func New(w io.Writer, level Level) *Logger {
 	l := &Logger{
 		w:   w,
@@ -150,17 +147,16 @@ func New(w io.Writer, level Level) *Logger {
 	return l
 }
 
-// Default is a process-global logger that writes to stdout at
-// info level.
+// Default 是进程级全局 Logger，向 stdout 输出 info 级别日志。
 var Default = New(os.Stdout, LevelInfo)
 
-// SetLevel changes the minimum level.
+// SetLevel 改变最小级别。
 func (l *Logger) SetLevel(level Level) { l.min.Store(int32(level)) }
 
-// Level returns the current minimum level.
+// Level 返回当前最小级别。
 func (l *Logger) Level() Level { return Level(l.min.Load()) }
 
-// With returns a derived logger with extra fields.
+// With 返回一个附带额外字段的派生 Logger。
 func (l *Logger) With(fields ...Field) *Logger {
 	merged := make([]Field, 0, len(l.fields)+len(fields))
 	merged = append(merged, l.fields...)
@@ -176,13 +172,13 @@ func (l *Logger) With(fields ...Field) *Logger {
 	return nl
 }
 
-// WithTime overrides the time source (testing).
+// WithTime 覆盖时间源（用于测试）。
 func (l *Logger) WithTime(now func() time.Time) *Logger {
 	l.now = now
 	return l
 }
 
-// WithEncoder swaps the encoder.
+// WithEncoder 替换编码器。
 func (l *Logger) WithEncoder(enc Encoder) *Logger {
 	l.enc = enc
 	return l
@@ -214,9 +210,9 @@ func (l *Logger) log(level Level, msg string, fields []Field) {
 	l.w.Write(buf)
 }
 
-// Trace, Debug, Info, Warn, Error, Fatal emit a record at the
-// named level. Fatal does not os.Exit (preserves testability);
-// the program can wire that policy in cmd/dog-collector.
+// Trace、Debug、Info、Warn、Error、Fatal 在对应级别输出一条记录。
+// Fatal 不会调用 os.Exit（以保留可测试性），
+// 该策略可在 cmd/dog-collector 中按需接入。
 func (l *Logger) Trace(msg string, f ...Field) { l.log(LevelTrace, msg, f) }
 func (l *Logger) Debug(msg string, f ...Field) { l.log(LevelDebug, msg, f) }
 func (l *Logger) Info(msg string, f ...Field)  { l.log(LevelInfo, msg, f) }
@@ -224,8 +220,7 @@ func (l *Logger) Warn(msg string, f ...Field)  { l.log(LevelWarn, msg, f) }
 func (l *Logger) Error(msg string, f ...Field) { l.log(LevelError, msg, f) }
 func (l *Logger) Fatal(msg string, f ...Field) { l.log(LevelFatal, msg, f) }
 
-// Caller returns the function name + line of the immediate
-// caller (skip=1 inside this package).
+// Caller 返回直接调用方的函数名与行号（在本包内 skip=1）。
 func Caller(skip int) Field {
 	pc, _, _, ok := runtime.Caller(skip + 1)
 	if !ok {
@@ -248,13 +243,13 @@ func trimPath(p string) string {
 	return p
 }
 
-// Stats returns counters for the writer side (best-effort).
+// Stats 表示写入端的计数器（尽力而为）。
 type Stats struct {
 	MinLevel Level `json:"min_level"`
 	Fields   int  `json:"fields"`
 }
 
-// Stats returns the logger configuration snapshot.
+// Stats 返回 Logger 配置的快照。
 func (l *Logger) Stats() Stats {
 	return Stats{MinLevel: l.Level(), Fields: len(l.fields)}
 }

@@ -1,19 +1,17 @@
 // Package health 健康检查：探测外部依赖并汇总健康状态。
 package health
 
-// Health aggregator.
+// 健康检查聚合器。
 //
-// Round 60 wires every health check into a single Status
-// surface that the liveness + readiness probes consume.
-// Supports two kinds of checks:
+// Round 60 把所有健康检查汇聚到统一的 Status 表层，供 liveness 与 readiness 探针消费。
+// 支持两种检查：
 //
-//   - Ping checks: synchronous HTTP / TCP / DB pings.
-//   - Worker checks: report the in-flight / queue depth of
-//     a goroutine pool, with thresholds per check.
+//   - Ping 检查：同步的 HTTP / TCP / DB ping。
+//   - Worker 检查：上报协程池的 in-flight / 队列深度，并为每个检查配置阈值。
 //
-// The overall Status is "ok" iff every check is "ok". The
-// Snapshot is JSON-stable so /healthz / /readyz / /debug/health
-// can all dump the same shape.
+// 仅当所有检查都为 "ok" 时，整体 Status 才为 "ok"。
+// Snapshot 采用 JSON 稳定结构，因此 /healthz / /readyz / /debug/health 等端点
+// 都能输出相同形态的数据。
 
 import (
 	"context"
@@ -26,7 +24,7 @@ import (
 	"time"
 )
 
-// Check is one named health probe.
+// Check 表示一个具名健康探测。
 type Check struct {
 	Name      string
 	Critical  bool
@@ -38,7 +36,7 @@ type Check struct {
 	At        time.Time
 }
 
-// Aggregator owns the check table.
+// Aggregator 持有所有检查项。
 type Aggregator struct {
 	mu     sync.RWMutex
 	checks map[string]*Check
@@ -46,7 +44,7 @@ type Aggregator struct {
 	now    func() time.Time
 }
 
-// NewAggregator returns an empty aggregator.
+// NewAggregator 返回一个空的聚合器。
 func NewAggregator() *Aggregator {
 	return &Aggregator{
 		checks: make(map[string]*Check),
@@ -54,7 +52,7 @@ func NewAggregator() *Aggregator {
 	}
 }
 
-// Register adds a check.
+// Register 添加一个检查项。
 func (a *Aggregator) Register(c *Check) {
 	if c.Threshold == 0 {
 		c.Threshold = 2 * time.Second
@@ -70,7 +68,7 @@ func (a *Aggregator) Register(c *Check) {
 	a.mu.Unlock()
 }
 
-// Remove drops a check.
+// Remove 删除一个检查项。
 func (a *Aggregator) Remove(name string) {
 	a.mu.Lock()
 	if _, ok := a.checks[name]; ok {
@@ -90,7 +88,7 @@ func removeString(s []string, t string) []string {
 	return out
 }
 
-// RunAll executes every check and returns the snapshot.
+// RunAll 执行所有检查并返回快照。
 func (a *Aggregator) RunAll(parent context.Context) Snapshot {
 	a.mu.RLock()
 	checks := make([]*Check, len(a.order))
@@ -130,7 +128,7 @@ func (a *Aggregator) RunAll(parent context.Context) Snapshot {
 	return res
 }
 
-// Snapshot is the JSON-stable result.
+// Snapshot 是 JSON 稳定的结果。
 type Snapshot struct {
 	At       time.Time          `json:"at"`
 	Healthy  bool               `json:"healthy"`
@@ -140,10 +138,10 @@ type Snapshot struct {
 	Items    map[string]*Check  `json:"items"`
 }
 
-// Healthy reports whether every check is ok.
+// Healthy 报告是否所有检查都正常。
 func (s Snapshot) Healthy_() bool { return s.Healthy }
 
-// HandleHTTP returns an http.Handler that runs all checks.
+// HandleHTTP 返回一个会运行所有检查的 http.Handler。
 func (a *Aggregator) HandleHTTP() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		snap := a.RunAll(r.Context())
@@ -158,7 +156,7 @@ func (a *Aggregator) HandleHTTP() http.Handler {
 	})
 }
 
-// HTTPCheck builds a Check that hits a URL.
+// HTTPCheck 构造一个会访问指定 URL 的 Check。
 func HTTPCheck(name, url string, critical bool) *Check {
 	return &Check{
 		Name: name, Critical: critical,
@@ -180,7 +178,7 @@ func HTTPCheck(name, url string, critical bool) *Check {
 	}
 }
 
-// TCPCheck builds a Check that opens a TCP connection.
+// TCPCheck 构造一个会建立 TCP 连接的 Check。
 func TCPCheck(name, addr string, critical bool) *Check {
 	return &Check{
 		Name: name, Critical: critical,
@@ -196,8 +194,8 @@ func TCPCheck(name, addr string, critical bool) *Check {
 	}
 }
 
-// WorkerCheck reports the health of a named worker pool.
-// The probe returns nil if active <= max.
+// WorkerCheck 上报具名 Worker 池的健康状态。
+// 当 active <= max 时 probe 返回 nil。
 func WorkerCheck(name string, active, max int, critical bool) *Check {
 	return &Check{
 		Name: name, Critical: critical,

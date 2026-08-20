@@ -8,9 +8,8 @@ import (
 	"sync/atomic"
 )
 
-// Controller keeps a target rate (0..1) and decides per-item
-// whether to keep or drop. The rate is recomputed
-// adaptively from observed load / error signals.
+// Controller 维护一个目标速率（0..1），逐项决定保留还是丢弃。
+// 速率会根据观测到的负载 / 错误信号进行自适应重新计算。
 type Controller struct {
 	mu        sync.RWMutex
 	rate      float64
@@ -25,7 +24,7 @@ type Controller struct {
 	drops     atomic.Uint64
 }
 
-// Config configures the controller.
+// Config 用于配置 Controller。
 type Config struct {
 	Rate      float64 // initial rate 0..1
 	MinRate   float64
@@ -34,7 +33,7 @@ type Config struct {
 	Window    uint64 // EWMA window
 }
 
-// Default returns a sane default config.
+// Default 返回一份合理的默认配置。
 func Default() Config {
 	return Config{
 		Rate: 1.0, MinRate: 0.01, MaxRate: 1.0,
@@ -42,7 +41,7 @@ func Default() Config {
 	}
 }
 
-// New constructs a Controller.
+// New 构造一个 Controller。
 func New(cfg Config) *Controller {
 	if cfg.MinRate <= 0 {
 		cfg.MinRate = 0.01
@@ -63,8 +62,8 @@ func New(cfg Config) *Controller {
 	return c
 }
 
-// ShouldKeep returns true when the controller decides to
-// keep the item. Each call also counts as one observation.
+// ShouldKeep 在 Controller 决定保留该条目时返回 true。
+// 每次调用都会计作一次观测。
 func (c *Controller) ShouldKeep() bool {
 	c.mu.RLock()
 	r := c.rate
@@ -79,10 +78,9 @@ func (c *Controller) ShouldKeep() bool {
 	return false
 }
 
-// Observe signals an observation. err=true means the kept
-// item failed. After every `window` observations the
-// controller adjusts the rate to stay near targetEPS while
-// penalising high error ratios.
+// Observe 上报一次观测。err=true 表示被保留的条目失败。
+// 每累计 window 次观测后，Controller 会调整速率，
+// 既要靠近 targetEPS，也会惩罚较高的错误率。
 func (c *Controller) Observe(err bool) {
 	c.curEPS.Add(1)
 	if err {
@@ -98,9 +96,10 @@ func (c *Controller) Observe(err bool) {
 	}
 }
 
-// adjust recomputes the rate from current EPS and error rate.
-// High EPS relative to target -> drop rate. High error rate
-// -> drop rate. Both < targets -> raise rate.
+// adjust 根据当前 EPS 与错误率重新计算速率。
+// EPS 相对 target 偏高 -> 降低速率。
+// 错误率偏高 -> 降低速率。
+// 二者均低于目标 -> 提高速率。
 func (c *Controller) adjust() {
 	decisions := c.decisions.Load()
 	if decisions == 0 {
@@ -121,22 +120,22 @@ func (c *Controller) adjust() {
 	c.rate = clamp(c.rate, c.minRate, c.maxRate)
 }
 
-// SetRate sets the rate manually (overrides adaptive control
-// until next Observe triggers adjust).
+// SetRate 手动设置速率（覆盖自适应控制，
+// 直到下一次 Observe 触发 adjust 为止）。
 func (c *Controller) SetRate(r float64) {
 	c.mu.Lock()
 	c.rate = clamp(r, c.minRate, c.maxRate)
 	c.mu.Unlock()
 }
 
-// Rate returns the current rate.
+// Rate 返回当前速率。
 func (c *Controller) Rate() float64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.rate
 }
 
-// Stats is the controller snapshot.
+// Stats 是 Controller 的快照。
 type Stats struct {
 	Rate      float64 `json:"rate"`
 	MinRate   float64 `json:"min_rate"`
@@ -149,7 +148,7 @@ type Stats struct {
 	ErrRate   float64 `json:"err_rate"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回当前快照。
 func (c *Controller) Stats() Stats {
 	c.mu.RLock()
 	r := c.rate

@@ -1,6 +1,6 @@
 package metrics
 
-// Counter, Gauge, Histogram.
+// Counter、Gauge、Histogram 三类指标。
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 )
 
-// CounterVec is a labelled counter.
+// CounterVec 是一个带标签的计数器。
 type CounterVec struct {
 	mu        sync.RWMutex
 	name      string
@@ -21,7 +21,7 @@ type CounterVec struct {
 	values    map[string]*counterSeries
 }
 
-// NewCounterVec constructs a labelled counter.
+// NewCounterVec 构造一个带标签的计数器。
 func NewCounterVec(name, help string, labelKeys []string) *CounterVec {
 	return &CounterVec{name: name, help: help, labelKeys: append([]string{}, labelKeys...), values: make(map[string]*counterSeries)}
 }
@@ -31,8 +31,8 @@ func (c *CounterVec) Help() string      { return c.help }
 func (c *CounterVec) Type() string      { return "counter" }
 func (c *CounterVec) LabelNames() []string { return c.labelKeys }
 
-// WithLabelValues returns the series for the given values.
-// Returns an error if the number of values does not match.
+// WithLabelValues 返回给定标签值对应的序列。
+// 当值的数量不匹配时返回错误。
 func (c *CounterVec) WithLabelValues(values ...string) (*CounterSeries, error) {
 	if len(values) != len(c.labelKeys) {
 		return nil, fmt.Errorf("counter %q wants %d label values, got %d", c.name, len(c.labelKeys), len(values))
@@ -48,7 +48,7 @@ func (c *CounterVec) WithLabelValues(values ...string) (*CounterSeries, error) {
 	return &CounterSeries{s}, nil
 }
 
-// CounterSeries is one labelled counter.
+// CounterSeries 表示一条带标签的计数器序列。
 type CounterSeries struct {
 	*counterSeries
 }
@@ -58,7 +58,7 @@ type counterSeries struct {
 	labels []string
 }
 
-// Add increments by n.
+// Add 增加 n。
 func (s *CounterSeries) Add(n float64) {
 	if n < 0 {
 		return
@@ -73,15 +73,15 @@ func (s *CounterSeries) Add(n float64) {
 	}
 }
 
-// Inc adds 1.
+// Inc 增加 1。
 func (s *CounterSeries) Inc() { s.Add(1) }
 
-// Value returns the current value.
+// Value 返回当前值。
 func (s *CounterSeries) Value() float64 {
 	return math.Float64frombits(s.value.Load())
 }
 
-// WriteText emits the counter lines.
+// WriteText 输出计数器的文本行。
 func (c *CounterVec) WriteText(w io.Writer) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -107,7 +107,7 @@ func (c *CounterVec) WriteText(w io.Writer) error {
 	return nil
 }
 
-// GaugeVec is a labelled gauge.
+// GaugeVec 是一个带标签的仪表盘。
 type GaugeVec struct {
 	mu        sync.RWMutex
 	name      string
@@ -116,7 +116,7 @@ type GaugeVec struct {
 	values    map[string]*gaugeSeries
 }
 
-// NewGaugeVec constructs a labelled gauge.
+// NewGaugeVec 构造一个带标签的仪表盘。
 func NewGaugeVec(name, help string, labelKeys []string) *GaugeVec {
 	return &GaugeVec{name: name, help: help, labelKeys: append([]string{}, labelKeys...), values: make(map[string]*gaugeSeries)}
 }
@@ -126,7 +126,7 @@ func (g *GaugeVec) Help() string         { return g.help }
 func (g *GaugeVec) Type() string         { return "gauge" }
 func (g *GaugeVec) LabelNames() []string { return g.labelKeys }
 
-// WithLabelValues returns the gauge series.
+// WithLabelValues 返回仪表盘序列。
 func (g *GaugeVec) WithLabelValues(values ...string) (*GaugeSeries, error) {
 	if len(values) != len(g.labelKeys) {
 		return nil, fmt.Errorf("gauge %q wants %d label values, got %d", g.name, len(g.labelKeys), len(values))
@@ -142,7 +142,7 @@ func (g *GaugeVec) WithLabelValues(values ...string) (*GaugeSeries, error) {
 	return &GaugeSeries{s}, nil
 }
 
-// GaugeSeries wraps one series.
+// GaugeSeries 包装一条序列。
 type GaugeSeries struct {
 	*gaugeSeries
 }
@@ -152,12 +152,12 @@ type gaugeSeries struct {
 	labels []string
 }
 
-// Set replaces the value.
+// Set 替换当前值。
 func (g *GaugeSeries) Set(v float64) {
 	g.bits.Store(math.Float64bits(v))
 }
 
-// Add increments.
+// Add 自增。
 func (g *GaugeSeries) Add(v float64) {
 	for {
 		old := g.bits.Load()
@@ -171,7 +171,7 @@ func (g *GaugeSeries) Add(v float64) {
 // Inc adds 1.
 func (g *GaugeSeries) Inc() { g.Add(1) }
 
-// Dec subtracts 1.
+// Dec 减去 1。
 func (g *GaugeSeries) Dec() { g.Add(-1) }
 
 // Value returns the current value.
@@ -179,7 +179,7 @@ func (g *GaugeSeries) Value() float64 {
 	return math.Float64frombits(g.bits.Load())
 }
 
-// WriteText emits the gauge lines.
+// WriteText 输出仪表盘的文本行。
 func (g *GaugeVec) WriteText(w io.Writer) error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()

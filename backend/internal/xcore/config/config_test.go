@@ -119,9 +119,9 @@ func TestWatcher_RunOnce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- w.Run(ctx) }()
-	// Wait for the first apply.
+	// 等待首次应用。
 	time.Sleep(80 * time.Millisecond)
-	// Update the file.
+	// 更新文件。
 	if err := os.WriteFile(p, []byte(`{"ingest_addr":":9090","workers":2,"sampling_rate":0.5}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
