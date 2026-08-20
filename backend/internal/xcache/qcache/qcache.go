@@ -3,6 +3,7 @@
 package qcache
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -48,7 +49,7 @@ func (c *Cache[K, V]) Get(k K) (V, error) {
 	f := &flight[K, V]{done: make(chan struct{})}
 	c.flights[k] = f
 	c.mu.Unlock()
-	v, err := c.loader(k)
+	v, err := safeCall(c.loader, k)
 	c.mu.Lock()
 	f.val, f.err = v, err
 	if err == nil {
@@ -58,6 +59,18 @@ func (c *Cache[K, V]) Get(k K) (V, error) {
 	close(f.done)
 	c.mu.Unlock()
 	return v, err
+}
+
+// safeCall 在 loader panic 时返回零值与错误，避免泄漏 flight。
+func safeCall[K comparable, V any](loader Loader[K, V], k K) (v V, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var z V
+			v = z
+			err = fmt.Errorf("qcache: loader panic: %v", r)
+		}
+	}()
+	return loader(k)
 }
 
 // Invalidate 删除一个 key。

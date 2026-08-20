@@ -12,6 +12,7 @@ type node struct {
 	param    string // 当前参数名（如 :id），空表示静态段
 	isStar   bool   // 是否 * 通配
 	handler  Handler
+	paramSet bool // 防止同层多次设置 param 覆盖
 }
 
 // Router 是 trie 路由器。
@@ -33,8 +34,10 @@ func (r *Router) Add(p string, h Handler) {
 			}
 			n := cur.children[":"]
 			if n == nil {
-				n = &node{param: seg[1:]}
+				n = &node{param: seg[1:], paramSet: true}
 				cur.children[":"] = n
+			} else {
+				n.param = seg[1:]
 			}
 			cur = n
 			continue

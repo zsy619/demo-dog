@@ -1,4 +1,5 @@
 // Package seqcache 提供一个按 sequence 顺序淘汰的并发安全缓存。
+// 同一字符串 key 的多次 Put 中，仅 sequence 最大（最新）的值会被 Get 返回。
 package seqcache
 
 import (
@@ -33,15 +34,21 @@ func (c *Cache) Put(k string, v any) {
 	s := c.seq.Add(1)
 	c.mu.Lock()
 	c.data[s] = &entry{k: k, v: v, s: s}
+	// 驱逐相同 key 的旧版本（保留 max sequence）
+	for ks, e := range c.data {
+		if e.k == k && ks != s {
+			delete(c.data, ks)
+		}
+	}
 	for len(c.data) > c.cap {
 		// 找最小 sequence 驱逐
 		var min uint64
 		var minKey uint64
 		found := false
-		for k, e := range c.data {
+		for kk, e := range c.data {
 			if !found || e.s < min {
 				min = e.s
-				minKey = k
+				minKey = kk
 				found = true
 			}
 		}
@@ -52,16 +59,27 @@ func (c *Cache) Put(k string, v any) {
 	c.mu.Unlock()
 }
 
-// Get 读取键值（按字符串匹配）。
+// Get 读取键值（按字符串匹配，返回最大 sequence 的版本）。
 func (c *Cache) Get(k string) (any, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	var bestVal any
+	var bestSeq uint64
+	found := false
 	for _, e := range c.data {
-		if e.k == k {
-			return e.v, true
+		if e.k != k {
+			continue
+		}
+		if !found || e.s > bestSeq {
+			bestVal = e.v
+			bestSeq = e.s
+			found = true
 		}
 	}
-	return nil, false
+	if !found {
+		return nil, false
+	}
+	return bestVal, true
 }
 
 // Len 返回元素数。
