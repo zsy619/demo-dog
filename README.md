@@ -100,23 +100,20 @@ demo-dog/
 │   ├── go.mod                  # 模块 github.com/zsy619/demo-dog/backend
 │   ├── cmd/dog-collector/
 │   │   └── main.go             # 入口与启动横幅
-│   ├── internal/
-│   │   ├── model/signal.go     # 兼容 OTLP 的 LogRecord / MetricPoint / SpanRecord
-│   │   ├── store/
-│   │   │   ├── doris.go        # 内存版 Doris 引擎(冷热分层 + 物化视图)
-│   │   │   └── doris_test.go   # 并发安全核心的单元测试
-│   │   ├── batch/pool.go       # 有界工作池,支持重试与退避
-│   │   ├── ingest/otlp.go      # OTLP JSON 解码 + 校验 + 标准化
-│   │   ├── stream/
-│   │   │   ├── hub.go          # 实时事件的发布/订阅中心
-│   │   │   └── ws.go           # WebSocket 帧处理(RFC 6455)
-│   │   └── api/
-│   │       ├── server.go       # HTTP 路由 + CORS + 日志中间件
-│   │       ├── handlers.go     # 查询 / 写入 / 流式 / 种子数据处理器
-│   │       ├── seed.go         # 合成数据生成器
-│   │       ├── rand.go         # 轻量线程安全随机数工具
-│   │       ├── util.go         # 整型解析辅助函数
-│   │       └── inject.go       # 启动期种子注入(由 --seed 参数触发)
+│   ├── internal/                # 7 大主题共 259 个 x* 子包（详见 internal/README.md）
+│   │   ├── xcache/   (35)        # 缓存 / 限流 / 淘汰算法
+│   │   ├── xcore/    (26)        # 运行时 / 可观测性
+│   │   ├── xdata/    (56)        # 数据结构 / 持久化（最大子包：xdata/store）
+│   │   ├── xflow/    (42)        # 并发编排 / 控制流
+│   │   ├── xnet/     (29)        # HTTP / TLS / 代理 / 路由
+│   │   ├── xsecure/  (27)        # 认证 / 加密 / 鉴权
+│   │   ├── xtool/    (44)        # 通用工具
+│   │   ├── xdata/model/          # 兼容 OTLP 的 LogRecord / MetricPoint / SpanRecord
+│   │   ├── xdata/store/          # 内存版 Doris 引擎(冷热分层 + 物化视图)
+│   │   ├── xflow/batch/          # 有界工作池,支持重试与退避
+│   │   ├── xdata/ingest/         # OTLP JSON 解码 + 校验 + 标准化
+│   │   ├── xflow/stream/         # 实时事件的发布/订阅中心
+│   │   └── xnet/api/             # HTTP 路由 + CORS + 日志中间件 / handlers / 种子数据
 │   └── scripts/
 │       └── seed.sh             # 持续种子数据驱动脚本
 └── frontend/                   # Vite + React 18 + TypeScript + Tailwind
@@ -343,9 +340,9 @@ sequenceDiagram
 
 | 岗位描述要求 | 对应实现 |
 |---|---|
-| OpenTelemetry Collector Doris Exporter(Go) | `internal/ingest/otlp.go`(简化版 OTLP JSON)+ `internal/batch/pool.go` |
+| OpenTelemetry Collector Doris Exporter(Go) | `xdata/ingest/otlp.go`(简化版 OTLP JSON)+ `xflow/batch/pool.go` |
 | 写入吞吐 / 批处理 / 重试 | `batch.Pool` —— 有界队列、指数退避 + 抖动、确定性反压 |
-| Go 并发 / 内存 / 性能调优 | `internal/store/doris.go` —— 细粒度互斥锁、原子计数器、环形缓存淘汰 |
+| Go 并发 / 内存 / 性能调优 | `xdata/store/doris.go` —— 细粒度互斥锁、原子计数器、环形缓存淘汰 |
 | Doris 表 / 索引 / 物化视图 / 冷热分层 | `store.Doris` —— 三张表(`__dog_logs`、`__dog_metrics`、`__dog_traces`)、按桶冷热分层、`mv_metrics_1m` / `mv_metrics_5m` |
 | Grafana Doris App 插件(TS/React) | `pages/Explore.tsx`、`pages/DataSources.tsx` —— Schema 感知查询编辑器、数据源清单、面板布局 |
 | 日志 / 指标 / 链路追踪(三大支柱) | 三个查询端点 + 三个顶层标签页 + 独立的 `Logs` / `Metrics` / `Traces` 页面 |
@@ -362,19 +359,19 @@ sequenceDiagram
 
 ```
                                ┌──────────────────────────────────────┐
-OTLP HTTP POST ───────────────▶│  internal/api/handlers.go             │
+OTLP HTTP POST ───────────────▶│  xnet/api/handlers.go                 │
                                │  handleIngest                        │
                                └──────────────┬───────────────────────┘
                                               │ 解码 + 校验 + 标准化
                                               ▼
                                ┌──────────────────────────────────────┐
-                               │  internal/batch/pool.go              │
+                               │  xflow/batch/pool.go                  │
                                │  有界工作池 · 重试与退避             │
                                └──────────────┬───────────────────────┘
                                               │
                                               ▼
                                ┌──────────────────────────────────────┐
-                               │  internal/store/doris.go             │
+                               │  xdata/store/doris.go                 │
                                │  ─ LogRecord   → __dog_logs          │
                                │  ─ MetricPoint → __dog_metrics + MV  │
                                │  ─ SpanRecord  → __dog_traces        │
@@ -400,7 +397,7 @@ flowchart TB
     main --> stream
     main --> model
 
-    subgraph apiPkg["internal/api"]
+    subgraph apiPkg["xnet/api"]
         api["server.go<br/>路由 + CORS + 日志中间件"]
         handlers["handlers.go<br/>查询/写入/流式/种子处理器"]
         seed["seed.go<br/>合成数据生成器"]
@@ -409,25 +406,25 @@ flowchart TB
         util["util.go"]
     end
 
-    subgraph batchPkg["internal/batch"]
+    subgraph batchPkg["xflow/batch"]
         batch["pool.go<br/>有界工作池 + 指数退避"]
     end
 
-    subgraph ingestPkg["internal/ingest"]
+    subgraph ingestPkg["xdata/ingest"]
         ingest["otlp.go<br/>OTLP JSON 解码 + 校验"]
     end
 
-    subgraph storePkg["internal/store"]
+    subgraph storePkg["xdata/store"]
         store["doris.go<br/>内存 Doris 引擎<br/>(冷热 + MV)"]
         dorisTest["doris_test.go<br/>并发单元测试"]
     end
 
-    subgraph streamPkg["internal/stream"]
+    subgraph streamPkg["xflow/stream"]
         hub["hub.go<br/>Pub/Sub 事件中心"]
         ws["ws.go<br/>WebSocket 帧处理"]
     end
 
-    subgraph modelPkg["internal/model"]
+    subgraph modelPkg["xdata/model"]
         model["signal.go<br/>LogRecord / MetricPoint / SpanRecord"]
     end
 
