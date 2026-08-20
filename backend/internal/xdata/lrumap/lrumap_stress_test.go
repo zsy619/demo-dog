@@ -6,7 +6,7 @@ import (
 )
 
 func TestConcurrent(t *testing.T) {
-	m := New(64)
+	m := New[string, int](64)
 	var wg sync.WaitGroup
 	for i := 0; i < 200; i++ {
 		wg.Add(2)

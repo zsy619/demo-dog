@@ -1,4 +1,4 @@
-// Package parallel 提供并行执行任务并收集错误的辅助。
+// Package parallel 提供并行执行辅助：任务执行、错误收集、迭代并行。
 package parallel
 
 import (
@@ -75,4 +75,30 @@ func Map[T any, U any](items []T, fn func(T) (U, error)) ([]U, []error) {
 		}
 	}
 	return out, nonNil
+}
+
+// ForEach 并行执行 fn 处理 items，maxN 为最大并行度（<=0 或 > len 表示不限）。
+func ForEach[T any](items []T, maxN int, fn func(idx int, item T)) {
+	if len(items) == 0 {
+		return
+	}
+	if maxN <= 0 || maxN > len(items) {
+		maxN = len(items)
+	}
+	jobs := make(chan int, len(items))
+	var wg sync.WaitGroup
+	for w := 0; w < maxN; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				fn(i, items[i])
+			}
+		}()
+	}
+	for i := range items {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
 }

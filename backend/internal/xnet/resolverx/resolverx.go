@@ -1,5 +1,5 @@
 // Package resolverx 提供简单的 DNS 解析 + 缓存辅助。
-// 使用 singleflight 防止同一 host 的并发请求触发重复 DNS 查询。
+// 使用 xflow/singleflight 防止同一 host 的并发请求触发重复 DNS 查询。
 package resolverx
 
 import (
@@ -8,26 +8,22 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/zsy619/demo-dog/backend/internal/xflow/singleflight"
 )
 
 // Resolver 是一个带 TTL 缓存的 DNS 解析器。
 type Resolver struct {
 	mu      sync.Mutex
 	cache   map[string]cacheEntry
-	flights map[string]*flight
 	ttl     time.Duration
 	resolve func(ctx context.Context, network, host string) ([]net.IP, error)
+	inflight *singleflight.Group[string, []net.IP]
 }
 
 type cacheEntry struct {
 	ips []net.IP
 	at  time.Time
-}
-
-type flight struct {
-	done chan struct{}
-	ips  []net.IP
-	err  error
 }
 
 // New 创建一个使用 net.DefaultResolver 的解析器。
@@ -36,10 +32,10 @@ func New(ttl time.Duration) *Resolver {
 		ttl = 5 * time.Minute
 	}
 	return &Resolver{
-		cache:   make(map[string]cacheEntry),
-		flights: make(map[string]*flight),
-		ttl:     ttl,
-		resolve: net.DefaultResolver.LookupIP,
+		cache:    make(map[string]cacheEntry),
+		ttl:      ttl,
+		resolve:  net.DefaultResolver.LookupIP,
+		inflight: singleflight.New[string, []net.IP](),
 	}
 }
 
@@ -50,23 +46,21 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) ([]net.IP, error) 
 		r.mu.Unlock()
 		return e.ips, nil
 	}
-	if f, ok := r.flights[host]; ok {
+	r.mu.Unlock()
+	ips, err := r.inflight.Do(host, func() ([]net.IP, error) {
+		r.mu.Lock()
+		if e, ok := r.cache[host]; ok && time.Since(e.at) < r.ttl {
+			r.mu.Unlock()
+			return e.ips, nil
+		}
 		r.mu.Unlock()
-		<-f.done
-		return f.ips, f.err
-	}
-	f := &flight{done: make(chan struct{})}
-	r.flights[host] = f
-	r.mu.Unlock()
-	ips, err := safeResolve(r.resolve, ctx, host)
-	r.mu.Lock()
+		return safeResolve(r.resolve, ctx, host)
+	})
 	if err == nil {
+		r.mu.Lock()
 		r.cache[host] = cacheEntry{ips: ips, at: time.Now()}
+		r.mu.Unlock()
 	}
-	f.ips, f.err = ips, err
-	delete(r.flights, host)
-	close(f.done)
-	r.mu.Unlock()
 	return ips, err
 }
 
@@ -81,7 +75,6 @@ func (r *Resolver) Invalidate(host string) {
 func (r *Resolver) Clear() {
 	r.mu.Lock()
 	r.cache = make(map[string]cacheEntry)
-	r.flights = make(map[string]*flight)
 	r.mu.Unlock()
 }
 
@@ -94,9 +87,7 @@ func (r *Resolver) Len() int {
 
 // Inflight 返回正在解析的 host 数。
 func (r *Resolver) Inflight() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.flights)
+	return r.inflight.Inflight()
 }
 
 func safeResolve(fn func(ctx context.Context, network, host string) ([]net.IP, error), ctx context.Context, host string) (ips []net.IP, err error) {
