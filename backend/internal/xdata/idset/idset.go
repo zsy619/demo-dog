@@ -35,8 +35,26 @@ func (s *Set) Add(id int64) {
 // Remove 删除 ID。
 func (s *Set) Remove(id int64) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[id]; !ok {
+		return
+	}
 	delete(s.m, id)
-	s.mu.Unlock()
+	if len(s.m) == 0 {
+		s.min, s.max = 0, 0
+		return
+	}
+	if id == s.min || id == s.max {
+		s.min, s.max = 0, 0
+		for k := range s.m {
+			if s.min == 0 || k < s.min {
+				s.min = k
+			}
+			if k > s.max {
+				s.max = k
+			}
+		}
+	}
 }
 
 // Has 判断 ID 是否存在。
