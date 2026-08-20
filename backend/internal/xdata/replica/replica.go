@@ -1,4 +1,4 @@
-// Package replica implements WAL replication between a primary
+// Package replica 实现 primary 与一个或多个
 // demo-dog collector and one or more followers. It is intentionally
 // stdlib-only and trades strong-consensus guarantees for
 // zero-dependency simplicity.
@@ -39,7 +39,7 @@ import (
 	"time"
 )
 
-// Role identifies whether this node is a primary or follower.
+// Role 标识该节点是 primary 还是 follower。
 type Role string
 
 const (
@@ -47,14 +47,14 @@ const (
 	RoleFollower Role = "follower"
 )
 
-// Record is one WAL entry that has been replicated.
+// Record 是一条已复制 WAL 条目。
 type Record struct {
 	Op      uint32 `json:"op"`
 	Payload []byte `json:"payload"`
 	Offset  int64  `json:"offset"`
 }
 
-// State is the runtime state of a node.
+// State 是一个节点的运行时状态。
 type State struct {
 	Role     Role      `json:"role"`
 	Offset   int64     `json:"offset"`
@@ -64,7 +64,7 @@ type State struct {
 	Dropped  uint64    `json:"dropped"`
 }
 
-// Node is the runtime replica manager.
+// Node 是运行时副本管理器。
 type Node struct {
 	mu      sync.Mutex
 	role    Role
@@ -77,7 +77,7 @@ type Node struct {
 	stopCh  chan struct{}
 }
 
-// NewPrimary returns a Node in primary role.
+// NewPrimary 返回 primary 角色的 Node。
 func NewPrimary() *Node {
 	return &Node{
 		role:   RolePrimary,
@@ -86,7 +86,7 @@ func NewPrimary() *Node {
 	}
 }
 
-// NewFollower returns a Node in follower role pointing at the peer.
+// NewFollower 返回指向对端的 follower 角色 Node。
 func NewFollower(peer string) *Node {
 	return &Node{
 		role:   RoleFollower,
@@ -96,7 +96,7 @@ func NewFollower(peer string) *Node {
 	}
 }
 
-// Emit is called by the primary WAL hook.
+// Emit 由 primary WAL 钩子调用。
 func (n *Node) Emit(op uint32, payload []byte) {
 	if n.role != RolePrimary {
 		return
@@ -110,12 +110,12 @@ func (n *Node) Emit(op uint32, payload []byte) {
 	}
 }
 
-// Apply returns the channel that delivers records to the engine.
+// Apply 返回将记录投递给引擎的 channel。
 func (n *Node) Apply() <-chan Record {
 	return n.apply
 }
 
-// Stats returns the current state for /api/health.
+// Stats 返回 /api/health 的当前状态。
 func (n *Node) Stats() State {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -129,13 +129,13 @@ func (n *Node) Stats() State {
 	}
 }
 
-// Start begins the replication loop.
+// Start 开启复制循环。
 func (n *Node) Start() error {
 	go n.run()
 	return nil
 }
 
-// Stop tears down the goroutine.
+// Stop 拆除 goroutine。
 func (n *Node) Stop() {
 	select {
 	case <-n.stopCh:
@@ -245,7 +245,7 @@ func (n *Node) emitSnapshot(from int64) <-chan Record {
 	return out
 }
 
-// HealthCheck performs a single round-trip to the peer.
+// HealthCheck 对对端执行一次往返。
 func (n *Node) HealthCheck() (int64, error) {
 	if n.peer == "" {
 		return 0, nil
@@ -265,7 +265,7 @@ func (n *Node) HealthCheck() (int64, error) {
 	return body.Offset - n.offset.Load(), nil
 }
 
-// Save writes the node state to disk.
+// Save 将节点状态写入磁盘。
 func (n *Node) Save(path string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -284,7 +284,7 @@ func (n *Node) Save(path string) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// Load reads node state from disk.
+// Load 从磁盘读取节点状态。
 func (n *Node) Load(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

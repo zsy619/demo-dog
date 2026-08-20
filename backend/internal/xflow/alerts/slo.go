@@ -1,6 +1,6 @@
 package alerts
 
-// SLO error budget calculator.
+// SLO 错误预算计算器。
 //
 // An SLO is a target availability: e.g. "99% of requests succeed
 // over a rolling 30-day window". The error budget is the
@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-// SLO defines one service-level objective.
+// SLO 定义一个服务级目标。
 type SLO struct {
 	Name         string
 	Service      string
@@ -52,7 +52,7 @@ func (s *SLO) Validate() error {
 	return nil
 }
 
-// Budget returns the allowed failure ratio.
+// Budget 返回允许的失败比例。
 func (s *SLO) Budget() float64 {
 	return 1 - s.Target
 }
@@ -62,7 +62,7 @@ type CountSink interface {
 	Counter(name string, window time.Duration) int64
 }
 
-// BudgetStatus is the current consumption state.
+// BudgetStatus 是当前的消耗状态。
 type BudgetStatus struct {
 	Name              string
 	Service           string
@@ -120,7 +120,7 @@ func Compute(s *SLO, sink CountSink, now time.Time) (BudgetStatus, error) {
 	}, nil
 }
 
-// BurnRate is the ratio of observed error rate to allowed error
+// BurnRate 是观测错误率与允许错误
 // rate. >1 means we're consuming the budget faster than allowed.
 type BurnRate struct {
 	Window time.Duration
@@ -160,7 +160,7 @@ func BurnRates(s *SLO, sink CountSink) ([]BurnRate, error) {
 	return out, nil
 }
 
-// MultiWindowDecision implements the Google SRE workbook
+// MultiWindowDecision 实现 Google SRE 工作手册
 // multi-window burn-rate alert policy.
 type MultiWindowDecision struct {
 	ShortWindow time.Duration
@@ -171,7 +171,7 @@ type MultiWindowDecision struct {
 	Reason      string
 }
 
-// Decide applies the multi-window policy.
+// Decide 应用多窗口策略。
 func Decide(short, long BurnRate) MultiWindowDecision {
 	d := MultiWindowDecision{
 		ShortWindow: short.Window,
@@ -205,7 +205,7 @@ func Decide(short, long BurnRate) MultiWindowDecision {
 	return d
 }
 
-// Score returns a single 0..1 score representing health. 1.0 =
+// Score 返回表示健康度的单个 0..1 分数。1.0 =
 // healthy, 0.0 = budget fully exhausted. Uses a logistic curve
 // so the score degrades smoothly as budget left goes to zero.
 func Score(status BudgetStatus) float64 {

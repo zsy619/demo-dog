@@ -1,4 +1,4 @@
-// WebSocket upgrade + per-frame write helper.
+// WebSocket 升级 + 单帧写入辅助。
 //
 // Hand-rolled on top of crypto/sha1 + encoding/base64 (RFC 6455) so the demo
 // has zero external dependencies.
@@ -16,7 +16,7 @@ import (
 
 var acceptKeyGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-// Upgrade performs the WebSocket handshake on a hijacked HTTP connection.
+// Upgrade 在被劫持的 HTTP 连接上执行 WebSocket 握手。
 // It returns a connection that yields text frames via Read and writes them
 // via WriteText.
 //
@@ -73,7 +73,7 @@ func originAllowed(origin string, allowedOrigins []string) bool {
 	return false
 }
 
-// Conn wraps a hijacked connection with WebSocket framing.
+// Conn 包装被劫持的连接并提供 WebSocket 帧处理。
 type Conn struct {
 	rwc   net.Conn
 	bufrw interface{ Flush() error }
@@ -81,7 +81,7 @@ type Conn struct {
 	closed bool
 }
 
-// ReadFrame returns the payload of the next text or binary frame.
+// ReadFrame 返回下一个文本或二进制帧的负载。
 // Close frames return io.EOF.
 func (c *Conn) ReadFrame() ([]byte, error) {
 	var hdr [2]byte
@@ -130,7 +130,7 @@ func (c *Conn) ReadFrame() ([]byte, error) {
 	return buf, nil
 }
 
-// WriteText writes a single text frame.
+// WriteText 写入单个文本帧。
 func (c *Conn) WriteText(payload []byte) error {
 	if c.closed {
 		return errors.New("connection closed")
@@ -174,7 +174,7 @@ func (c *Conn) WriteText(payload []byte) error {
 	return nil
 }
 
-// Close sends a close frame and closes the underlying connection.
+// Close 发送 close 帧并关闭底层连接。
 func (c *Conn) Close() error {
 	if c.closed {
 		return nil

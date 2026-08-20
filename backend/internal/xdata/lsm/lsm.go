@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Entry is one key/value pair. Deleted entries are represented
+// Entry 是一个键值对。已删除条目表示为
 // with Tombstone=true.
 type Entry struct {
 	Key       string
@@ -14,7 +14,7 @@ type Entry struct {
 	Tombstone bool
 }
 
-// Memtable is an in-memory sorted key/value store backed by a
+// Memtable 是由以下支持的内存有序键/值存储
 // RedBlack-style skiplist. For Round 87 we use a sorted slice
 // + binary search for simplicity.
 type Memtable struct {
@@ -23,12 +23,12 @@ type Memtable struct {
 	size    int
 }
 
-// NewMemtable constructs an empty Memtable.
+// NewMemtable 构造一个空 Memtable。
 func NewMemtable() *Memtable {
 	return &Memtable{}
 }
 
-// Put inserts or replaces a key.
+// Put 插入或替换一个 key。
 func (m *Memtable) Put(key string, value []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -46,7 +46,7 @@ func (m *Memtable) Put(key string, value []byte) {
 	m.size++
 }
 
-// Delete marks the key as a tombstone.
+// Delete 将 key 标记为墓碑。
 func (m *Memtable) Delete(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -81,19 +81,19 @@ func (m *Memtable) Get(key string) ([]byte, bool, bool) {
 	return copyBytes(m.entries[idx].Value), true, false
 }
 
-// Len returns the number of entries.
+// Len 返回条目数。
 func (m *Memtable) Len() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.size
 }
 
-// SortedRun is an immutable sorted key/value run on disk.
+// SortedRun 是磁盘上不可变的有序键/值 run。
 type SortedRun struct {
 	entries []Entry
 }
 
-// NewSortedRun creates a run from entries (assumed already
+// NewSortedRun 由 entries 创建 run（假设已
 // sorted by key).
 func NewSortedRun(entries []Entry) *SortedRun {
 	cp := make([]Entry, len(entries))
@@ -103,7 +103,7 @@ func NewSortedRun(entries []Entry) *SortedRun {
 	return &SortedRun{entries: cp}
 }
 
-// Get returns the same shape as Memtable.Get.
+// Get 返回与 Memtable.Get 相同的结果。
 func (r *SortedRun) Get(key string) ([]byte, bool, bool) {
 	idx := sort.Search(len(r.entries), func(i int) bool {
 		return r.entries[i].Key >= key
@@ -117,7 +117,7 @@ func (r *SortedRun) Get(key string) ([]byte, bool, bool) {
 	return copyBytes(r.entries[idx].Value), true, false
 }
 
-// StringTable is the LSM structure: memtable + sorted runs.
+// StringTable 是 LSM 结构：memtable + 有序 run。
 // Reads go newest-to-oldest.
 type StringTable struct {
 	mu      sync.RWMutex
@@ -125,19 +125,19 @@ type StringTable struct {
 	runs    []*SortedRun
 }
 
-// NewStringTable constructs an empty LSM.
+// NewStringTable 构造一个空 LSM。
 func NewStringTable() *StringTable {
 	return &StringTable{mem: NewMemtable()}
 }
 
-// Put inserts a key into the memtable.
+// Put 将一个 key 插入 memtable。
 func (s *StringTable) Put(key string, value []byte) {
 	s.mu.Lock()
 	s.mem.Put(key, value)
 	s.mu.Unlock()
 }
 
-// Delete marks a key deleted in the memtable.
+// Delete 在 memtable 中将 key 标记为已删除。
 func (s *StringTable) Delete(key string) {
 	s.mu.Lock()
 	s.mem.Delete(key)
@@ -172,7 +172,7 @@ func (s *StringTable) Get(key string) ([]byte, bool) {
 	return nil, false
 }
 
-// Flush moves the memtable into a new sorted run and clears
+// Flush 将 memtable 移入新的有序 run 并清空
 // the memtable. Returns the run seq.
 func (s *StringTable) Flush() int {
 	s.mu.Lock()
@@ -185,7 +185,7 @@ func (s *StringTable) Flush() int {
 	return len(s.runs)
 }
 
-// MemLen returns the memtable size.
+// MemLen 返回 memtable 大小。
 func (s *StringTable) MemLen() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

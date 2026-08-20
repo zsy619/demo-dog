@@ -1,7 +1,7 @@
 // Package retention 保留策略：自动删除过期数据并统计空间占用。
 package retention
 
-// Per-tenant retention policies + cold-storage eviction.
+// 每租户保留策略 + 冷存储淘汰。
 //
 // Different tenants pay for different retention tiers. A
 // free tier keeps 1 day of hot logs and 7 days of cold.
@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-// Tier names a retention profile.
+// Tier 命名一个保留策略文件。
 type Tier string
 
 const (
@@ -38,7 +38,7 @@ const (
 	TierEnterprise Tier = "enterprise"
 )
 
-// Policy is the per-tenant retention setting.
+// Policy 是每租户的保留设置。
 type Policy struct {
 	Tenant    string
 	Tier      Tier
@@ -47,7 +47,7 @@ type Policy struct {
 	UpdatedAt time.Time
 }
 
-// DefaultPolicies returns the canonical tier settings.
+// DefaultPolicies 返回标准的分层设置。
 func DefaultPolicies() map[Tier]Policy {
 	return map[Tier]Policy{
 		TierFree:       {Tier: TierFree, HotTTL: 24 * time.Hour, ColdTTL: 7 * 24 * time.Hour},
@@ -56,7 +56,7 @@ func DefaultPolicies() map[Tier]Policy {
 	}
 }
 
-// Manager owns the per-tenant policies + runs the sweeper.
+// Manager 拥有每租户的策略并运行清理器。
 type Manager struct {
 	mu       sync.RWMutex
 	policies map[string]Policy
@@ -67,7 +67,7 @@ type Manager struct {
 	now      func() time.Time
 }
 
-// NewManager returns an empty manager.
+// NewManager 返回一个空 manager。
 func NewManager(coldDir string, now func() time.Time) *Manager {
 	if now == nil {
 		now = time.Now
@@ -79,7 +79,7 @@ func NewManager(coldDir string, now func() time.Time) *Manager {
 	}
 }
 
-// Set assigns a tenant to a tier (overwriting any prior
+// Set 将租户分配到一个分层（覆盖任何先前的
 // setting).
 func (m *Manager) Set(tenant string, tier Tier) {
 	defs := DefaultPolicies()
@@ -95,7 +95,7 @@ func (m *Manager) Set(tenant string, tier Tier) {
 	m.mu.Unlock()
 }
 
-// SetPolicy lets the caller specify a custom policy (e.g.
+// SetPolicy 允许调用方指定自定义策略（例如
 // regulatory hold). HotTTL/ColdTTL must be positive for the
 // policy to evict anything.
 func (m *Manager) SetPolicy(p Policy) error {
@@ -123,14 +123,14 @@ func (m *Manager) Get(tenant string) (Policy, bool) {
 	return p, ok
 }
 
-// Remove deletes the policy.
+// Remove 删除策略。
 func (m *Manager) Remove(tenant string) {
 	m.mu.Lock()
 	delete(m.policies, tenant)
 	m.mu.Unlock()
 }
 
-// List returns the current policies sorted by tenant name.
+// List 返回当前策略（按租户名排序）。
 func (m *Manager) List() []Policy {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -142,14 +142,14 @@ func (m *Manager) List() []Policy {
 	return out
 }
 
-// Decision tells the caller what to do with a single log row.
+// Decision 告诉调用方对单行日志应做什么。
 type Decision struct {
 	Tenant string
 	Age    time.Duration
 	Action string // keep, move_to_cold, drop
 }
 
-// Decide inspects one log row and tells the caller the action
+// Decide 检查一行日志并告诉调用方应采取的动作。
 // to take. age is (now - row.Timestamp).
 func (m *Manager) Decide(tenant string, age time.Duration) Decision {
 	m.mu.RLock()
@@ -171,7 +171,7 @@ func (m *Manager) Decide(tenant string, age time.Duration) Decision {
 	return d
 }
 
-// MoveToCold copies one log file to the cold directory. The
+// MoveToCold 将一个日志文件复制到冷目录。
 // caller is responsible for deleting the source after a
 // successful copy.
 func (m *Manager) MoveToCold(src, tenant string) (string, error) {
@@ -193,7 +193,7 @@ func (m *Manager) MoveToCold(src, tenant string) (string, error) {
 	return dst, nil
 }
 
-// SweepResult summarises one sweep run.
+// SweepResult 汇总一次扫描运行。
 type SweepResult struct {
 	Inspected int
 	Dropped   int
@@ -201,7 +201,7 @@ type SweepResult struct {
 	Bytes     int64
 }
 
-// Sweep walks a slice of log rows and applies decisions in
+// Sweep 遍历日志行切片并应用决策
 // batch. The caller provides the input rows and a function
 // that drops one row from the hot store.
 func (m *Manager) Sweep(rows []Row, dropper func(Row) error, mover func(Row, string) error) (SweepResult, error) {
@@ -240,7 +240,7 @@ type Row struct {
 	Bytes     int64
 }
 
-// Stats is the JSON-stable view.
+// Stats 是 JSON 稳定视图。
 type Stats struct {
 	Tenants   int  `json:"tenants"`
 	Swept     int64 `json:"swept"`
@@ -249,7 +249,7 @@ type Stats struct {
 	ColdDir   string `json:"cold_dir"`
 }
 
-// Stats returns current counters.
+// Stats 返回当前计数器。
 func (m *Manager) Stats() Stats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -262,7 +262,7 @@ func (m *Manager) Stats() Stats {
 	}
 }
 
-// RetentionReport describes what would happen on a sweep
+// RetentionReport 描述一次扫描会发生什么
 // without modifying anything. Used by /debug/retention.
 type RetentionReport struct {
 	Tenant  string

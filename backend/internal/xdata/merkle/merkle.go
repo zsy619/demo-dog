@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// Tree is a binary Merkle tree over a sorted set of keys.
+// Tree 是对一组有序 keys 构建的二叉默克尔树。
 type Tree struct {
 	mu    sync.RWMutex
 	keys  []string
@@ -16,7 +16,7 @@ type Tree struct {
 	root  []byte
 }
 
-// New constructs a Merkle tree from keys.
+// New 由 keys 构造一棵默克尔树。
 func New(keys []string) *Tree {
 	sorted := append([]string{}, keys...)
 	sort.Strings(sorted)
@@ -29,14 +29,14 @@ func New(keys []string) *Tree {
 	return t
 }
 
-// Root returns the root hash as a hex string.
+// Root 以十六进制字符串返回根哈希。
 func (t *Tree) Root() string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return hex.EncodeToString(t.root)
 }
 
-// Diff returns the keys in b that are not in t (or have a
+// Diff 返回 b 中不在 t 中的 key（或具有不同
 // different value).
 func (t *Tree) Diff(other *Tree) []string {
 	t.mu.RLock()
@@ -57,7 +57,7 @@ func (t *Tree) Diff(other *Tree) []string {
 	return out
 }
 
-// Keys returns the sorted key list.
+// Keys 返回排序后的 key 列表。
 func (t *Tree) Keys() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -157,7 +157,7 @@ func (t *Tree) Proof(key string) *Proof {
 	return &Proof{Key: key, Path: path}
 }
 
-// VerifyProof checks that a proof matches the tree root.
+// VerifyProof 检查证明是否与树根匹配。
 func (t *Tree) VerifyProof(p *Proof) bool {
 	leaf := leafHash(p.Key)
 	cur := leaf

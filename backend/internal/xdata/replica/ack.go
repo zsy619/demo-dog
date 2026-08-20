@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// FollowerState tracks one follower progress.
+// FollowerState 跟踪一个 follower 的进度。
 type FollowerState struct {
 	ID         string `json:"id"`
 	Addr       string `json:"addr,omitempty"`
@@ -18,7 +18,7 @@ type FollowerState struct {
 	Connected  bool   `json:"connected"`
 }
 
-// PrimaryState is the at-least-once primary view of the cluster.
+// PrimaryState 是集群的 at-least-once primary 视图。
 type PrimaryState struct {
 	mu                  sync.Mutex
 	retained            []Record
@@ -30,7 +30,7 @@ type PrimaryState struct {
 	receivedAcks        atomic.Uint64
 }
 
-// NewPrimaryState returns a primary in at-least-once mode.
+// NewPrimaryState 返回 at-least-once 模式的 primary。
 func NewPrimaryState(maxRetained int) *PrimaryState {
 	if maxRetained <= 0 {
 		maxRetained = 100000
@@ -41,7 +41,7 @@ func NewPrimaryState(maxRetained int) *PrimaryState {
 	}
 }
 
-// RegisterFollower adds a follower to the cluster.
+// RegisterFollower 向集群添加一个 follower。
 func (p *PrimaryState) RegisterFollower(id, addr string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -50,7 +50,7 @@ func (p *PrimaryState) RegisterFollower(id, addr string) {
 	}
 }
 
-// Append records a new record on the primary.
+// Append 在 primary 上记录一条新记录。
 func (p *PrimaryState) Append(rec Record) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -69,7 +69,7 @@ func (p *PrimaryState) Append(rec Record) {
 	}
 }
 
-// Ack records a follower progress.
+// Ack 记录 follower 的进度。
 func (p *PrimaryState) Ack(followerID string, offset int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -97,14 +97,14 @@ func (p *PrimaryState) Ack(followerID string, offset int64) {
 	}
 }
 
-// Snapshot returns the current cluster state.
+// Snapshot 返回当前集群状态。
 func (p *PrimaryState) Snapshot() (offset int64, followers []FollowerState, dropped, acks uint64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, f := range p.followers {
 		followers = append(followers, *f)
 	}
-	// Track the high-water mark so callers see the latest offset
+	// 跟踪高水位标记，以便调用方看到最新偏移
 	// even after retention has been GC'd.
 	if len(p.retained) > 0 {
 		offset = p.retained[len(p.retained)-1].Offset
@@ -114,7 +114,7 @@ func (p *PrimaryState) Snapshot() (offset int64, followers []FollowerState, drop
 	return offset, followers, p.droppedOldest.Load(), p.receivedAcks.Load()
 }
 
-// RetainedForFollower returns records the follower needs to catch up.
+// RetainedForFollower 返回 follower 需要的追平记录。
 func (p *PrimaryState) RetainedForFollower(fromOffset int64) []Record {
 	p.mu.Lock()
 	defer p.mu.Unlock()

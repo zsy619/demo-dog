@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Step is one unit of work in a saga.
+// Step 是 saga 中的一个工作单元。
 type Step struct {
 	Name   string
 	Do     func(ctx context.Context) error
@@ -15,7 +15,7 @@ type Step struct {
 	Result any
 }
 
-// Outcome is the recorded outcome of a saga.
+// Outcome 是 saga 的记录结果。
 type Outcome struct {
 	Name     string
 	Executed []string
@@ -24,7 +24,7 @@ type Outcome struct {
 	Rollback bool
 }
 
-// Coordinator runs the steps in order; on the first error
+// Coordinator 按顺序执行步骤；遇到首个错误时
 // it runs each previously executed step's Undo in reverse
 // order to compensate.
 type Coordinator struct {
@@ -32,12 +32,12 @@ type Coordinator struct {
 	onRollback func(o Outcome)
 }
 
-// New returns an empty coordinator.
+// New 返回一个空 coordinator。
 func New() *Coordinator {
 	return &Coordinator{}
 }
 
-// OnRollback registers a hook fired after rollback completes.
+// OnRollback 注册回滚完成后触发的钩子。
 func (c *Coordinator) OnRollback(fn func(o Outcome)) {
 	c.mu.Lock()
 	c.onRollback = fn
@@ -87,5 +87,5 @@ func (c *Coordinator) compensate(ctx context.Context, steps []Step, out *Outcome
 	}
 }
 
-// ErrEmpty is returned when Run is given zero steps.
+// ErrEmpty 在 Run 收到零个步骤时返回。
 var ErrEmpty = errors.New("saga has no steps")

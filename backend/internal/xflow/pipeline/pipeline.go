@@ -9,18 +9,18 @@ import (
 	"sync/atomic"
 )
 
-// Stage processes one input and produces one (possibly
+// Stage 处理一个输入并产生一个（可能
 // transformed) output or an error. The pipeline feeds the
 // output of stage N into stage N+1.
 type Stage[T any] func(ctx context.Context, in T) (T, error)
 
-// Pipeline chains stages together.
+// Pipeline 将多个 stage 链接起来。
 type Pipeline[T any] struct {
 	stages []Stage[T]
 	name   string
 }
 
-// New creates a named pipeline from stages.
+// New 由 stages 创建一个具名流水线。
 func New[T any](name string, stages ...Stage[T]) *Pipeline[T] {
 	return &Pipeline[T]{name: name, stages: stages}
 }
@@ -50,14 +50,14 @@ func (p *Pipeline[T]) Run(ctx context.Context, in T) (T, error) {
 	return v, nil
 }
 
-// ForkResult is one branch output.
+// ForkResult 是单个分支的输出。
 type ForkResult[T any] struct {
 	Name   string
 	Value  T
 	Err    error
 }
 
-// Fork executes each stage concurrently with the same input
+// Fork 并发执行每个阶段，使用相同输入
 // and returns each branch result. Context-aware: if ctx is
 // cancelled all branches see Done.
 func Fork[T any](ctx context.Context, branches map[string]Stage[T], in T) []ForkResult[T] {
@@ -82,7 +82,7 @@ func Fork[T any](ctx context.Context, branches map[string]Stage[T], in T) []Fork
 	return results
 }
 
-// FirstError returns the first non-nil error from results.
+// FirstError 从结果中返回第一个非 nil 错误。
 func FirstError[T any](results []ForkResult[T]) error {
 	for _, r := range results {
 		if r.Err != nil {
@@ -92,5 +92,5 @@ func FirstError[T any](results []ForkResult[T]) error {
 	return nil
 }
 
-// ErrEmpty is returned when a pipeline has no stages.
+// ErrEmpty 在流水线没有阶段时返回。
 var ErrEmpty = errors.New("pipeline has no stages")

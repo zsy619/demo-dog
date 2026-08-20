@@ -65,7 +65,7 @@ func newHistogramAgg(p model.MetricPoint) *histogramAgg {
 func (h *histogramAgg) add(p model.MetricPoint) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// Bounds mismatch -> rebuild from scratch. Cheap enough since this
+	// 边界不匹配 -> 从头重建。此操作足够廉价，
 	// happens only when the upstream reconfigured.
 	if !sameBounds(h.bounds, p.BucketBounds) {
 		h.bounds = append([]float64(nil), p.BucketBounds...)
@@ -77,7 +77,7 @@ func (h *histogramAgg) add(p model.MetricPoint) {
 		h.hasData = true
 		return
 	}
-	// Also feed the t-digest with the bucket midpoints so quantile
+	// 同时将桶中点送入 t-digest，以便分位数
 	// answers remain accurate when the OTel bucket bounds shift
 	// between snapshots. We approximate each bucket by its midpoint.
 	if len(p.BucketCounts) == len(h.bounds) {
@@ -109,7 +109,7 @@ func (h *histogramAgg) add(p model.MetricPoint) {
 	h.hasData = true
 }
 
-// ObserveRaw feeds a single scalar observation into the t-digest.
+// ObserveRaw 将单个标量观测值送入 t-digest。
 // Used by non-histogram metric streams that need quantile answers.
 func (h *histogramAgg) ObserveRaw(x float64) {
 	h.mu.Lock()
@@ -125,7 +125,7 @@ func (h *histogramAgg) ObserveRaw(x float64) {
 	h.total++
 }
 
-// QuantileStreaming returns the q-th quantile (0..1) computed from
+// QuantileStreaming 返回从计算的 q 阶分位数（0..1）
 // the t-digest of raw observations. Use this when the upstream
 // exporter does not supply explicit bucket bounds (scalar metric
 // streams). Returns 0 if no data.
@@ -179,7 +179,7 @@ func (h *histogramAgg) quantile(q float64) float64 {
 	for i, c := range h.counts {
 		cum += c
 		if float64(cum) >= target {
-			// Found the bucket containing the q-th observation.
+			// 找到包含第 q 个观测值的桶。
 			// Interpolate within the bucket for better precision.
 			lower := 0.0
 			if i > 0 {

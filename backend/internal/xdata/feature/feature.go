@@ -1,7 +1,7 @@
 // Package feature 特性开关：按 key 评估启用/禁用，支持租户隔离。
 package feature
 
-// Per-tenant feature flags with audit trail.
+// 每租户特性开关，带审计跟踪。
 //
 // Until now operators had no way to gate a beta feature for a
 // single tenant. With Round 56 the flag table is per-tenant,
@@ -36,7 +36,7 @@ type Flag struct {
 	Default     any
 }
 
-// Validate runs basic integrity checks on the flag.
+// Validate 对 flag 运行基本完整性检查。
 func (f *Flag) Validate() error {
 	if f.Name == "" {
 		return errors.New("flag name required")
@@ -59,7 +59,7 @@ func (f *Flag) Validate() error {
 	return nil
 }
 
-// Override is one tenant-specific value.
+// Override 是一个租户特定值。
 type Override struct {
 	Tenant    string
 	Value     any
@@ -67,7 +67,7 @@ type Override struct {
 	UpdatedBy string
 }
 
-// AuditEntry records one change.
+// AuditEntry 记录一次变更。
 type AuditEntry struct {
 	Tenant     string
 	Flag       string
@@ -78,7 +78,7 @@ type AuditEntry struct {
 	Action     string // set, clear
 }
 
-// Manager is the flag table.
+// Manager 是 flag 表。
 type Manager struct {
 	mu       sync.RWMutex
 	flags    map[string]*Flag
@@ -88,7 +88,7 @@ type Manager struct {
 	now      func() time.Time
 }
 
-// NewManager returns an empty manager.
+// NewManager 返回一个空 manager。
 func NewManager(auditCap int) *Manager {
 	if auditCap <= 0 {
 		auditCap = 1024
@@ -101,13 +101,13 @@ func NewManager(auditCap int) *Manager {
 	}
 }
 
-// WithTime overrides the time source.
+// WithTime 覆盖时间源。
 func (m *Manager) WithTime(now func() time.Time) *Manager {
 	m.now = now
 	return m
 }
 
-// Register adds a flag definition.
+// Register 添加一个 flag 定义。
 func (m *Manager) Register(f *Flag) error {
 	if err := f.Validate(); err != nil {
 		return err
@@ -124,14 +124,14 @@ func (m *Manager) Register(f *Flag) error {
 	return nil
 }
 
-// MustRegister panics on error.
+// MustRegister 出错时 panic。
 func (m *Manager) MustRegister(f *Flag) {
 	if err := m.Register(f); err != nil {
 		panic(err)
 	}
 }
 
-// Get returns the flag definition.
+// Get 返回 flag 定义。
 func (m *Manager) Get(name string) (*Flag, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -139,7 +139,7 @@ func (m *Manager) Get(name string) (*Flag, bool) {
 	return f, ok
 }
 
-// List returns all flag names sorted.
+// List 返回所有 flag 名称（已排序）。
 func (m *Manager) List() []*Flag {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -165,7 +165,7 @@ func (m *Manager) Evaluate(name, tenant string) (any, bool) {
 	return f.Default, true
 }
 
-// Bool / String / Int typed accessors. Each returns the
+// Bool / String / Int 类型化访问器。每个返回
 // default if no override is set.
 func (m *Manager) Bool(name, tenant string) (bool, bool) {
 	v, ok := m.Evaluate(name, tenant)
@@ -196,7 +196,7 @@ func (m *Manager) Int(name, tenant string) (int, bool) {
 	return i, ok
 }
 
-// SetOverride sets the per-tenant override and records audit.
+// SetOverride 设置每租户覆盖并记录审计。
 func (m *Manager) SetOverride(name, tenant string, value any, actor string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -224,7 +224,7 @@ func (m *Manager) SetOverride(name, tenant string, value any, actor string) erro
 	return nil
 }
 
-// ClearOverride removes a tenant override and reverts to the
+// ClearOverride 移除租户覆盖并恢复为
 // default.
 func (m *Manager) ClearOverride(name, tenant, actor string) error {
 	m.mu.Lock()
@@ -262,7 +262,7 @@ func (m *Manager) Overrides(name string) []*Override {
 	return out
 }
 
-// Audit returns a copy of the audit ring (most recent last).
+// Audit 返回审计环的副本（最新的在末尾）。
 func (m *Manager) Audit() []AuditEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -271,7 +271,7 @@ func (m *Manager) Audit() []AuditEntry {
 	return out
 }
 
-// AuditFor returns audit entries scoped to one tenant.
+// AuditFor 返回限定于一个租户的审计条目。
 func (m *Manager) AuditFor(tenant string) []AuditEntry {
 	all := m.Audit()
 	out := make([]AuditEntry, 0, len(all))

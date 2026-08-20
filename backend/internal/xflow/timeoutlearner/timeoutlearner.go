@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Learner tracks per-host response times and recommends a
+// Learner 跟踪每个 host 的响应时间并推荐
 // timeout. The current implementation is an EWMA over the
 // p95-ish tail plus a safety factor.
 type Learner struct {
@@ -26,7 +26,7 @@ type hostStat struct {
 	last   time.Time
 }
 
-// Config is the Learner constructor options.
+// Config 是 Learner 构造函数的选项。
 type Config struct {
 	EWMAAlpha  float64       // smoothing 0..1; default 0.2
 	Safety     float64       // multiplier on EWMA; default 2.0
@@ -35,7 +35,7 @@ type Config struct {
 	Fallback   time.Duration // before any sample; default 1s
 }
 
-// New creates a Learner.
+// New 创建一个 Learner。
 func New(c Config) *Learner {
 	if c.EWMAAlpha <= 0 {
 		c.EWMAAlpha = 0.2
@@ -62,7 +62,7 @@ func New(c Config) *Learner {
 	}
 }
 
-// Observe records one successful sample.
+// Observe 记录一次成功的样本。
 func (l *Learner) Observe(host string, dur time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -100,20 +100,20 @@ func (l *Learner) Timeout(host string) time.Duration {
 	return d
 }
 
-// Forget removes host's samples.
+// Forget 移除 host 的样本。
 func (l *Learner) Forget(host string) {
 	l.mu.Lock()
 	delete(l.hosts, host)
 	l.mu.Unlock()
 }
 
-// Stats is one host's view.
+// Stats 是单个 host 的视图。
 type Stats struct {
 	EWMA  float64 `json:"ewma_ms"`
 	Count int     `json:"count"`
 }
 
-// Stats returns a copy of host's stats.
+// Stats 返回 host 统计的副本。
 func (l *Learner) Stats(host string) Stats {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -124,7 +124,7 @@ func (l *Learner) Stats(host string) Stats {
 	return Stats{EWMA: st.ewmaMs, Count: st.count}
 }
 
-// Snapshot returns all host stats.
+// Snapshot 返回所有 host 统计。
 func (l *Learner) Snapshot() map[string]Stats {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -135,14 +135,14 @@ func (l *Learner) Snapshot() map[string]Stats {
 	return out
 }
 
-// Reset clears all learned data.
+// Reset 清除所有已学习数据。
 func (l *Learner) Reset() {
 	l.mu.Lock()
 	l.hosts = make(map[string]*hostStat)
 	l.mu.Unlock()
 }
 
-// Sanity is a self-test that the EWMA math is bounded.
+// Sanity 是对 EWMA 计算有界的自检。
 func Sanity() bool {
 	l := New(Config{EWMAAlpha: 0.2, Safety: 2.0, Min: 100 * time.Millisecond, Max: 30 * time.Second, Fallback: time.Second})
 	for i := 0; i < 100; i++ {

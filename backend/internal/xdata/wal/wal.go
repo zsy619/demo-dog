@@ -13,7 +13,7 @@ import (
 	"sync"
 )
 
-// Frame on disk:
+// 磁盘上的帧格式：
 //   4 bytes  magic 'WAL1'
 //   4 bytes  length of payload (LE u32)
 //   payload bytes
@@ -22,7 +22,7 @@ import (
 // The CRC catches torn writes / corruption.
 var magic = [4]byte{'W', 'A', 'L', '1'}
 
-// WAL is an append-only log with periodic snapshot support.
+// WAL 是支持定期快照的仅追加日志。
 type WAL struct {
 	mu      sync.Mutex
 	path    string
@@ -32,13 +32,13 @@ type WAL struct {
 	hasSnap bool
 }
 
-// Snapshot stores the last snapshot state.
+// Snapshot 存储最近的快照状态。
 type Snapshot struct {
 	Seq     uint64 `json:"seq"`
 	Payload []byte `json:"payload"`
 }
 
-// Open opens (or creates) a WAL on the given path.
+// Open 在给定路径打开（或创建）WAL。
 func Open(path string) (*WAL, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
@@ -49,7 +49,7 @@ func Open(path string) (*WAL, error) {
 	return w, nil
 }
 
-// Close flushes + closes the file.
+// Close 刷新并关闭文件。
 func (w *WAL) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -64,7 +64,7 @@ func (w *WAL) Close() error {
 	return nil
 }
 
-// Append writes one entry to the WAL.
+// Append 向 WAL 写入一条记录。
 func (w *WAL) Append(seq uint64, payload []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -75,7 +75,7 @@ func (w *WAL) Append(seq uint64, payload []byte) error {
 	return w.writer.Flush()
 }
 
-// WriteSnapshot persists a snapshot payload, truncating entries
+// WriteSnapshot 持久化快照负载，截断条目
 // with seq <= snap.Seq.
 func (w *WAL) WriteSnapshot(seq uint64, payload []byte) error {
 	w.mu.Lock()
@@ -112,7 +112,7 @@ func (w *WAL) compactLocked() error {
 	}
 	w.file = f
 	w.writer = bufio.NewWriter(f)
-	// Re-write the snapshot as a synthetic entry.
+	// 将快照重写为合成条目。
 	snapFrame := encodeFrame(0, encodeSnapshotBlob(w.snap))
 	if _, err := w.writer.Write(snapFrame); err != nil {
 		return err
@@ -167,7 +167,7 @@ func decodeFrame(b []byte) (uint64, []byte, error) {
 	return seq, payload, nil
 }
 
-// Reader iterates frames from a file (or path).
+// Reader 从文件（或路径）迭代帧。
 type Reader struct {
 	file *os.File
 	r    *bufio.Reader
@@ -182,10 +182,10 @@ func NewReader(path string) (*Reader, error) {
 	return &Reader{file: f, r: bufio.NewReader(f)}, nil
 }
 
-// Close closes the reader.
+// Close 关闭读取器。
 func (r *Reader) Close() error { return r.file.Close() }
 
-// Next returns the next (seq, payload) or io.EOF.
+// Next 返回下一个 (seq, payload) 或 io.EOF。
 func (r *Reader) Next() (uint64, []byte, error) {
 	hdr := make([]byte, 8)
 	if _, err := io.ReadFull(r.r, hdr); err != nil {

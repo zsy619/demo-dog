@@ -1,5 +1,4 @@
 // Package poolg 提供一个固定大小的 goroutine 工作池。
-//
 // 任务通过有缓冲的 chan 提交，固定数量 worker 并发消费。
 //
 // 特性：

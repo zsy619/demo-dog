@@ -7,13 +7,13 @@ import (
 	"sync/atomic"
 )
 
-// Message is one published payload.
+// Message 是单个已发布负载。
 type Message struct {
 	Topic   string
 	Payload []byte
 }
 
-// Bus is a topic-based pub/sub fan-out.
+// Bus 是基于主题的 pub/sub 扇出。
 type Bus struct {
 	mu     sync.RWMutex
 	topics map[string]map[int]*Subscriber
@@ -22,19 +22,19 @@ type Bus struct {
 	drop   atomic.Uint64
 }
 
-// Subscriber is one consumer with a bounded buffer.
+// Subscriber 是带有限缓冲的单个消费者。
 type Subscriber struct {
 	ch     chan Message
 	dropped atomic.Uint64
 	closed atomic.Bool
 }
 
-// NewBus creates an empty Bus.
+// NewBus 创建一个空 Bus。
 func NewBus() *Bus {
 	return &Bus{topics: make(map[string]map[int]*Subscriber)}
 }
 
-// ErrUnknownTopic is returned when Subscribe references a
+// ErrUnknownTopic 在 Subscribe 引用
 // topic nobody has registered.
 var ErrUnknownTopic = errors.New("unknown topic")
 
@@ -54,7 +54,7 @@ func (b *Bus) Subscribe(topic string, bufferSize int) *Subscriber {
 	return s
 }
 
-// Publish sends a message to all subscribers on the topic.
+// Publish 向主题的所有订阅者发送消息。
 // Non-blocking: when a subscriber buffer is full, the
 // message is dropped for that subscriber.
 func (b *Bus) Publish(topic string, payload []byte) {
@@ -85,14 +85,14 @@ func (s *Subscriber) Messages() <-chan Message { return s.ch }
 // subscriber.
 func (s *Subscriber) Dropped() uint64 { return s.dropped.Load() }
 
-// Close closes the subscriber.
+// Close 关闭订阅者。
 func (s *Subscriber) Close() {
 	if s.closed.CompareAndSwap(false, true) {
 		close(s.ch)
 	}
 }
 
-// Stats returns counters.
+// Stats 返回计数器。
 type Stats struct {
 	Topics      int    `json:"topics"`
 	Subscribers int    `json:"subscribers"`
@@ -100,7 +100,7 @@ type Stats struct {
 	Dropped     uint64 `json:"dropped"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回快照。
 func (b *Bus) Stats() Stats {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -111,7 +111,7 @@ func (b *Bus) Stats() Stats {
 	return Stats{Topics: len(b.topics), Subscribers: n, Published: b.pub.Load(), Dropped: b.drop.Load()}
 }
 
-// CloseTopic removes all subscribers from a topic.
+// CloseTopic 移除一个主题的所有订阅者。
 func (b *Bus) CloseTopic(topic string) {
 	b.mu.Lock()
 	subs := b.topics[topic]

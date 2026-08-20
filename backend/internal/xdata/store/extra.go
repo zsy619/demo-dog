@@ -1,4 +1,4 @@
-// Package store: extended query / analytics helpers that build on the
+// Package store：构建于其上的扩展查询/分析辅助函数。
 // primary hot/cold tables defined in doris.go.
 //
 // These functions do NOT mutate the in-memory tables; they read under the
@@ -44,7 +44,7 @@ func matchesLabelFilter(attrs, want map[string]string) bool {
 	return true
 }
 
-// QueryLogsFiltered is like QueryLogs but supports a richer filter:
+// QueryLogsFiltered 与 QueryLogs 类似，但支持更丰富的过滤器：
 // time range, substring search across the body, and label-key matching.
 func (d *Doris) QueryLogsFiltered(f QueryFilter) model.QueryResult {
 	start := time.Now()
@@ -130,7 +130,7 @@ func (d *Doris) collectLogs(in []model.LogRecord, f QueryFilter) []model.LogReco
 	return out
 }
 
-// QueryMetricsFiltered supports labels filter + time range + window selection.
+// QueryMetricsFiltered 支持 labels 过滤 + 时间范围 + 窗口选择。
 func (d *Doris) QueryMetricsFiltered(f QueryFilter) model.QueryResult {
 	start := time.Now()
 	d.queriesServed.Add(1)
@@ -185,7 +185,7 @@ func (d *Doris) QueryMetricsFiltered(f QueryFilter) model.QueryResult {
 	}
 }
 
-// QueryTracesFiltered supports trace id, service, name substring, and label matching.
+// QueryTracesFiltered 支持 trace id、service、name 子串和 label 匹配。
 //
 // When the caller filters by service we expand the result set to include every
 // span belonging to the trace ids that matched, so the client sees the full
@@ -198,7 +198,7 @@ func (d *Doris) QueryTracesFiltered(f QueryFilter) model.QueryResult {
 	if f.TraceID != "" {
 		all = append(all, d.hotSpans[f.TraceID]...)
 	} else {
-		// First pass: collect trace ids that have at least one span matching
+		// 第一遍：收集至少有一个匹配 span 的 trace id
 		// every filter, so we can later expand them to full traces.
 		matchedTraces := make(map[string]struct{})
 		for tid, group := range d.hotSpans {
@@ -225,7 +225,7 @@ func (d *Doris) QueryTracesFiltered(f QueryFilter) model.QueryResult {
 				break
 			}
 		}
-		// Second pass: emit every span of every matched trace so a
+		// 第二遍：发出每个匹配 trace 的每个 span，以便
 		// "checkout" filter still surfaces the auth+postgres child spans.
 		for tid := range matchedTraces {
 			for _, s := range d.hotSpans[tid] {
@@ -281,7 +281,7 @@ func (d *Doris) QueryTracesFiltered(f QueryFilter) model.QueryResult {
 	}
 }
 
-// TraceSpans returns every span that belongs to a trace id (sorted by start_time).
+// TraceSpans 返回属于某 trace id 的每个 span（按 start_time 排序）。
 func (d *Doris) TraceSpans(traceID string) []model.SpanRecord {
 	d.muSpans.RLock()
 	defer d.muSpans.RUnlock()
@@ -291,7 +291,7 @@ func (d *Doris) TraceSpans(traceID string) []model.SpanRecord {
 	return out
 }
 
-// LabelKeys returns the union of attribute keys observed across stored records.
+// LabelKeys 返回所有已存记录中观察到的属性 key 并集。
 func (d *Doris) LabelKeys() model.LabelKeysResponse {
 	resp := model.LabelKeysResponse{Logs: []string{}, Metrics: []string{}, Spans: []string{}}
 	logKeys := map[string]bool{}
@@ -341,7 +341,7 @@ func (d *Doris) LabelKeys() model.LabelKeysResponse {
 	return resp
 }
 
-// ServiceMap walks every span and aggregates parent_service -> service edges.
+// ServiceMap 遍历每个 span 并聚合 parent_service -> service 边。
 func (d *Doris) ServiceMap() model.ServiceMap {
 	type edgeAcc struct {
 		calls  int64
@@ -411,7 +411,7 @@ func (d *Doris) ServiceMap() model.ServiceMap {
 	return out
 }
 
-// PercentileLatencies computes p50/p95/p99 over the duration_ms samples
+// PercentileLatencies 基于 duration_ms 样本计算 p50/p95/p99
 // observed for a single service in the hot tier. Returns 0 if no samples.
 func (d *Doris) PercentileLatencies(service string) (p50, p95, p99 float64) {
 	d.muSpans.RLock()
@@ -453,7 +453,7 @@ func percentile(samples []int64, q float64) float64 {
 	if len(cp) == 1 {
 		return float64(cp[0])
 	}
-	// Position in [0, len-1] floating point.
+	// 位置在 [0, len-1] 浮点。
 	pos := q * float64(len(cp)-1)
 	lo := int(pos)
 	hi := lo + 1
@@ -475,7 +475,7 @@ func avgMs(samples []int64) float64 {
 	return float64(sum) / float64(len(samples))
 }
 
-// TopMetricNames returns the top-N most-frequently ingested metric names.
+// TopMetricNames 返回摄入最频繁的前 N 个指标名。
 func (d *Doris) TopMetricNames(limit int) []string {
 	d.muMetrics.RLock()
 	defer d.muMetrics.RUnlock()
@@ -508,7 +508,7 @@ func (d *Doris) TopMetricNames(limit int) []string {
 	return out
 }
 
-// ServiceListForLog returns the set of services that have any log records.
+// ServiceListForLog 返回有任何日志记录的服务集合。
 func (d *Doris) ServiceListForLog() []string {
 	d.muLogs.RLock()
 	defer d.muLogs.RUnlock()
@@ -590,13 +590,13 @@ func resampleBuckets(src []int, dst int) []int {
 	}
 	out := make([]int, dst)
 	if dst >= len(src) {
-		// Pad-and-interleave: distribute src into dst slots evenly.
+		// 填充并交错：将 src 平均分布到 dst 槽中。
 		for i, v := range src {
 			out[i*dst/len(src)] += v
 		}
 		return out
 	}
-	// Merge: each output bin averages k = len(src)/dst input bins.
+	// Merge：每个输出桶平均 k = len(src)/dst 个输入桶。
 	k := len(src) / dst
 	r := len(src) % dst
 	idx := 0
@@ -629,7 +629,7 @@ func (d *Doris) SeverityCounts(service string) map[string]int {
 	return counts
 }
 
-// QPSByService returns a recent points-per-second aggregate per service.
+// QPSByService 返回每个服务最近每秒点的聚合。
 func (d *Doris) QPSByService(window time.Duration) map[string][]model.SeriesPoint {
 	d.muMetrics.RLock()
 	defer d.muMetrics.RUnlock()
@@ -688,7 +688,7 @@ func (d *Doris) Snapshot() (logs []model.LogRecord, metrics []model.MetricPoint,
 	return
 }
 
-// Counter accessors used by /metrics.
+// 用于 /metrics 的计数器访问器。
 func (d *Doris) LogsAccepted() int64    { return d.logsAccepted.Load() }
 func (d *Doris) MetricsAccepted() int64 { return d.metricsAccepted.Load() }
 func (d *Doris) SpansAccepted() int64   { return d.spansAccepted.Load() }
@@ -718,7 +718,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	detail.RecentTraces = []string{}
 	detail.QPS = []model.SeriesPoint{}
 
-	// Top endpoints by span name.
+	// 按 span name 的顶级 endpoint。
 	d.muSpans.RLock()
 	type acc struct {
 		count    int64
@@ -797,7 +797,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	}
 	sort.Strings(detail.MetricNames)
 
-	// Recent errors.
+	// 最近的错误。
 	d.muLogs.RLock()
 	for i := len(d.hotLogs) - 1; i >= 0; i-- {
 		r := d.hotLogs[i]
@@ -814,7 +814,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	}
 	d.muLogs.RUnlock()
 
-	// Recent trace IDs.
+	// 最近的 trace ID。
 	seen := map[string]bool{}
 	d.muSpans.RLock()
 	for _, group := range d.hotSpans {
@@ -837,7 +837,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	}
 	d.muSpans.RUnlock()
 
-	// QPS series (last 5 minutes, 1-second buckets).
+	// QPS 序列（最近 5 分钟，1 秒桶）。
 	qpsAll := d.QPSByService(5 * time.Minute)
 	if pts, ok := qpsAll[name]; ok && pts != nil {
 		detail.QPS = pts

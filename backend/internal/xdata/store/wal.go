@@ -116,7 +116,7 @@ func repairWAL(f *os.File) error {
 	return f.Truncate(good)
 }
 
-// Append records one entry to the WAL. The entry is fsynced before
+// Append 向 WAL 写入一条记录。该记录在
 // the call returns so a crash can lose at most the last batch that
 // was in-flight in the ingest pool.
 func (w *WAL) Append(op uint32, payload any) error {
@@ -143,7 +143,7 @@ func (w *WAL) Append(op uint32, payload any) error {
 	return w.f.Sync()
 }
 
-// Close flushes and closes the underlying file.
+// Close 刷新并关闭底层文件。
 func (w *WAL) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -156,7 +156,7 @@ func (w *WAL) Close() error {
 	return nil
 }
 
-// Rotate truncates the WAL. Call after a successful snapshot to bound
+// Rotate 截断 WAL。在成功快照后调用以限制
 // the replay window.
 func (w *WAL) Rotate() error {
 	w.mu.Lock()
@@ -171,7 +171,7 @@ func (w *WAL) Rotate() error {
 	return err
 }
 
-// Replay drains the WAL into a fresh Doris. The function is exposed
+// Replay 将 WAL 排空到新 Doris。该函数对外暴露
 // for tests; production code uses the unexported replayInto.
 func (w *WAL) Replay() ([]model.LogRecord, []model.MetricPoint, []model.SpanRecord, error) {
 	w.mu.Lock()
@@ -181,7 +181,7 @@ func (w *WAL) Replay() ([]model.LogRecord, []model.MetricPoint, []model.SpanReco
 		_ = w.en.Flush()
 	}
 	w.mu.Unlock()
-	// Open a fresh read-only fd because O_APPEND + Seek is not
+	// 打开一个新的只读 fd，因为 O_APPEND + Seek 不
 	// guaranteed to behave predictably on every OS.
 	f, err := os.Open(path)
 	if err != nil {
@@ -267,7 +267,7 @@ func SnapshotThenWAL(d *Doris, snapPath string, w *WAL) error {
 	return nil
 }
 
-// PeriodicPersist runs SnapshotThenWAL on the given interval until
+// PeriodicPersist 按给定间隔运行 SnapshotThenWAL，直到
 // the returned cancel function is called. Useful from main.go:
 //
 //	ctx, cancel := context.WithCancel(context.Background())

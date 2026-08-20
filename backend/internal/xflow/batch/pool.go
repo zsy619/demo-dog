@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// Job is the unit of work submitted to the pool. Done is called exactly once
+// Job 是提交到池的工作单元。Done 恰好被调用一次
 // to signal completion (success or failure). Error is reported back through
 // the optional Results callback.
 type Job struct {
@@ -28,7 +28,7 @@ type Job struct {
 	Done    func(err error)
 }
 
-// Pool is a bounded worker pool with cooperative backpressure.
+// Pool 是带协作背压的有界工作池。
 type Pool struct {
 	workers int
 	queue   chan Job
@@ -40,7 +40,7 @@ type Pool struct {
 	retryMax     int
 	retryBackoff time.Duration
 
-	// Bookkeeping surfaced via Stats().
+	// 通过 Stats() 暴露的簿记。
 	accepted atomic.Int64
 	processed atomic.Int64
 	retried   atomic.Int64
@@ -50,7 +50,7 @@ type Pool struct {
 	mu  sync.Mutex
 }
 
-// Options configures a new Pool.
+// Options 用于配置新 Pool。
 type Options struct {
 	Workers     int
 	QueueSize   int
@@ -58,7 +58,7 @@ type Options struct {
 	RetryBackoff time.Duration
 }
 
-// NewPool creates a Pool with the given options and starts its workers.
+// NewPool 以给定选项创建 Pool 并启动其 workers。
 func NewPool(opts Options) *Pool {
 	if opts.Workers <= 0 {
 		opts.Workers = 4
@@ -107,7 +107,7 @@ func (p *Pool) Close() {
 	p.wg.Wait()
 }
 
-// Stats returns a snapshot of pool counters.
+// Stats 返回池计数器的快照。
 type Stats struct {
 	Accepted  int64 `json:"accepted"`
 	Processed int64 `json:"processed"`
@@ -117,7 +117,7 @@ type Stats struct {
 	Workers   int   `json:"workers"`
 }
 
-// Stats returns live counters and the current queue depth.
+// Stats 返回实时计数器和当前队列深度。
 func (p *Pool) Stats() Stats {
 	return Stats{
 		Accepted:  p.accepted.Load(),

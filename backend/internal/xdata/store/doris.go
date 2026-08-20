@@ -1,4 +1,4 @@
-// Package store provides an in-memory simulation of an Apache Doris engine.
+// Package store 提供 Apache Doris 引擎的内存模拟实现。
 //
 // The design intentionally mirrors real Doris concepts so that the demo
 // behaves like an OLAP backend, even though everything fits in RAM:
@@ -26,13 +26,13 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// Config tunes the in-memory Doris engine.
+// Config 用于调优内存 Doris 引擎。
 type Config struct {
 	HotLogTTL    time.Duration // logs older than this move to cold
 	HotLogCap    int           // max hot logs per bucket
 	HotMetricCap int           // max hot metric points per (service, name)
 	ColdCap      int           // max cold rows per signal table
-	// MaxCardinality caps the number of unique (service, name,
+	// MaxCardinality 限制唯一 (service, name,
 	// label-set) tuples the engine will accept. 0 means unlimited.
 	// When the limit is hit, new series are dropped and the
 	// dropped counter increments. Set this in production to
@@ -52,7 +52,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Validate returns the first configuration error or nil.
+// Validate 返回首个配置错误或 nil。
 // Callers should fail fast at startup.
 func (c Config) Validate() error {
 	if c.HotLogTTL < 0 {
@@ -73,7 +73,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Doris is the in-memory engine backing the demo.
+// Doris 是 demo 的内存引擎。
 type Doris struct {
 	cfg Config
 
@@ -92,7 +92,7 @@ type Doris struct {
 	hotMetrics  map[string][]model.MetricPoint // key=service|name
 	coldMetrics []model.MetricPoint
 
-	// Histograms keyed by service|name. We aggregate sum/count into the
+	// 直方图按 service|name 索引。我们将 sum/count 聚合到
 	// MV-style buckets AND keep the latest bucket_bounds + per-bucket
 	// counts for proper quantile queries. Without this, OTel histograms
 	// would degrade to scalar sum/count and SLO p95/p99 would silently
@@ -113,13 +113,13 @@ type Doris struct {
 	muSum sync.RWMutex
 	sum   map[string]*model.ServiceSummary
 
-	// Total counters for /api/health.
+	// /api/health 的总计数器。
 	logsAccepted    atomic.Int64
 	metricsAccepted atomic.Int64
 	spansAccepted   atomic.Int64
 	queriesServed   atomic.Int64
 
-	// Cardinality tracking. seriesCardinality counts unique
+	// 基数跟踪。seriesCardinality 统计唯一
 	// (service, name, label-set) tuples currently held in hotMetrics.
 	// When cardinality > cfg.MaxCardinality new inserts are dropped
 	// and seriesDropped is incremented.
@@ -127,7 +127,7 @@ type Doris struct {
 	seriesDropped     atomic.Int64
 }
 
-// New returns a freshly initialized Doris engine.
+// New 返回一个新初始化的 Doris 引擎。
 func New(cfg Config) *Doris {
 	if cfg.HotLogTTL == 0 {
 		cfg = DefaultConfig()
@@ -148,7 +148,7 @@ func New(cfg Config) *Doris {
 	}
 }
 
-// Stats reports counters surfaced by /api/health.
+// Stats 报告 /api/health 暴露的计数器。
 type Stats struct {
 	LogsAccepted    int64 `json:"logs_accepted"`
 	MetricsAccepted int64 `json:"metrics_accepted"`
@@ -163,7 +163,7 @@ type Stats struct {
 	Services        int   `json:"services"`
 }
 
-// Stats returns a snapshot of the engine counters.
+// Stats 返回引擎计数器的快照。
 func (d *Doris) Stats() Stats {
 	d.muLogs.RLock()
 	hotLogs := len(d.hotLogs)
@@ -205,7 +205,7 @@ func (d *Doris) Stats() Stats {
 	}
 }
 
-// InsertLogs performs a Doris-style Stream Load of log records.
+// InsertLogs 执行 Doris 风格的 Stream Load 日志记录。
 // It returns the number of accepted rows.
 func (d *Doris) InsertLogs(in []model.LogRecord) int {
 	if len(in) == 0 {
@@ -224,13 +224,13 @@ func (d *Doris) InsertLogs(in []model.LogRecord) int {
 		}
 		d.logBuckets[r.Service]++
 	}
-	// Bound hot tier by evicting oldest.
+	// 通过淘汰最旧记录限制热层。
 	if len(d.hotLogs) > d.cfg.HotLogCap {
 		evicted := d.hotLogs[:len(d.hotLogs)-d.cfg.HotLogCap]
 		d.coldLogs = append(d.coldLogs, evicted...)
 		d.hotLogs = d.hotLogs[len(d.hotLogs)-d.cfg.HotLogCap:]
 	}
-	// Bound cold tier.
+	// 限制冷层。
 	if len(d.coldLogs) > d.cfg.ColdCap {
 		d.coldLogs = d.coldLogs[len(d.coldLogs)-d.cfg.ColdCap:]
 	}
@@ -242,7 +242,7 @@ func (d *Doris) InsertLogs(in []model.LogRecord) int {
 	return len(in)
 }
 
-// InsertMetrics adds metric points and updates the minute-level MV.
+// InsertMetrics 添加指标点并更新分钟级 MV。
 // When the engine has reached cfg.MaxCardinality, new (label-set)
 // variants of an existing metric are silently dropped and
 // seriesDropped is incremented.
@@ -293,7 +293,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 // HotMetricCap (default 4096), and label maps are usually small.
 func bucketContainsLabelSet(bucket []model.MetricPoint, want map[string]string) bool {
 	if len(want) == 0 {
-		// Empty label-set always matches the first empty-label point.
+		// 空标签集始终匹配首个空标签数据点。
 		for _, p := range bucket {
 			if len(p.Labels) == 0 {
 				return true
@@ -319,7 +319,7 @@ func bucketContainsLabelSet(bucket []model.MetricPoint, want map[string]string) 
 	return false
 }
 
-// CardinalityStats surfaces the live series count for /api/health.
+// CardinalityStats 暴露 /api/health 的实时序列数。
 type CardinalityStats struct {
 	Current int64 `json:"current"`
 	Cap     int   `json:"cap"`
@@ -334,7 +334,7 @@ func (d *Doris) CardinalityStats() CardinalityStats {
 	}
 }
 
-// InsertSpans adds trace spans grouped by trace_id.
+// InsertSpans 按 trace_id 分组添加 trace span。
 func (d *Doris) InsertSpans(in []model.SpanRecord) int {
 	if len(in) == 0 {
 		return 0
@@ -364,7 +364,7 @@ func (d *Doris) InsertSpans(in []model.SpanRecord) int {
 }
 
 
-// SetWAL attaches a write-ahead log. Subsequent inserts append to it.
+// SetWAL 附加预写日志。后续插入会追加到其中。
 // A nil WAL disables persistence.
 func (d *Doris) SetWAL(w *WAL) {
 	d.walMu.Lock()
@@ -383,7 +383,7 @@ func (d *Doris) appendWAL(op uint32, payload any) {
 	_ = w.Append(op, payload)
 }
 
-// ReplayInto reads every record from the WAL and applies it to d.
+// ReplayInto 读取 WAL 的每条记录并将其应用到 d。
 // Call after LoadFromFile to rebuild the in-memory state from disk.
 func (d *Doris) ReplayInto(w *WAL) error {
 	if w == nil {
@@ -470,7 +470,7 @@ func tenantKey(tenant, name string) string {
 	return tenant + "\x00" + name
 }
 
-// ListServices returns a stable, sorted view of service summaries.
+// ListServices 返回稳定且排序后的服务摘要视图。
 // When tenant is non-empty only services belonging to that tenant
 // are returned. When tenant is empty all services are returned (back
 // compat with callers that have not enabled multi-tenancy).
@@ -493,7 +493,7 @@ func (d *Doris) ListServices(tenant string) []model.ServiceSummary {
 	return out
 }
 
-// GetService returns a single service summary. When tenant is
+// GetService 返回单个服务摘要。当 tenant 为
 // non-empty, the lookup is restricted to summaries belonging to that
 // tenant.
 func (d *Doris) GetService(tenant, name string) (model.ServiceSummary, bool) {
@@ -606,7 +606,7 @@ func (d *Doris) updateMetricMV(in []model.MetricPoint) {
 	d.muMV.Lock()
 	defer d.muMV.Unlock()
 	for _, p := range in {
-		// Tenant + service + metric name as the MV bucket key so two
+		// 租户 + 服务 + 指标名作为 MV 桶键，因此两个
 		// tenants with the same service name do not co-mingle data.
 		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		ts := p.Timestamp.Truncate(time.Minute).UnixMilli()
@@ -626,7 +626,7 @@ func appendMVBucket(series []model.MVBucket, value float64, ts int64) []model.MV
 	}
 	last := series[len(series)-1]
 	if last.Ts == ts {
-		// Same bucket: accumulate sum/count/min/max.
+		// 同一桶：累加 sum/count/min/max。
 		last.Sum += value
 		last.Count++
 		if value < last.Min {
@@ -671,7 +671,7 @@ func mvToSeries(buckets []model.MVBucket) []model.SeriesPoint {
 	return out
 }
 
-// QueryLogs returns recent logs filtered by service, severity, and time window.
+// QueryLogs 返回按服务、严重级和时间窗口过滤的最近日志。
 func (d *Doris) QueryLogs(service string, severity string, limit int, sinceMs int64) model.QueryResult {
 	start := time.Now()
 	d.queriesServed.Add(1)
@@ -707,7 +707,7 @@ func (d *Doris) QueryLogs(service string, severity string, limit int, sinceMs in
 	}
 	d.muLogs.RUnlock()
 
-	// Sort by timestamp descending, then clip to limit.
+	// 按时间戳降序排序，然后截断到 limit。
 	sort.Slice(hot, func(i, j int) bool { return hot[i].Timestamp.After(hot[j].Timestamp) })
 	if len(hot) > limit {
 		hot = hot[:limit]

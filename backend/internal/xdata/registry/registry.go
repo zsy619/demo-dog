@@ -7,14 +7,14 @@ import (
 	"sync/atomic"
 )
 
-// Entry is one typed config slot.
+// Entry 是一个类型化配置槽。
 type Entry struct {
 	Key    string
 	Value  any
 	Reason string
 }
 
-// Registry is a thread-safe typed config registry.
+// Registry 是线程安全的类型化配置注册表。
 type Registry struct {
 	mu      sync.RWMutex
 	data    map[string]any
@@ -22,12 +22,12 @@ type Registry struct {
 	version atomic.Uint64
 }
 
-// New creates an empty Registry.
+// New 创建一个空 Registry。
 func New() *Registry {
 	return &Registry{data: make(map[string]any), reasons: make(map[string]string)}
 }
 
-// Set stores a key.
+// Set 存储一个 key。
 func (r *Registry) Set(key string, value any, reason string) {
 	r.mu.Lock()
 	r.data[key] = value
@@ -51,7 +51,7 @@ func (r *Registry) Reason(key string) string {
 	return r.reasons[key]
 }
 
-// Delete removes a key.
+// Delete 移除一个 key。
 func (r *Registry) Delete(key string) {
 	r.mu.Lock()
 	delete(r.data, key)
@@ -60,7 +60,7 @@ func (r *Registry) Delete(key string) {
 	r.version.Add(1)
 }
 
-// Snapshot returns a copy of all entries.
+// Snapshot 返回所有条目的副本。
 func (r *Registry) Snapshot() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -71,19 +71,19 @@ func (r *Registry) Snapshot() map[string]any {
 	return out
 }
 
-// Version returns the current version counter.
+// Version 返回当前版本计数器。
 func (r *Registry) Version() uint64 {
 	return r.version.Load()
 }
 
-// ErrKeyMissing is returned when the key is absent.
+// ErrKeyMissing 在 key 缺失时返回。
 var ErrKeyMissing = errors.New("key missing")
 
-// ErrBadType is returned when the stored value is not of
+// ErrBadType 在存储值不是预期
 // the expected type.
 var ErrBadType = errors.New("bad type")
 
-// GetString returns the value as a string.
+// GetString 将值作为 string 返回。
 func (r *Registry) GetString(key string) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -98,7 +98,7 @@ func (r *Registry) GetString(key string) (string, error) {
 	return s, nil
 }
 
-// GetInt returns the value as an int.
+// GetInt 将值作为 int 返回。
 func (r *Registry) GetInt(key string) (int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -117,7 +117,7 @@ func (r *Registry) GetInt(key string) (int, error) {
 	return 0, ErrBadType
 }
 
-// GetBool returns the value as a bool.
+// GetBool 将值作为 bool 返回。
 func (r *Registry) GetBool(key string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -132,7 +132,7 @@ func (r *Registry) GetBool(key string) (bool, error) {
 	return b, nil
 }
 
-// Keys returns all keys sorted.
+// Keys 返回所有排序后的 key。
 func (r *Registry) Keys() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

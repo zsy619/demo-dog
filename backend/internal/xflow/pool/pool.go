@@ -8,20 +8,20 @@ import (
 	"sync/atomic"
 )
 
-// Job is the unit of work.
+// Job 是工作单元。
 type Job struct {
 	Name string
 	Run  func(ctx context.Context) error
 }
 
-// Result is the outcome of one Job.
+// Result 是一次 Job 的结果。
 type Result struct {
 	Job    string
 	Err    error
 	Panic  any
 }
 
-// Pool is a fixed-size worker pool with bounded queue and
+// Pool 是固定大小、有界队列的工作池，并
 // backpressure. When the queue is full Submit returns an
 // error rather than blocking, so callers can shed load.
 type Pool struct {
@@ -42,7 +42,7 @@ type Pool struct {
 	cancel    context.CancelFunc
 }
 
-// Config configures the pool.
+// Config 用于配置池。
 type Config struct {
 	Name      string
 	Workers   int
@@ -50,7 +50,7 @@ type Config struct {
 	OnPanic   func(name string, r any)
 }
 
-// New creates a new pool. The pool does not start until
+// New 创建一个新池。在之前池不会启动
 // Start() is called.
 func New(cfg Config) *Pool {
 	if cfg.Workers <= 0 {
@@ -73,7 +73,7 @@ func New(cfg Config) *Pool {
 	return p
 }
 
-// Start launches the worker goroutines.
+// Start 启动 worker goroutine。
 func (p *Pool) Start() {
 	if !p.runOn.CompareAndSwap(false, true) {
 		return
@@ -96,7 +96,7 @@ func (p *Pool) Stop() {
 	close(p.results)
 }
 
-// Submit enqueues a job. Returns ErrFull when the queue is at
+// Submit 将任务入队。当队列处于
 // capacity so callers can shed load rather than block.
 func (p *Pool) Submit(j Job) error {
 	if !p.runOn.Load() {
@@ -112,7 +112,7 @@ func (p *Pool) Submit(j Job) error {
 	}
 }
 
-// SubmitCtx is the blocking variant. ctx.Done() returns ErrFull
+// SubmitCtx 是阻塞变体。ctx.Done() 返回 ErrFull
 // early so callers can cancel their wait.
 func (p *Pool) SubmitCtx(ctx context.Context, j Job) error {
 	select {
@@ -127,10 +127,10 @@ func (p *Pool) SubmitCtx(ctx context.Context, j Job) error {
 	}
 }
 
-// Results exposes the result channel.
+// Results 暴露结果 channel。
 func (p *Pool) Results() <-chan Result { return p.results }
 
-// Stats returns a snapshot of pool counters.
+// Stats 返回池计数器的快照。
 type Stats struct {
 	Name      string `json:"name"`
 	Workers   int    `json:"workers"`
@@ -143,7 +143,7 @@ type Stats struct {
 	Panicked  uint64 `json:"panicked"`
 }
 
-// Stats returns the counters.
+// Stats 返回计数器。
 func (p *Pool) Stats() Stats {
 	return Stats{
 		Name:      p.name,
@@ -158,7 +158,7 @@ func (p *Pool) Stats() Stats {
 	}
 }
 
-// ErrFull is returned by Submit when the queue is full.
+// ErrFull 在队列已满时由 Submit 返回。
 var ErrFull = errors.New("pool queue full")
 
 func (p *Pool) worker() {

@@ -1,4 +1,4 @@
-// Recording rules engine.
+// 录制规则引擎。
 //
 // A recording rule is a named, precomputed query. It runs against
 // the live data set on every evaluation cycle and stores the
@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// RecordingResult is one evaluation of a recording rule.
+// RecordingResult 是一次录制规则评估。
 type RecordingResult struct {
 	Metric string
 	Labels map[string]string
@@ -30,7 +30,7 @@ type RecordingResult struct {
 	Err    error
 }
 
-// RecordingRule defines one recording rule.
+// RecordingRule 定义一条录制规则。
 type RecordingRule struct {
 	Name        string
 	NewMetric   string
@@ -40,7 +40,7 @@ type RecordingRule struct {
 	Evaluate    func(ctx context.Context) (float64, error)
 }
 
-// RecordingEngine runs recording rules on a shared goroutine.
+// RecordingEngine 在共享 goroutine 上运行录制规则。
 type RecordingEngine struct {
 	mu     sync.RWMutex
 	rules  map[string]*recordingState
@@ -57,7 +57,7 @@ type recordingState struct {
 	fails   int64
 }
 
-// NewRecordingEngine returns an engine with no rules.
+// NewRecordingEngine 返回无规则的引擎。
 func NewRecordingEngine() *RecordingEngine {
 	return &RecordingEngine{rules: make(map[string]*recordingState), stopCh: make(chan struct{})}
 }
@@ -89,12 +89,12 @@ func (e *RecordingEngine) Remove(name string) bool {
 	return ok
 }
 
-// Start launches one goroutine per rule.
+// Start 为每条规则启动一个 goroutine。
 func (e *RecordingEngine) Start(ctx context.Context) {
 	go e.loop(ctx)
 }
 
-// Stop shuts down all rule goroutines.
+// Stop 关闭所有规则 goroutine。
 func (e *RecordingEngine) Stop() {
 	select {
 	case <-e.stopCh:
@@ -168,7 +168,7 @@ func (e *RecordingEngine) runRule(ctx context.Context, st *recordingState, tick 
 	}
 }
 
-// Snapshot returns runtime state of all rules.
+// Snapshot 返回所有规则的运行时状态。
 func (e *RecordingEngine) Snapshot() []RecordingStateView {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -190,7 +190,7 @@ func (e *RecordingEngine) Snapshot() []RecordingStateView {
 	return out
 }
 
-// RecordingStateView is the JSON-stable form of one rule state.
+// RecordingStateView 是单条规则状态的 JSON 稳定形式。
 type RecordingStateView struct {
 	Name        string            `json:"name"`
 	NewMetric   string            `json:"new_metric"`
@@ -211,7 +211,7 @@ func errString(e error) string {
 	return e.Error()
 }
 
-// Format returns a Prometheus-compatible rule entry.
+// Format 返回 Prometheus 兼容的规则条目。
 func (v RecordingStateView) Format() map[string]any {
 	return map[string]any{
 		"name":       v.Name,

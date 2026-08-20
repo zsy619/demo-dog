@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Record is a stored entry with a soft-delete marker.
+// Record 是带软删除标记的存储条目。
 type Record struct {
 	ID        string
 	Data      []byte
@@ -15,7 +15,7 @@ type Record struct {
 	Exists    bool
 }
 
-// Store keeps records with optional TTL + soft-delete.
+// Store 保留带可选 TTL + 软删除的记录。
 type Store struct {
 	mu       sync.RWMutex
 	records  map[string]*Record
@@ -23,14 +23,14 @@ type Store struct {
 	now      func() time.Time
 }
 
-// ErrNotFound is returned when the ID is missing.
+// ErrNotFound 在 ID 缺失时返回。
 var ErrNotFound = errors.New("record not found")
 
-// ErrAlreadyDeleted is returned when deleting a tombstoned
+// ErrAlreadyDeleted 在删除墓碑记录时返回。
 // record.
 var ErrAlreadyDeleted = errors.New("already deleted")
 
-// New creates a Store with TTL.
+// New 以 TTL 创建一个 Store。
 func New(ttl time.Duration) *Store {
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
@@ -44,14 +44,14 @@ func (s *Store) WithTime(now func() time.Time) *Store {
 	return s
 }
 
-// Put stores a record by id.
+// Put 按 id 存储一条记录。
 func (s *Store) Put(id string, data []byte) {
 	s.mu.Lock()
 	s.records[id] = &Record{ID: id, Data: data, Exists: true}
 	s.mu.Unlock()
 }
 
-// Get returns a copy of the record. Returns ErrNotFound if
+// Get 返回记录的副本。若不存在则返回 ErrNotFound。
 // soft-deleted or missing.
 func (s *Store) Get(id string) (*Record, error) {
 	s.mu.RLock()
@@ -68,7 +68,7 @@ func (s *Store) Get(id string) (*Record, error) {
 	return &cp, nil
 }
 
-// Delete soft-deletes a record.
+// Delete 软删除一条记录。
 func (s *Store) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,7 +84,7 @@ func (s *Store) Delete(id string) error {
 	return nil
 }
 
-// Restore clears the soft-delete marker.
+// Restore 清除软删除标记。
 func (s *Store) Restore(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -100,7 +100,7 @@ func (s *Store) Restore(id string) error {
 	return nil
 }
 
-// Reclaim drops soft-deleted records older than the TTL.
+// Reclaim 删除早于 TTL 的软删除记录。
 // Returns the number reclaimed.
 func (s *Store) Reclaim() int {
 	s.mu.Lock()
@@ -116,7 +116,7 @@ func (s *Store) Reclaim() int {
 	return n
 }
 
-// List returns all live records.
+// List 返回所有活跃记录。
 func (s *Store) List() []*Record {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -131,14 +131,14 @@ func (s *Store) List() []*Record {
 	return out
 }
 
-// Len returns the total record count (live + tombstoned).
+// Len 返回总记录数（活跃 + 墓碑）。
 func (s *Store) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.records)
 }
 
-// Live returns the live (non-deleted) record count.
+// Live 返回活跃（未删除）记录数。
 func (s *Store) Live() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

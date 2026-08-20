@@ -1,6 +1,6 @@
 package store
 
-// Schema migration framework.
+// Schema 迁移框架。
 //
 // As the store evolves, the on-disk layout of snapshots and
 // WAL records changes too. Without a migration framework every
@@ -28,26 +28,26 @@ import (
 	"fmt"
 )
 
-// Migration is one step in the chain.
+// Migration 是链中的一个步骤。
 type Migration struct {
 	Version int
 	Name    string
 	Apply   func(payload []byte) ([]byte, error)
 }
 
-// Migrator runs migrations in order.
+// Migrator 按顺序运行迁移。
 type Migrator struct {
 	chain []Migration
 }
 
-// NewMigrator returns a Migrator with the given chain. The
+// NewMigrator 返回带给定链的 Migrator。该
 // chain is stored as-is; callers are expected to construct it
 // in increasing version order.
 func NewMigrator(chain []Migration) *Migrator {
 	return &Migrator{chain: chain}
 }
 
-// Head returns the latest version in the chain.
+// Head 返回链中的最新版本。
 func (m *Migrator) Head() int {
 	if len(m.chain) == 0 {
 		return 0
@@ -55,7 +55,7 @@ func (m *Migrator) Head() int {
 	return m.chain[len(m.chain)-1].Version
 }
 
-// Apply runs every migration between from and Head.
+// Apply 运行从 from 到 Head 之间的每个迁移。
 func (m *Migrator) Apply(payload []byte, from int) ([]byte, int, error) {
 	if from > m.Head() {
 		return nil, 0, fmt.Errorf("source version %d > head %d", from, m.Head())
@@ -74,7 +74,7 @@ func (m *Migrator) Apply(payload []byte, from int) ([]byte, int, error) {
 	return cur, m.Head(), nil
 }
 
-// EncodeMigrationHeader prefixes payload with a fixed-size
+// EncodeMigrationHeader 在负载前添加固定大小的
 // big-endian uint32 version. The Doris snapshot writer emits
 // this header; the migration loader reads it via
 // DecodeMigrationHeader to learn the source version.
@@ -84,7 +84,7 @@ func EncodeMigrationHeader(version int, payload []byte) []byte {
 	return append(hdr[:], payload...)
 }
 
-// DecodeMigrationHeader reads the version prefix.
+// DecodeMigrationHeader 读取版本前缀。
 func DecodeMigrationHeader(payload []byte) (int, []byte, error) {
 	if len(payload) < 4 {
 		return 0, nil, errors.New("payload too short for migration header")
@@ -95,7 +95,7 @@ func DecodeMigrationHeader(payload []byte) (int, []byte, error) {
 
 // ---- built-in migrations ----
 
-// V1ToV2: the v1 snapshot was a single JSON document; v2
+// V1ToV2：v1 快照是单个 JSON 文档；v2
 // adds a histogram list at the end under PersistHistogram.
 // We accept v1 input as the older shape and re-marshal it with
 // empty histograms.
@@ -110,7 +110,7 @@ func V1ToV2(payload []byte) ([]byte, error) {
 	return json.Marshal(v1)
 }
 
-// V2ToV3: adds an empty TDigestMap. Idempotent.
+// V2ToV3：添加一个空 TDigestMap。幂等。
 func V2ToV3(payload []byte) ([]byte, error) {
 	var v2 map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &v2); err != nil {
@@ -122,7 +122,7 @@ func V2ToV3(payload []byte) ([]byte, error) {
 	return json.Marshal(v2)
 }
 
-// DefaultChain returns the chain shipped with the binary. New
+// DefaultChain 返回随二进制发布的迁移链。新的
 // migrations should be appended; never reorder.
 func DefaultChain() []Migration {
 	return []Migration{

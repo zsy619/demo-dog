@@ -14,7 +14,7 @@ package model
 
 import "time"
 
-// Severity mirrors OTel LogSeverity (subset).
+// Severity 对应 OTel LogSeverity（子集）。
 type Severity string
 
 const (
@@ -45,7 +45,7 @@ func (s Severity) Rank() int {
 	return -1
 }
 
-// LogRecord is a single log entry. OTLP AnyValue is simplified to string.
+// LogRecord 是一条日志记录。OTLP AnyValue 被简化为 string。
 type LogRecord struct {
 	Timestamp  time.Time         `json:"timestamp"`
 	TenantID   string            `json:"tenant_id,omitempty"`
@@ -57,7 +57,7 @@ type LogRecord struct {
 	SpanID     string            `json:"span_id,omitempty"`
 }
 
-// MetricPoint is a single metric data point, simplified OTel NumberDataPoint.
+// MetricPoint 是单个指标数据点，是简化的 OTel NumberDataPoint。
 type MetricPoint struct {
 	Timestamp time.Time         `json:"timestamp"`
 	TenantID  string            `json:"tenant_id,omitempty"`
@@ -80,7 +80,7 @@ type MetricPoint struct {
 	HistogramMax   float64   `json:"histogram_max,omitempty"`
 }
 
-// SpanRecord is a simplified OTel Span.
+// SpanRecord 是简化的 OTel Span。
 type SpanRecord struct {
 	TraceID    string            `json:"trace_id"`
 	SpanID     string            `json:"span_id"`
@@ -94,7 +94,7 @@ type SpanRecord struct {
 	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
-// OTLPRequest is a JSON-simplified OTLP-style write payload.
+// OTLPRequest 是 JSON 简化的 OTLP 风格写入负载。
 // Real OTLP uses Protobuf; this demo uses JSON but keeps OTel naming.
 type OTLPRequest struct {
 	TenantID      string            `json:"tenant_id,omitempty"`
@@ -104,7 +104,7 @@ type OTLPRequest struct {
 	Spans         []SpanRecord      `json:"spans,omitempty"`
 }
 
-// OTLPResponse is the write acknowledgement, with retry hints per signal.
+// OTLPResponse 是写入确认，含每个 signal 的重试提示。
 type OTLPResponse struct {
 	AcceptedLogs    int      `json:"accepted_logs"`
 	AcceptedMetrics int      `json:"accepted_metrics"`
@@ -115,7 +115,7 @@ type OTLPResponse struct {
 	Errors          []string `json:"errors,omitempty"`
 }
 
-// ServiceSummary is per-service overview consumed by the frontend cards.
+// ServiceSummary 是前端卡片使用的每服务概览。
 type ServiceSummary struct {
 	Name         string    `json:"name"`
 	TenantID     string    `json:"tenant_id,omitempty"`
@@ -131,13 +131,13 @@ type ServiceSummary struct {
 	LastLabels   []string  `json:"last_labels,omitempty"`
 }
 
-// SeriesPoint is a single point on a time series.
+// SeriesPoint 是时间序列上的一个点。
 type SeriesPoint struct {
 	Ts    int64   `json:"ts"` // ms
 	Value float64 `json:"value"`
 }
 
-// MVBucket is a single time-bucketed aggregate. Each bucket represents
+// MVBucket 是单个时间桶聚合。每个桶代表
 // a 1- or 5-minute window and stores sum+count so we can compute a
 // proper mean when the bucket is read out (rather than the previous
 // "running average" hack that biased toward the first sample).
@@ -161,7 +161,7 @@ func (b MVBucket) Mean() float64 {
 	return b.Sum / float64(b.Count)
 }
 
-// HistogramView is the read-out of an aggregated OTel histogram. The
+// HistogramView 是聚合 OTel 直方图的读出。
 // Bounds slice is the upper bound of each bucket (exclusive) with the
 // last entry representing +Inf overflow. Counts are the per-bucket
 // counts since the series began. Total/Sum/Min/Max are running totals
@@ -184,7 +184,7 @@ type MetricSeries struct {
 	Points  []SeriesPoint `json:"points"`
 }
 
-// QueryResult is the generic query response.
+// QueryResult 是通用查询响应。
 type QueryResult struct {
 	Type   string         `json:"type"` // logs|metrics|traces
 	Rows   []Row          `json:"rows"`
@@ -195,7 +195,7 @@ type QueryResult struct {
 // Row is a generic columnar row rendered by the frontend.
 type Row map[string]any
 
-// QueryStats reports query engine statistics.
+// QueryStats 报告查询引擎统计。
 //
 // Fields:
 //   - Scanned: total rows touched in the in-memory table
@@ -211,7 +211,7 @@ type QueryStats struct {
 	MVUsed   string `json:"mv_used,omitempty"`
 }
 
-// LabelKeys returns the set of attribute keys that have been observed
+// LabelKeys 返回已观察到的属性 key 集合
 // across all stored records. Useful for building the "filter by label"
 // dropdown in the frontend.
 type LabelKeysResponse struct {
@@ -220,7 +220,7 @@ type LabelKeysResponse struct {
 	Spans   []string `json:"spans"`
 }
 
-// ServiceMapEdge represents one edge in the service dependency graph.
+// ServiceMapEdge 表示服务依赖图中的一条边。
 type ServiceMapEdge struct {
 	From   string `json:"from"` // caller / parent
 	To     string `json:"to"`   // callee / child
@@ -230,13 +230,13 @@ type ServiceMapEdge struct {
 	P99Ms  float64 `json:"p99_ms"`
 }
 
-// ServiceMap is the response for /api/service-map.
+// ServiceMap 是 /api/service-map 的响应。
 type ServiceMap struct {
 	Edges []ServiceMapEdge `json:"edges"`
 	Nodes []string         `json:"nodes"` // distinct services in the map
 }
 
-// ServiceDetail bundles the per-service drill-down payload for /api/services/{name}/detail.
+// ServiceDetail 打包 /api/services/{name}/detail 的每服务下钻负载。
 // It surfaces top endpoints (span-name histogram), recent errors, recent trace IDs, and
 // the per-metric time series window so the frontend can render a complete service overview
 // page with a single round-trip.

@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// WAL is a dual-writer append-only log. Each record has a
+// WAL 是双写的仅追加日志。每条记录带有一个
 // 4-byte length + 4-byte CRC + payload.
 type WAL struct {
 	mu      sync.Mutex
@@ -18,17 +18,17 @@ type WAL struct {
 	records uint64
 }
 
-// ErrBadRecord is returned when the WAL detects a corrupt
+// ErrBadRecord 在 WAL 检测到损坏
 // frame on read.
 var ErrBadRecord = errors.New("bad record")
 
-// New creates a dual-writer WAL. primary is required; mirror
+// New 创建一个双写 WAL。primary 是必需的；mirror
 // may be nil.
 func New(primary, mirror io.Writer) *WAL {
 	return &WAL{primary: primary, mirror: mirror}
 }
 
-// Append writes a record to both writers.
+// Append 向两个 writer 写入一条记录。
 func (w *WAL) Append(p []byte) error {
 	if len(p) > 0xFFFFFFFF {
 		return errors.New("record too large")
@@ -57,24 +57,24 @@ func (w *WAL) Append(p []byte) error {
 	return nil
 }
 
-// Count returns the number of records appended.
+// Count 返回已追加的记录数。
 func (w *WAL) Count() uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.records
 }
 
-// Reader reads records from a WAL stream.
+// Reader 从 WAL 流读取记录。
 type Reader struct {
 	r io.Reader
 }
 
-// NewReader creates a Reader from r.
+// NewReader 从 r 创建 Reader。
 func NewReader(r io.Reader) *Reader {
 	return &Reader{r: r}
 }
 
-// Next reads the next record. io.EOF on end.
+// Next 读取下一条记录。结束时返回 io.EOF。
 func (r *Reader) Next() ([]byte, error) {
 	hdr := make([]byte, 8)
 	if _, err := io.ReadFull(r.r, hdr); err != nil {
@@ -97,7 +97,7 @@ func (r *Reader) Next() ([]byte, error) {
 	return buf, nil
 }
 
-// Verify reads all records from r and confirms checksum.
+// Verify 从 r 读取所有记录并确认校验和。
 // Returns the count verified.
 func (r *Reader) Verify() (int, error) {
 	n := 0

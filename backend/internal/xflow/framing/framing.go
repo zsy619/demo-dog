@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-// Op is a frame opcode.
+// Op 是一个帧操作码。
 type Op byte
 
 const (
@@ -18,31 +18,31 @@ const (
 	OpPong   Op = 0xA
 )
 
-// ErrBadFrame is returned when the frame header is corrupt.
+// ErrBadFrame 在帧头损坏时返回。
 var ErrBadFrame = errors.New("bad frame")
 
-// ErrFrameTooLarge is returned when the payload exceeds the
+// ErrFrameTooLarge 在负载超过
 // configured limit.
 var ErrFrameTooLarge = errors.New("frame too large")
 
-// Frame is one decoded message.
+// Frame 是单个解码后的消息。
 type Frame struct {
 	Op      Op
 	Payload []byte
 }
 
-// Conn wraps an io.ReadWriter with framing.
+// Conn 包装一个 io.ReadWriter 并提供帧处理。
 type Conn struct {
 	rw       io.ReadWriter
 	maxBytes int
 }
 
-// New creates a framed Conn. maxBytes <= 0 means no limit.
+// New 创建一个带帧的 Conn。maxBytes <= 0 表示无限制。
 func New(rw io.ReadWriter, maxBytes int) *Conn {
 	return &Conn{rw: rw, maxBytes: maxBytes}
 }
 
-// Write sends a frame with the given opcode and payload.
+// Write 发送带有指定操作码与负载的帧。
 func (c *Conn) Write(op Op, payload []byte) error {
 	size := len(payload)
 	var hdr []byte
@@ -76,7 +76,7 @@ func (c *Conn) Write(op Op, payload []byte) error {
 	return nil
 }
 
-// Read returns the next frame.
+// Read 返回下一帧。
 func (c *Conn) Read() (*Frame, error) {
 	var hdr [2]byte
 	if _, err := io.ReadFull(c.rw, hdr[:]); err != nil {

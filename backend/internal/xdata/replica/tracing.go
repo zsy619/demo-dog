@@ -13,14 +13,14 @@ type Tracer interface {
 	NewSpan(ctx context.Context, name string) (newCtx context.Context, traceparent, tracestate string)
 }
 
-// TraceRoundTripper injects W3C trace context into every outbound
+// TraceRoundTripper 向每个出站请求注入 W3C trace context
 // replica request.
 type TraceRoundTripper struct {
 	Inner  http.RoundTripper
 	Tracer Tracer
 }
 
-// NewTraceRT wraps an existing RoundTripper with trace injection.
+// NewTraceRT 用 trace 注入包装现有的 RoundTripper。
 func NewTraceRT(inner http.RoundTripper, t Tracer) *TraceRoundTripper {
 	if inner == nil {
 		inner = http.DefaultTransport
@@ -28,7 +28,7 @@ func NewTraceRT(inner http.RoundTripper, t Tracer) *TraceRoundTripper {
 	return &TraceRoundTripper{Inner: inner, Tracer: t}
 }
 
-// RoundTrip injects the traceparent header on every request.
+// RoundTrip 在每个请求上注入 traceparent 头。
 func (rt *TraceRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if rt.Tracer != nil {
 		if tp, ts := rt.Tracer.Header(req.Context()); tp != "" {
@@ -41,7 +41,7 @@ func (rt *TraceRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return rt.Inner.RoundTrip(req)
 }
 
-// ExtractTrace parses traceparent in a self-contained way.
+// ExtractTrace 以自包含的方式解析 traceparent。
 func ExtractTrace(r *http.Request) (traceID, spanID, flags string) {
 	tp := r.Header.Get("traceparent")
 	if tp == "" || len(tp) < 55 {
@@ -62,7 +62,7 @@ func ExtractTrace(r *http.Request) (traceID, spanID, flags string) {
 	return tp[dashes[0]+1 : dashes[1]], tp[dashes[1]+1 : dashes[2]], tp[dashes[2]+1 :]
 }
 
-// TraceFromContext extracts a traceparent string from ctx.
+// TraceFromContext 从 ctx 提取 traceparent 字符串。
 func TraceFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -75,7 +75,7 @@ func TraceFromContext(ctx context.Context) string {
 	return ""
 }
 
-// WithTraceparent stores a traceparent string on the context.
+// WithTraceparent 在 context 上存储 traceparent 字符串。
 func WithTraceparent(ctx context.Context, tp string) context.Context {
 	return context.WithValue(ctx, traceparentKey{}, tp)
 }

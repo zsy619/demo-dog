@@ -14,7 +14,7 @@ type SeriesEntry struct {
 	LastMs  int64             `json:"last_ms"`
 }
 
-// MetricCard summarises one metric name.
+// MetricCard 汇总一个指标名称。
 type MetricCard struct {
 	Name        string `json:"name"`
 	Series      int    `json:"series"`
@@ -24,7 +24,7 @@ type MetricCard struct {
 	LastSeenMs  int64  `json:"last_seen_ms,omitempty"`
 }
 
-// SeriesCatalog walks the in-memory hot/cold metric buffers and
+// SeriesCatalog 遍历内存热/冷指标缓冲，并
 // produces a catalog of (metric, series).
 type SeriesCatalog struct {
 	mu   sync.RWMutex

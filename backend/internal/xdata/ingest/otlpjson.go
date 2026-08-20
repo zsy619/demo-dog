@@ -110,7 +110,7 @@ type otlpNumberDP struct {
 	AsDouble          float64   `json:"asDouble"`
 }
 
-// DecodeOTLPJSON converts an OTel-standard OTLP/JSON envelope into our
+// DecodeOTLPJSON 将符合 OTel 标准的 OTLP/JSON 信封转换为我们的
 // internal model. It does NOT call our internal JSON decoder -- the wire
 // shape is different.
 //
@@ -236,7 +236,7 @@ func DecodeOTLPJSON(body []byte) (model.OTLPRequest, error) {
 				for _, dp := range mt.Histogram.DataPoints {
 					attrs := attrListToMap(dp.Attributes)
 					mergeAttrs(attrs, resourceAttrs)
-					// If the SDK sent explicit bucket boundaries + counts,
+					// 如果 SDK 发送了显式桶边界 + 计数，
 					// pass them through so the store can compute true
 					// quantiles. Otherwise fall back to the count+sum
 					// pseudo-metrics that mimic OTel semantics over a
@@ -361,7 +361,7 @@ func trimHex(s string) string {
 	if s == "" {
 		return ""
 	}
-	// OTel JSON often uses lowercase hex without 0x prefix, but tolerate 0x.
+	// OTel JSON 通常使用不带 0x 前缀的小写十六进制，但也容忍 0x。
 	s = strings.TrimPrefix(s, "0x")
 	if _, err := hex.DecodeString(s); err != nil {
 		return s // pass through; downstream may still match it

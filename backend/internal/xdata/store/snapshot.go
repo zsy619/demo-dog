@@ -12,7 +12,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// PersistSnapshot is the serializable representation of the Doris engine.
+// PersistSnapshot 是 Doris 引擎的可序列化表示。
 // It is intentionally limited to the hot tier + service summaries + MV
 // buckets so cold tiers can be rebuilt on next ingest.
 //
@@ -30,7 +30,7 @@ type PersistSnapshot struct {
 	Histograms map[string]*PersistHistogram
 }
 
-// PersistHistogram is the on-disk form of a histogramAgg.
+// PersistHistogram 是 histogramAgg 的磁盘形式。
 type PersistHistogram struct {
 	Bounds  []float64
 	Counts  []int64
@@ -63,7 +63,7 @@ func persistRegister() {
 	})
 }
 
-// PersistSnapshotBytes returns the snapshot as gob-encoded bytes.
+// PersistSnapshotBytes 以 gob 编码字节返回快照。
 func (d *Doris) PersistSnapshotBytes() ([]byte, error) {
 	persistRegister()
 	var buf bytes.Buffer
@@ -136,7 +136,7 @@ func (d *Doris) PersistSnapshotBytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// RestoreSnapshot loads a snapshot from r into the engine.
+// RestoreSnapshot 从 r 加载快照到引擎。
 func (d *Doris) RestoreSnapshot(r io.Reader) error {
 	persistRegister()
 	dec := gob.NewDecoder(r)
@@ -191,7 +191,7 @@ func (d *Doris) RestoreSnapshot(r io.Reader) error {
 	return nil
 }
 
-// SaveToFile writes the snapshot atomically.
+// SaveToFile 原子地写入快照。
 func (d *Doris) SaveToFile(path string) error {
 	data, err := d.PersistSnapshotBytes()
 	if err != nil {
@@ -204,7 +204,7 @@ func (d *Doris) SaveToFile(path string) error {
 	return os.Rename(tmp, path)
 }
 
-// LoadFromFile loads the snapshot. Missing file is not an error.
+// LoadFromFile 加载快照。文件不存在不视为错误。
 func (d *Doris) LoadFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

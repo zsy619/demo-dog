@@ -6,13 +6,13 @@ import (
 	"sync"
 )
 
-// Clock is a vector clock: a mapping of node -> counter.
+// Clock 是向量时钟：节点到计数器的映射。
 type Clock struct {
 	mu    sync.RWMutex
 	entry map[string]uint64
 }
 
-// New creates an empty Clock.
+// New 创建一个空 Clock。
 func New() *Clock {
 	return &Clock{entry: make(map[string]uint64)}
 }
@@ -40,7 +40,7 @@ func (c *Clock) Get(node string) uint64 {
 	return c.entry[node]
 }
 
-// Update merges other into c: takes the element-wise max.
+// Update 将 other 合并到 c：取逐元素最大值。
 // Returns the resulting "score" for ordering.
 func (c *Clock) Update(other *Clock) {
 	c.mu.Lock()
@@ -54,7 +54,7 @@ func (c *Clock) Update(other *Clock) {
 	}
 }
 
-// Compare returns the relationship between two clocks:
+// Compare 返回两个时钟的关系：
 // -1 if c < other (c is causally before other),
 //  0 if c == other (equal),
 //  1 if c > other (c is causally after other),
@@ -91,7 +91,7 @@ func (c *Clock) Compare(other *Clock) int {
 	}
 }
 
-// Snapshot returns a stable copy of the clock state.
+// Snapshot 返回时钟状态的稳定副本。
 func (c *Clock) Snapshot() map[string]uint64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -102,7 +102,7 @@ func (c *Clock) Snapshot() map[string]uint64 {
 	return out
 }
 
-// FromSnapshot restores from a map.
+// FromSnapshot 从 map 恢复。
 func (c *Clock) FromSnapshot(m map[string]uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -112,7 +112,7 @@ func (c *Clock) FromSnapshot(m map[string]uint64) {
 	}
 }
 
-// Nodes returns the sorted node list.
+// Nodes 返回已排序的节点列表。
 func (c *Clock) Nodes() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

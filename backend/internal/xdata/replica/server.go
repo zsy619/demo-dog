@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// ReplicaServer assembles the primary-side HTTP handler with auth
+// ReplicaServer 组合 primary 端的 HTTP handler 与认证
 // and the cluster state. Operators mount ServeReplica on their main
 // mux or run a dedicated listener for /replica/*.
 type ReplicaServer struct {
@@ -14,7 +14,7 @@ type ReplicaServer struct {
 	Node    *Node
 }
 
-// Handler returns the auth-wrapped handler tree.
+// Handler 返回带认证包装的处理函数树。
 func (s *ReplicaServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/replica/ack", s.Primary.AckHandler())

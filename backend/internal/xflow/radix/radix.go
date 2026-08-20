@@ -24,12 +24,12 @@ func newNode(prefix string) *node {
 	return &node{prefix: prefix, children: make(map[string]*node)}
 }
 
-// New creates an empty Tree.
+// New 创建一个空 Tree。
 func New() *Tree {
 	return &Tree{root: newNode("")}
 }
 
-// Insert inserts key with value. Existing key is overwritten.
+// Insert 插入 key 与 value。若 key 已存在则覆盖。
 func (t *Tree) Insert(key string, value any) {
 	if key == "" {
 		return
@@ -41,11 +41,11 @@ func (t *Tree) Insert(key string, value any) {
 
 func insert(n *node, key string, value any) {
 	for {
-		// Find longest prefix match between n.prefix and key.
+		// 查找 n.prefix 与 key 之间的最长前缀匹配。
 		common := commonPrefix(n.prefix, key)
 		switch {
 		case common == n.prefix && len(key) == len(common):
-			// Exact match on n. Set leaf + value.
+			// 对 n 的精确匹配。设置 leaf + value。
 			n.leaf = true
 			n.value = value
 			return
@@ -60,14 +60,14 @@ func insert(n *node, key string, value any) {
 			}
 			n = child
 		default:
-			// Split n. n.prefix = common; new child has n.prefix[len(common):].
+			// 分裂 n。n.prefix = 公共前缀；新子节点的 n.prefix[len(common):]。
 			oldPrefix := n.prefix
 			oldChildren := n.children
 			oldLeaf := n.leaf
 			oldValue := n.value
-			// Mutate n in place to become the split node.
+			// 就地变更 n 成为分裂节点。
 			n.prefix = common
-			// Preserve old children + state in a new sibling node.
+			// 在新的兄弟节点中保留旧的子节点 + 状态。
 			sibling := newNode(oldPrefix[len(common):])
 			sibling.children = oldChildren
 			sibling.leaf = oldLeaf
@@ -112,7 +112,7 @@ func (t *Tree) Lookup(key string) any {
 	}
 }
 
-// ErrBadPattern is returned when a wildcard pattern is invalid.
+// ErrBadPattern 在通配符模式非法时返回。
 var ErrBadPattern = errors.New("bad pattern")
 
 // MatchPattern looks up a pattern that may end with a "*"
@@ -150,7 +150,7 @@ func lookupNode(n *node, key string) *node {
 	}
 }
 
-// Len returns the number of leaf entries.
+// Len 返回叶子条目数。
 func (t *Tree) Len() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

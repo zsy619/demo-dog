@@ -1,4 +1,4 @@
-// Package tenants implements a tiny in-process tenant registry. Each
+// Package tenants 实现一个轻量的进程内租户注册表。每个
 // tenant has a unique ID, a display name, an optional description, and
 // a list of API keys that belong to it. The registry is the source of
 // truth for tenant isolation: when a handler resolves a request it
@@ -20,7 +20,7 @@ import (
 
 var ErrNotFound = errors.New("tenant not found")
 
-// Tenant is the on-the-wire description of an organisation.
+// Tenant 是组织的线上描述。
 type Tenant struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -29,7 +29,7 @@ type Tenant struct {
 	Active      bool      `json:"active"`
 }
 
-// Key is an API key owned by one tenant. We do not persist secrets; the
+// Key 是由一个租户拥有的 API key。我们不持久化 secret；
 // caller is responsible for handing the plaintext to the operator over
 // a secure channel.
 type Key struct {
@@ -40,7 +40,7 @@ type Key struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Registry is the in-memory tenant + key store.
+// Registry 是内存中的租户 + key 存储。
 type Registry struct {
 	mu       sync.RWMutex
 	tenants  map[string]*Tenant
@@ -54,7 +54,7 @@ func New() *Registry {
 	}
 }
 
-// CreateTenant registers a new tenant. ID is normalised to lowercase
+// CreateTenant 注册一个新租户。ID 被规范化为小写
 // slug; an empty ID returns an error.
 func (r *Registry) CreateTenant(id, name, description string) (*Tenant, error) {
 	id = strings.ToLower(strings.TrimSpace(id))
@@ -77,7 +77,7 @@ func (r *Registry) CreateTenant(id, name, description string) (*Tenant, error) {
 	return t, nil
 }
 
-// Get returns a tenant by id.
+// Get 按 id 返回一个租户。
 func (r *Registry) Get(id string) (*Tenant, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -89,7 +89,7 @@ func (r *Registry) Get(id string) (*Tenant, error) {
 	return &out, nil
 }
 
-// List returns all tenants in insertion order (by created_at).
+// List 按插入顺序（按 created_at）返回所有租户。
 func (r *Registry) List() []Tenant {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -120,7 +120,7 @@ func (r *Registry) MintKey(tenantID, label, role string) (*Key, error) {
 	}, nil
 }
 
-// LookupTenant returns the tenant that owns a key, or empty when the
+// LookupTenant 返回拥有 key 的租户，若无则返回空
 // key is not a tenant-bound key. Used by the auth middleware to stamp
 // X-Dog-Tenant on the request.
 func (r *Registry) LookupTenant(plaintext string) string {
@@ -129,7 +129,7 @@ func (r *Registry) LookupTenant(plaintext string) string {
 	return r.keys[plaintext]
 }
 
-// SnapshotKeyMap returns a copy of every (plaintext -> tenant id) pair
+// SnapshotKeyMap 返回每个 (明文 -> 租户 id) 对的副本
 // so the auth layer can build its registry without losing information.
 func (r *Registry) SnapshotKeyMap() map[string]string {
 	r.mu.RLock()

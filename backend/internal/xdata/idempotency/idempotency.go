@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Record stores one idempotent response.
+// Record 存储一条幂等响应。
 type Record struct {
 	Key        string
 	RequestHash string
@@ -22,7 +22,7 @@ type Record struct {
 	StoredAt   time.Time
 }
 
-// Store is the idempotency-key store with TTL eviction.
+// Store 是带 TTL 淘汰的幂等键存储。
 type Store struct {
 	mu       sync.Mutex
 	items    map[string]*Record
@@ -31,7 +31,7 @@ type Store struct {
 	now      func() time.Time
 }
 
-// New constructs a Store with the given TTL.
+// New 以给定 TTL 构造一个 Store。
 func New(ttl time.Duration, maxItems int) *Store {
 	if maxItems <= 0 {
 		maxItems = 8192
@@ -81,14 +81,14 @@ func (s *Store) Lookup(key string) *Record {
 	return r
 }
 
-// Forget drops a key.
+// Forget 删除一个 key。
 func (s *Store) Forget(key string) {
 	s.mu.Lock()
 	delete(s.items, key)
 	s.mu.Unlock()
 }
 
-// Len returns the current entry count.
+// Len 返回当前条目数。
 func (s *Store) Len() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,22 +118,22 @@ func (s *Store) evictOne() {
 	}
 }
 
-// HashRequest returns a stable SHA256 of the request body.
+// HashRequest 返回请求体的稳定 SHA256。
 func HashRequest(body []byte) string {
 	h := sha256.Sum256(body)
 	return hex.EncodeToString(h[:])
 }
 
-// ErrKeyMissing is returned by Middleware.Lookup when the
+// ErrKeyMissing 由 Middleware.Lookup 在
 // caller did not send an Idempotency-Key header.
 var ErrKeyMissing = errors.New("idempotency key missing")
 
-// Middleware enforces idempotency on a single endpoint.
+// Middleware 在单个端点上强制幂等性。
 type Middleware struct {
 	Store *Store
-	// RequireKey rejects requests missing Idempotency-Key.
+	// RequireKey 拒绝缺少 Idempotency-Key 的请求。
 	RequireKey bool
-	// MismatchBodyHash returns an error when the request
+	// MismatchBodyHash 在请求时返回错误
 	// body differs from the body that produced the cached
 	// response.
 	MismatchBodyHash bool

@@ -14,14 +14,14 @@ import (
 	"time"
 )
 
-// Algorithm is the signing algorithm.
+// Algorithm 表示签名算法。
 type Algorithm string
 
 const (
 	HS256 Algorithm = "HS256"
 )
 
-// Key carries the secret + kid for one rotation entry.
+// Key 保存一次轮换项的密钥与 kid。
 type Key struct {
 	KID     string
 	Secret  []byte
@@ -29,8 +29,8 @@ type Key struct {
 	Created time.Time
 }
 
-// Verifier holds a ring of keys by kid, with the current key
-// always at index 0.
+// Verifier 持有按 kid 索引的密钥环，
+// 当前密钥始终位于索引 0。
 type Verifier struct {
 	mu        sync.RWMutex
 	keys      map[string]*Key
@@ -39,7 +39,7 @@ type Verifier struct {
 	now       func() time.Time
 }
 
-// New creates an empty Verifier.
+// New 创建一个空的 Verifier。
 func New(clockSkew time.Duration) *Verifier {
 	if clockSkew <= 0 {
 		clockSkew = 30 * time.Second
@@ -51,13 +51,13 @@ func New(clockSkew time.Duration) *Verifier {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试所用的时间源。
 func (v *Verifier) WithTime(now func() time.Time) *Verifier {
 	v.now = now
 	return v
 }
 
-// Add introduces a key. New keys go to the front of the order.
+// Add 引入一个新密钥。新密钥会放到顺序的最前面。
 func (v *Verifier) Add(k *Key) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -65,7 +65,7 @@ func (v *Verifier) Add(k *Key) {
 	v.order = append([]string{k.KID}, v.order...)
 }
 
-// Remove drops a key by kid.
+// Remove 按 kid 删除一个密钥。
 func (v *Verifier) Remove(kid string) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -79,16 +79,16 @@ func (v *Verifier) Remove(kid string) {
 	v.order = out
 }
 
-// ErrNoKey is returned when no key matches the kid.
+// ErrNoKey 在没有密钥匹配给定 kid 时返回。
 var ErrNoKey = errors.New("no key")
 
-// ErrBadToken is returned for malformed tokens.
+// ErrBadToken 在令牌格式错误时返回。
 var ErrBadToken = errors.New("bad token")
 
-// ErrExpired is returned when the token is past its expiry.
+// ErrExpired 在令牌超过有效期时返回。
 var ErrExpired = errors.New("expired")
 
-// Verify parses and validates a token, returning the kid.
+// Verify 解析并校验令牌，返回 kid。
 func (v *Verifier) Verify(token string) (map[string]any, string, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -162,13 +162,13 @@ func (c *claimsCtx) Deadline() (time.Time, bool)       { return c.ctx.Deadline()
 func (c *claimsCtx) Done() <-chan struct{}             { return c.ctx.Done() }
 func (c *claimsCtx) Err() error                        { return c.ctx.Err() }
 
-// WithClaims wraps a context.Context with claims + kid.
+// WithClaims 将 claims 与 kid 包装到 context.Context 中。
 func WithClaims(ctx context.Context, claims map[string]any, kid string) context.Context {
 	return &claimsCtx{ctx: ctx, claims: claims, kid: kid}
 }
 
-// FromContext returns the claims map + kid injected by the
-// middleware.
+// FromContext 返回由中间件注入到上下文中的 claims 映射
+// 与 kid。
 func FromContext(ctx context.Context) (map[string]any, string, bool) {
 	c, ok := ctx.Value(claimsKey).(map[string]any)
 	if !ok {
@@ -178,8 +178,8 @@ func FromContext(ctx context.Context) (map[string]any, string, bool) {
 	return c, kid, true
 }
 
-// Sign issues a HS256 token for the given claims using the
-// given key.
+// Sign 使用给定密钥为指定 claims 签发一个
+// HS256 令牌。
 func Sign(claims map[string]any, k *Key) (string, error) {
 	header := map[string]any{"alg": "HS256", "typ": "JWT", "kid": k.KID}
 	hb, err := json.Marshal(header)
@@ -198,8 +198,8 @@ func Sign(claims map[string]any, k *Key) (string, error) {
 	return hp + "." + cp + "." + sig, nil
 }
 
-// Middleware returns the http.Handler that requires a valid
-// bearer token + injects claims into the request context.
+// Middleware 返回一个 http.Handler，要求传入合法的
+// bearer 令牌，并将 claims 注入到请求上下文中。
 func (v *Verifier) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")

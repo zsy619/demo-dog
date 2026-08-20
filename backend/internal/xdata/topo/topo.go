@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 )
 
-// Status is the lifecycle status of a task.
+// Status 是一个任务的生命周期状态。
 type Status int
 
 const (
@@ -31,7 +31,7 @@ func (s Status) String() string {
 	return "unknown"
 }
 
-// Task is one node in the topology.
+// Task 是拓扑中的一个节点。
 type Task struct {
 	ID       string
 	Parent   string
@@ -40,7 +40,7 @@ type Task struct {
 	Err      error
 }
 
-// Queue maintains a parent/child task topology. Children
+// Queue 维护父子任务拓扑。子任务
 // cannot run until their parent is Done.
 type Queue struct {
 	mu       sync.RWMutex
@@ -52,12 +52,12 @@ type Queue struct {
 	closed   atomic.Uint32
 }
 
-// New creates an empty Queue.
+// New 创建一个空 Queue。
 func New() *Queue {
 	return &Queue{tasks: make(map[string]*Task), ready: make(chan string, 1024)}
 }
 
-// Add registers a task. If a parent is set and not yet Done,
+// Add 注册一个任务。如果设置了 parent 且尚未 Done，
 // the task is queued for parent completion.
 func (q *Queue) Add(id, parent string) {
 	q.mu.Lock()
@@ -83,10 +83,10 @@ func (q *Queue) enqueueReady(id string) {
 	}
 }
 
-// ErrNoTask is returned when the requested ID is unknown.
+// ErrNoTask 在请求的 ID 未知时返回。
 var ErrNoTask = errors.New("task not found")
 
-// Start marks the task as running.
+// Start 将任务标记为运行中。
 func (q *Queue) Start(id string) error {
 	q.mu.Lock()
 	t, ok := q.tasks[id]
@@ -104,7 +104,7 @@ func (q *Queue) Start(id string) error {
 	return nil
 }
 
-// Complete marks the task as done and unblocks its children.
+// Complete 将任务标记为完成并解除子任务的阻塞。
 func (q *Queue) Complete(id string, err error) error {
 	q.mu.Lock()
 	t, ok := q.tasks[id]
@@ -127,14 +127,14 @@ func (q *Queue) Complete(id string, err error) error {
 	return nil
 }
 
-// Next returns the next ready task ID, blocking until one is
+// Next 返回下一个就绪任务 ID，阻塞直到存在
 // available or the queue is closed.
 func (q *Queue) Next() (string, bool) {
 	id, ok := <-q.ready
 	return id, ok
 }
 
-// Get returns a snapshot of a task.
+// Get 返回一个任务的快照。
 func (q *Queue) Get(id string) (*Task, bool) {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -147,7 +147,7 @@ func (q *Queue) Get(id string) (*Task, bool) {
 	return &cp, true
 }
 
-// Stats returns counters.
+// Stats 返回计数器。
 type Stats struct {
 	Tasks   int    `json:"tasks"`
 	Running int64  `json:"running"`
@@ -155,7 +155,7 @@ type Stats struct {
 	Failed  int    `json:"failed"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回快照。
 func (q *Queue) Stats() Stats {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
@@ -168,7 +168,7 @@ func (q *Queue) Stats() Stats {
 	return stats
 }
 
-// Close shuts down the queue. No further tasks can be added.
+// Close 关闭队列。此后不能再添加任务。
 func (q *Queue) Close() {
 	if q.closed.CompareAndSwap(0, 1) {
 		close(q.ready)

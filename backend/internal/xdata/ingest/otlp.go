@@ -1,4 +1,4 @@
-// Package ingest implements the OTLP-style JSON ingest pipeline.
+// Package ingest 实现 OTLP 风格的 JSON 摄取管道。
 //
 // The public surface is intentionally narrow: a single Ingestor struct that
 // knows how to take an OTLPRequest, validate it, batch it, and finally push
@@ -24,7 +24,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
 )
 
-// Ingestor wires the OTLP decoder, the worker pool, and the store together.
+// Ingestor 将 OTLP 解码器、工作池和 store 连接起来。
 type Ingestor struct {
 	store *store.Doris
 	pool  *batch.Pool
@@ -34,7 +34,7 @@ type Ingestor struct {
 	recent   []model.OTLPRequest
 }
 
-// New constructs an Ingestor with a custom pool size; default is 8 workers.
+// New 以自定义池大小构造 Ingestor；默认为 8 个 worker。
 func New(s *store.Doris, poolSize int) *Ingestor {
 	if poolSize <= 0 {
 		poolSize = 8
@@ -48,12 +48,12 @@ func New(s *store.Doris, poolSize int) *Ingestor {
 	return &Ingestor{store: s, pool: pool}
 }
 
-// Close drains the worker pool.
+// Close 排空工作池。
 func (in *Ingestor) Close() {
 	in.pool.Close()
 }
 
-// PoolStats exposes the worker pool counters (accepted, processed,
+// PoolStats 暴露工作池计数器（accepted、processed、
 // retried, failed). The HTTP /metrics handler renders them as
 // Prometheus counters so operators can see ingest back-pressure in
 // real time.
@@ -61,7 +61,7 @@ func (in *Ingestor) PoolStats() batch.Stats {
 	return in.pool.Stats()
 }
 
-// Validate performs lightweight sanity checks on an OTLPRequest.
+// Validate 对 OTLPRequest 执行轻量级健全性检查。
 // It does not check every field; missing service name is the only hard error.
 func (in *Ingestor) Validate(req *model.OTLPRequest) error {
 	if req == nil {
@@ -93,7 +93,7 @@ func (in *Ingestor) Validate(req *model.OTLPRequest) error {
 	return nil
 }
 
-// Normalize applies resource attributes (e.g. service.name) to records that
+// Normalize 将资源属性（例如 service.name）应用于
 // do not have their own service field. It also sets sensible defaults for
 // severity and timestamp so downstream code doesnt need to deal with zeros.
 //

@@ -14,7 +14,7 @@ type Task struct {
 	Run    func(ctx context.Context) error
 }
 
-// Pool is a worker pool with per-tenant FIFO fairness.
+// Pool 是按租户 FIFO 公平调度的工作池。
 type Pool struct {
 	mu       sync.Mutex
 	queues   map[string]chan Task
@@ -29,13 +29,13 @@ type Pool struct {
 	reject   atomic.Uint64
 }
 
-// ErrClosed is returned when Submit is called after Close.
+// ErrClosed 在 Close 之后调用 Submit 时返回。
 var ErrClosed = errors.New("pool closed")
 
-// ErrFull is returned when the queue is full.
+// ErrFull 在队列已满时返回。
 var ErrFull = errors.New("queue full")
 
-// New creates a Pool with workers and per-tenant queueSize.
+// New 创建带 workers 与每租户 queueSize 的 Pool。
 func New(workers, queueSize int) *Pool {
 	if workers <= 0 {
 		workers = 4
@@ -126,7 +126,7 @@ func (p *Pool) next() (Task, bool) {
 			tenants = append(tenants, t)
 		}
 	}
-	// Also discover any tenants not yet in order.
+	// 同时发现尚未排序的租户。
 	for t := range p.queues {
 		if !visited[t] {
 			visited[t] = true
@@ -176,7 +176,7 @@ func (p *Pool) watch() <-chan Task {
 	return merged
 }
 
-// Close drains the queue and stops workers.
+// Close 排空队列并停止工作协程。
 func (p *Pool) Close() {
 	if p.closed.CompareAndSwap(false, true) {
 		p.cancel()
@@ -184,7 +184,7 @@ func (p *Pool) Close() {
 	}
 }
 
-// Stats returns counters.
+// Stats 返回计数器。
 type Stats struct {
 	Workers  int    `json:"workers"`
 	Tenants  int    `json:"tenants"`
@@ -192,7 +192,7 @@ type Stats struct {
 	Rejected uint64 `json:"rejected"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回快照。
 func (p *Pool) Stats() Stats {
 	p.mu.Lock()
 	defer p.mu.Unlock()

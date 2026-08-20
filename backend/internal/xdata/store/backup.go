@@ -16,20 +16,20 @@ import (
 	"time"
 )
 
-// BackupManager owns backup creation + restore.
+// BackupManager 负责备份创建与恢复。
 type BackupManager struct {
 	mu      sync.Mutex
 	dataDir string
 }
 
-// BackupOptions customises a backup run.
+// BackupOptions 自定义一次备份运行。
 type BackupOptions struct {
 	Output     string
 	Compress   *bool
 	IncludeWAL *bool
 }
 
-// BackupResult summarises what was written.
+// BackupResult 汇总已写入的内容。
 type BackupResult struct {
 	Output      string    `json:"output"`
 	Bytes       int64     `json:"bytes"`
@@ -45,7 +45,7 @@ func NewBackupManager(dataDir string) *BackupManager {
 	return &BackupManager{dataDir: dataDir}
 }
 
-// Backup writes a self-contained archive.
+// Backup 写入一个自包含的归档。
 func (m *BackupManager) Backup(store *Doris, opts BackupOptions) (BackupResult, error) {
 	if opts.Output == "" {
 		return BackupResult{}, errors.New("output path required")
@@ -113,7 +113,7 @@ func (m *BackupManager) Backup(store *Doris, opts BackupOptions) (BackupResult, 
 	return res, nil
 }
 
-// RestoreOption customises a Restore.
+// RestoreOption 自定义 Restore。
 type RestoreOption func(*backupOptions)
 
 type backupOptions struct {
@@ -121,7 +121,7 @@ type backupOptions struct {
 	IntoDir string
 }
 
-// RestoreResult summarises what was restored.
+// RestoreResult 汇总已恢复的内容。
 type RestoreResult struct {
 	Input         string    `json:"input"`
 	SnapshotID    string    `json:"snapshot_id"`
@@ -130,7 +130,7 @@ type RestoreResult struct {
 	SHA256        string    `json:"sha256"`
 }
 
-// Restore reads a backup archive.
+// Restore 读取备份归档。
 func (m *BackupManager) Restore(input string, opts ...RestoreOption) (RestoreResult, error) {
 	res := RestoreResult{Input: input}
 	cfg := backupOptions{}
@@ -189,7 +189,7 @@ func (m *BackupManager) Restore(input string, opts ...RestoreOption) (RestoreRes
 	return res, nil
 }
 
-// Verify checks the archive magic + walks entries.
+// Verify 检查归档魔术字并遍历条目。
 func (m *BackupManager) Verify(input string) error {
 	in, err := os.Open(input)
 	if err != nil {
@@ -217,7 +217,7 @@ func (m *BackupManager) Verify(input string) error {
 	return nil
 }
 
-// ListBackups enumerates backup files in a directory.
+// ListBackups 枚举目录中的备份文件。
 func ListBackups(dir string) ([]BackupInfo, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -241,7 +241,7 @@ func ListBackups(dir string) ([]BackupInfo, error) {
 	return out, nil
 }
 
-// BackupInfo is one entry in a backup directory listing.
+// BackupInfo 是备份目录列表中的一项。
 type BackupInfo struct {
 	Name    string    `json:"name"`
 	Path    string    `json:"path"`
@@ -249,12 +249,12 @@ type BackupInfo struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
-// RestoreDryRun returns a RestoreOption that does not write.
+// RestoreDryRun 返回不写入的 RestoreOption。
 func RestoreDryRun() RestoreOption {
 	return func(o *backupOptions) { o.DryRun = true }
 }
 
-// RestoreIntoDir returns a RestoreOption that extracts into a custom directory.
+// RestoreIntoDir 返回提取到自定义目录的 RestoreOption。
 func RestoreIntoDir(dir string) RestoreOption {
 	return func(o *backupOptions) { o.IntoDir = dir }
 }

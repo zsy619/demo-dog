@@ -94,7 +94,7 @@ func buildCertPool(pemData []byte) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-// NewMTLSClient returns an *http.Client that presents the follower
+// NewMTLSClient 返回一个为 follower 出示证书的 *http.Client
 // client cert on every request.
 func NewMTLSClient(cfg *tls.Config, timeout time.Duration) *http.Client {
 	tr := &http.Transport{
@@ -110,7 +110,7 @@ func NewMTLSClient(cfg *tls.Config, timeout time.Duration) *http.Client {
 	return &http.Client{Transport: tr, Timeout: timeout}
 }
 
-// CertFingerprint returns the SHA-256 fingerprint of the cert in hex.
+// CertFingerprint 以十六进制返回证书的 SHA-256 指纹。
 func CertFingerprint(cert *x509.Certificate) string {
 	h := sha256.Sum256(cert.Raw)
 	return hex.EncodeToString(h[:])
@@ -130,7 +130,7 @@ func CertSubjectCN(cert *x509.Certificate) string {
 	return ""
 }
 
-// ParsedCert is the wire-stable form of a peer certificate.
+// ParsedCert 是对端证书的线上稳定形式。
 type ParsedCert struct {
 	Subject     pkix.Name
 	Issuer      pkix.Name
@@ -142,7 +142,7 @@ type ParsedCert struct {
 	Serial      string
 }
 
-// PeerCertFromRequest extracts the peer cert from an in-flight request.
+// PeerCertFromRequest 从 in-flight 请求中提取对端证书。
 func PeerCertFromRequest(r *http.Request) *x509.Certificate {
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		return nil
@@ -172,7 +172,7 @@ func CertAllowedBySAN(cert *x509.Certificate, hostname string) bool {
 	return false
 }
 
-// SplitPEM splits a PEM bundle into individual certificates.
+// SplitPEM 将 PEM 包拆分为单独的证书。
 func SplitPEM(data []byte) [][]byte {
 	out := [][]byte{}
 	current := []byte{}
@@ -193,5 +193,5 @@ func SplitPEM(data []byte) [][]byte {
 	return out
 }
 
-// Allow mtLS sync.Mutex unused-warning suppressor.
+// Allow 用于抑制 mtLS sync.Mutex 的未使用警告。
 var _ = sync.Mutex{}

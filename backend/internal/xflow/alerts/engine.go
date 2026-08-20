@@ -1,4 +1,4 @@
-// Package alerts implements a tiny rules engine: load a list of
+// Package alerts 实现一个轻量级规则引擎：加载一组
 // alert rules + their SLO targets, evaluate them against the current
 // engine state on every flush, and fire a webhook when an SLO burns
 // through its error budget faster than allowed.
@@ -197,7 +197,7 @@ func (e *Engine) SortedRules() []Rule {
 	return out
 }
 
-// UpsertRule inserts r or replaces the rule with the same name.
+// UpsertRule 插入 r 或替换同名规则。
 // Returns the previous rule if one was replaced, plus the new one.
 func (e *Engine) UpsertRule(r Rule) (prev Rule, ok bool) {
 	e.mu.Lock()
@@ -214,7 +214,7 @@ func (e *Engine) UpsertRule(r Rule) (prev Rule, ok bool) {
 	return
 }
 
-// DeleteRule removes the named rule.
+// DeleteRule 移除指定规则。
 func (e *Engine) DeleteRule(name string) (Rule, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -228,7 +228,7 @@ func (e *Engine) DeleteRule(name string) (Rule, bool) {
 	return Rule{}, false
 }
 
-// GetRule returns the named rule.
+// GetRule 返回指定规则。
 func (e *Engine) GetRule(name string) (Rule, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

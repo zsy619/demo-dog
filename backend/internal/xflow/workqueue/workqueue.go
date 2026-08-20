@@ -61,23 +61,23 @@ func (q *Queue) Size() int {
 	return len(q.hp)
 }
 
-// Len implements heap.Interface.
+// Len 实现 heap.Interface。
 func (q *Queue) Len() int { return len(q.hp) }
 
-// Less implements heap.Interface.
+// Less 实现 heap.Interface。
 func (q *Queue) Less(i, j int) bool { return q.hp[i].At.Before(q.hp[j].At) }
 
-// Swap implements heap.Interface.
+// Swap 实现 heap.Interface。
 func (q *Queue) Swap(i, j int) {
 	q.hp[i], q.hp[j] = q.hp[j], q.hp[i]
 	q.hp[i].index = i
 	q.hp[j].index = j
 }
 
-// Push implements heap.Interface.
+// Push 实现 heap.Interface。
 func (q *Queue) Push(x any) { it := x.(*Item); it.index = len(q.hp); q.hp = append(q.hp, it) }
 
-// Pop implements heap.Interface.
+// Pop 实现 heap.Interface。
 func (q *Queue) Pop() any {
 	n := len(q.hp) - 1
 	it := q.hp[n]

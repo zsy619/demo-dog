@@ -8,19 +8,19 @@ import (
 	"unicode"
 )
 
-// Doc is one indexed document.
+// Doc 是一个已索引的文档。
 type Doc struct {
 	ID     string
 	Fields map[string]string
 }
 
-// Posting is one (docID -> freq) entry.
+// Posting 是一个 (docID -> freq) 条目。
 type Posting struct {
 	DocID string
 	Freq  int
 }
 
-// Index is an in-memory inverted index with TF ranking.
+// Index 是支持 TF 排序的内存倒排索引。
 type Index struct {
 	mu     sync.RWMutex
 	docs   map[string]*Doc
@@ -28,7 +28,7 @@ type Index struct {
 	stop   map[string]struct{}
 }
 
-// New constructs an empty Index.
+// New 构造一个空 Index。
 func New() *Index {
 	return &Index{
 		docs:  make(map[string]*Doc),
@@ -36,7 +36,7 @@ func New() *Index {
 	}
 }
 
-// WithStopwords configures stopwords.
+// WithStopwords 配置停用词。
 func (i *Index) WithStopwords(words []string) *Index {
 	i.stop = make(map[string]struct{}, len(words))
 	for _, w := range words {
@@ -45,7 +45,7 @@ func (i *Index) WithStopwords(words []string) *Index {
 	return i
 }
 
-// Add inserts one document.
+// Add 插入一个文档。
 func (i *Index) Add(d *Doc) {
 	if d.ID == "" {
 		return
@@ -75,7 +75,7 @@ func (i *Index) Add(d *Doc) {
 	i.mu.Unlock()
 }
 
-// Delete removes a document.
+// Delete 移除一个文档。
 func (i *Index) Delete(id string) {
 	i.mu.Lock()
 	delete(i.docs, id)
@@ -95,7 +95,7 @@ func (i *Index) Delete(id string) {
 	i.mu.Unlock()
 }
 
-// Search returns documents matching all query terms, sorted
+// Search 返回匹配所有查询词的文档，已排序
 // by aggregate term frequency descending.
 func (i *Index) Search(query string, limit int) []Hit {
 	qTokens := tokenize(query)
@@ -128,14 +128,14 @@ func (i *Index) Search(query string, limit int) []Hit {
 	return hits
 }
 
-// Hit is one search result.
+// Hit 是单个搜索结果。
 type Hit struct {
 	DocID  string            `json:"doc_id"`
 	Score  int               `json:"score"`
 	Fields map[string]string `json:"fields"`
 }
 
-// Size returns the document count.
+// Size 返回文档数。
 func (i *Index) Size() int {
 	i.mu.RLock()
 	defer i.mu.RUnlock()

@@ -43,7 +43,7 @@ func (d *Doris) HistogramSnapshot(service, name string) *model.HistogramView {
 	return h.snapshot()
 }
 
-// HistogramQuantile returns the q-th percentile of the named histogram
+// HistogramQuantile 返回命名直方图的第 q 百分位
 // (0..1). Returns 0 if the series has no data. The result is computed
 // from the explicit OTel bucket boundaries so it is accurate even for
 // sparse streams.

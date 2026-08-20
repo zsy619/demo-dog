@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// Auth is a bearer-token authenticator for /replica endpoints.
+// Auth 是 /replica 端点的 bearer-token 认证器。
 //
 // Wire format:
 //
@@ -20,7 +20,7 @@ type Auth struct {
 	tokens map[string]string
 }
 
-// NewAuth creates an Auth with token:follower-id entries.
+// NewAuth 创建带 token:follower-id 条目的 Auth。
 func NewAuth(entries []string) *Auth {
 	a := &Auth{tokens: make(map[string]string)}
 	for _, e := range entries {
@@ -38,14 +38,14 @@ func NewAuth(entries []string) *Auth {
 	return a
 }
 
-// Enabled reports whether auth is enforced.
+// Enabled 报告是否强制认证。
 func (a *Auth) Enabled() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return len(a.tokens) > 0
 }
 
-// Middleware wraps an http.Handler with bearer-token enforcement.
+// Middleware 用 bearer-token 强制包装 http.Handler。
 func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if a.Authenticate(r) == "" {
@@ -56,7 +56,7 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// Authenticate returns the follower ID on success or empty string on failure.
+// Authenticate 成功时返回 follower ID，失败时返回空字符串。
 func (a *Auth) Authenticate(r *http.Request) string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -86,7 +86,7 @@ func hashToken(t string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// TLSConfigFromPairs builds a *tls.Config from PEM bytes.
+// TLSConfigFromPairs 从 PEM 字节构建 *tls.Config。
 func TLSConfigFromPairs(certPEM, keyPEM []byte) (*tls.Config, error) {
 	c, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {

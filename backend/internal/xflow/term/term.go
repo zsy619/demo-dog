@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// State describes one peer's view of the cluster.
+// State 描述一个对端的集群视图。
 type State struct {
 	Term     uint64
 	Leader   string
@@ -16,7 +16,7 @@ type State struct {
 	Peers    map[string]time.Time
 }
 
-// Clock is a Raft-style term clock. There is exactly one
+// Clock 是 Raft 风格的 term 时钟。每个
 // leader per term; followers promote themselves when their
 // leader heartbeat expires.
 type Clock struct {
@@ -52,11 +52,11 @@ func (c *Clock) WithTime(now func() time.Time) *Clock {
 	return c
 }
 
-// ErrStale is returned when a request from an older term
+// ErrStale 在来自更早 term 的请求
 // arrives.
 var ErrStale = errors.New("stale term")
 
-// Heartbeat updates the leader state. If the term is newer
+// Heartbeat 更新 leader 状态。如果 term 更新
 // than the current, demote self.
 func (c *Clock) Heartbeat(from string, term uint64) error {
 	c.mu.Lock()
@@ -98,7 +98,7 @@ func (c *Clock) MaybeElect() bool {
 	return true
 }
 
-// Snapshot returns a copy of the current state.
+// Snapshot 返回当前状态的副本。
 func (c *Clock) Snapshot() State {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -123,7 +123,7 @@ func (c *Clock) StepDown() {
 	c.mu.Unlock()
 }
 
-// Stats returns counter snapshots.
+// Stats 返回计数器快照。
 type Stats struct {
 	Term       uint64 `json:"term"`
 	Leader     string `json:"leader"`
@@ -133,7 +133,7 @@ type Stats struct {
 	Heartbeats uint64 `json:"heartbeats"`
 }
 
-// Stats returns the counter snapshot.
+// Stats 返回计数器快照。
 func (c *Clock) Stats() Stats {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -1,4 +1,4 @@
-// Package alerts implements alert rule evaluation + notification.
+// Package alerts 实现告警规则评估与通知。
 // This file adds SMTP email and PagerDuty notification channels.
 package alerts
 
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// ChannelKind enumerates the supported alert delivery channels.
+// ChannelKind 枚举支持的告警投递通道。
 type ChannelKind string
 
 const (
@@ -35,7 +35,7 @@ type NotifyOpts struct {
 	Labels    map[string]string
 }
 
-// Channel is the contract every concrete notifier fulfils.
+// Channel 是每个具体通知器实现的契约。
 type Channel interface {
 	Kind() ChannelKind
 	Send(ctx context.Context, opts NotifyOpts) error
@@ -216,7 +216,7 @@ func severityToPD(s string) string {
 	}
 }
 
-// Multiplexer fans a NotifyOpts to many channels in parallel and
+// Multiplexer 并行将 NotifyOpts 扇出到多个 channel，并
 // aggregates the per-channel errors. Used by the engine when a rule
 // is wired to multiple channels.
 type Multiplexer struct {
