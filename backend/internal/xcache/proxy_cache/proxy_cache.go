@@ -2,7 +2,9 @@
 // 查询时先查本地，未命中再查远程并回填本地。
 package proxy_cache
 
-import "sync"
+import (
+	"sync/atomic"
+)
 
 // Local 是本地缓存接口（QCache 等可适配）。
 type Local interface {
@@ -18,11 +20,10 @@ type Remote interface {
 
 // Proxy 是 Local + Remote 组合。
 type Proxy struct {
-	mu     sync.Mutex
 	local  Local
 	remote Remote
-	hits   int64
-	misses int64
+	hits   atomic.Int64
+	misses atomic.Int64
 }
 
 // New 创建 Proxy。
@@ -33,22 +34,16 @@ func New(l Local, r Remote) *Proxy {
 // Get 查询：先 local，后 remote。
 func (p *Proxy) Get(k string) (string, bool) {
 	if v, ok := p.local.Get(k); ok {
-		p.mu.Lock()
-		p.hits++
-		p.mu.Unlock()
+		p.hits.Add(1)
 		return v, true
 	}
 	v, err := p.remote.Get(k)
 	if err != nil {
-		p.mu.Lock()
-		p.misses++
-		p.mu.Unlock()
+		p.misses.Add(1)
 		return "", false
 	}
 	p.local.Put(k, v)
-	p.mu.Lock()
-	p.misses++
-	p.mu.Unlock()
+	p.misses.Add(1)
 	return v, true
 }
 
@@ -60,7 +55,11 @@ func (p *Proxy) Put(k, v string) error {
 
 // Stats 返回命中统计。
 func (p *Proxy) Stats() (hits, misses int64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.hits, p.misses
+	return p.hits.Load(), p.misses.Load()
+}
+
+// ResetStats 重置命中统计。
+func (p *Proxy) ResetStats() {
+	p.hits.Store(0)
+	p.misses.Store(0)
 }

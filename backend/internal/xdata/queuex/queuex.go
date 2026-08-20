@@ -55,6 +55,8 @@ func (q *Queue[T]) Pop() (T, bool) {
 		return zero, false
 	}
 	v := q.buf[q.head]
+	var z T
+	q.buf[q.head] = z // 帮助 GC
 	q.head = (q.head + 1) % q.cap
 	q.full = false
 	return v, true

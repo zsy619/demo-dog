@@ -1,6 +1,8 @@
 // Package cmp 提供通用比较器辅助。
 package cmp
 
+import "reflect"
+
 // Compare 按 cmp(a, b) 排序。
 // 返回 -1 / 0 / 1。
 func Compare[T any](a, b T, lt func(a, b T) bool) int {
@@ -35,11 +37,7 @@ func Max[T any](a, b T, lt func(a, b T) bool) T {
 	return b
 }
 
-// Equal 返回 a 与 b 的浅比较（reflect.DeepEqual）。
+// Equal 返回 a 与 b 的深度比较（reflect.DeepEqual）。
 func Equal(a, b any) bool {
-	return deepEqual(a, b)
-}
-
-func deepEqual(a, b any) bool {
-	return a == b
+	return reflect.DeepEqual(a, b)
 }

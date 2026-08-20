@@ -15,11 +15,12 @@ type Job func(tick int64)
 type Recurring struct {
 	interval time.Duration
 	job      Job
-	stop     chan struct{}
-	done     chan struct{}
-	tick     atomic.Int64
-	running  atomic.Bool
-	mu       sync.Mutex
+
+	mu     sync.Mutex
+	stopCh chan struct{} // 本次运行的停止信号
+	doneCh chan struct{} // 本次循环退出的信号
+	tick   atomic.Int64
+	closed atomic.Bool // 永久停止（防止 Stop 后再 Start）
 }
 
 // New 创建一个 Recurring。
@@ -27,34 +28,46 @@ func New(interval time.Duration, job Job) *Recurring {
 	return &Recurring{
 		interval: interval,
 		job:      job,
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
 	}
 }
 
-// Start 启动周期任务。
-func (r *Recurring) Start() {
-	r.mu.Lock()
-	if r.running.Load() {
-		r.mu.Unlock()
-		return
+// Start 启动周期任务。已运行或已永久停止时返回 false。
+func (r *Recurring) Start() bool {
+	if r.closed.Load() {
+		return false
 	}
-	r.running.Store(true)
+	r.mu.Lock()
+	if r.stopCh != nil {
+		r.mu.Unlock()
+		return false
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	r.stopCh = stop
+	r.doneCh = done
 	r.mu.Unlock()
-	go r.loop()
+	go r.loop(stop, done)
+	return true
 }
 
-// Stop 停止周期任务。
-func (r *Recurring) Stop() {
+// Stop 停止周期任务。停止或未运行返回 false。
+func (r *Recurring) Stop() bool {
 	r.mu.Lock()
-	if !r.running.Load() {
-		r.mu.Unlock()
-		return
-	}
-	r.running.Store(false)
+	stop, done := r.stopCh, r.doneCh
+	r.stopCh, r.doneCh = nil, nil
 	r.mu.Unlock()
-	r.stop <- struct{}{}
-	<-r.done
+	if stop == nil {
+		return false
+	}
+	close(stop)
+	<-done
+	return true
+}
+
+// Close 永久停止；之后 Start 永远返回 false。
+func (r *Recurring) Close() {
+	r.Stop()
+	r.closed.Store(true)
 }
 
 // Tick 返回已触发的 tick 数。
@@ -62,13 +75,13 @@ func (r *Recurring) Tick() int64 {
 	return r.tick.Load()
 }
 
-func (r *Recurring) loop() {
+func (r *Recurring) loop(stop <-chan struct{}, done chan<- struct{}) {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
-	defer close(r.done)
+	defer close(done)
 	for {
 		select {
-		case <-r.stop:
+		case <-stop:
 			return
 		case <-ticker.C:
 			n := r.tick.Add(1)

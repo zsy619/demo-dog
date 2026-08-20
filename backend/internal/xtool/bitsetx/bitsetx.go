@@ -17,16 +17,22 @@ func New(n int) *BitSet {
 	return &BitSet{bits: make([]uint64, (n+63)/64)}
 }
 
-// Set 设置位置 i 的位。
+// Set 设置位置 i 的位。负数索引忽略。
 func (b *BitSet) Set(i int) {
+	if i < 0 {
+		return
+	}
 	b.mu.Lock()
 	b.ensure(i)
 	b.bits[i/64] |= 1 << (i % 64)
 	b.mu.Unlock()
 }
 
-// Clear 清除位置 i 的位。
+// Clear 清除位置 i 的位。负数索引忽略。
 func (b *BitSet) Clear(i int) {
+	if i < 0 {
+		return
+	}
 	b.mu.Lock()
 	if i/64 >= len(b.bits) {
 		b.mu.Unlock()
@@ -36,8 +42,11 @@ func (b *BitSet) Clear(i int) {
 	b.mu.Unlock()
 }
 
-// Get 读取位置 i 的位。
+// Get 读取位置 i 的位。负数索引返回 false。
 func (b *BitSet) Get(i int) bool {
+	if i < 0 {
+		return false
+	}
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if i/64 >= len(b.bits) {
@@ -69,6 +78,9 @@ func (b *BitSet) Len() int {
 
 // Or 修改为与 other 的并集。
 func (b *BitSet) Or(other *BitSet) {
+	if other == nil || other == b {
+		return
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	other.mu.RLock()
@@ -84,6 +96,9 @@ func (b *BitSet) Or(other *BitSet) {
 
 // And 修改为与 other 的交集。
 func (b *BitSet) And(other *BitSet) {
+	if other == nil || other == b {
+		return
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	other.mu.RLock()
