@@ -1,17 +1,3 @@
-// Package grace 提供一个优雅停机协调器。
-//
-// 用法：
-//
-//	g := grace.New(30 * time.Second)
-//	g.Register(grace.Hook{Name: "http", Fn: srv.Shutdown})
-//	g.Register(grace.Hook{Name: "db", Fn: db.Close})
-//	if err := g.Run(); err != nil { log.Println(err) }
-//
-// Shutdown 行为：
-//   - 顺序按注册顺序执行所有 Hook
-//   - 每个 Hook 在独立的 goroutine 中运行，受总 deadline 约束
-//   - 某个 Hook 返回错误：记录并继续下一个（不中断）
-//   - 超时：返回 ErrTimeout，剩余 Hook 不再等待（goroutine 仍在运行）
 package grace
 
 import (
@@ -20,43 +6,35 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 )
 
-// Hook 表示一项关闭动作。
-type Hook struct {
-	Name string
-	Fn   func(ctx context.Context) error
-}
-
-// ErrTimeout 在总超时时返回。
-var ErrTimeout = errors.New("grace: 停机超时")
-
-// ErrShutdown 在重复调用 Shutdown 时返回。
-var ErrShutdown = errors.New("grace: 重复 Shutdown")
-
 // Manager 持有多个 Hook 并协调停机。
 //
 // 零值不可用；请使用 New。
+//
+// 线程安全：所有方法都可以并发调用；内部使用 sync.Mutex 保护 Hook 列表，
+// 使用 atomic.Bool / atomic.Int64 保护运行标志、结果收集。
 type Manager struct {
-	mu       sync.Mutex
-	hooks    []Hook
-	running  atomic.Bool // 防止并发 Shutdown
-	done     atomic.Bool // Shutdown 已完成
-	deadline time.Duration
+	mu       sync.Mutex // 保护 hooks / errs / onHookErr 的互斥锁
+	hooks    []Hook     // 已注册的 Hook 列表（按顺序执行）
+	running  atomic.Bool // 防止并发 Shutdown 的乐观锁
+	done     atomic.Bool // Shutdown 已完成（用于快速拒绝重入）
+	deadline time.Duration // 单次 Shutdown 的总截止时间
 
 	// 结果收集
-	errs    []error
-	elapsed atomic.Int64 // 纳秒
+	errs    []error        // Shutdown 期间收集到的错误
+	elapsed atomic.Int64  // 纳秒计的 Shutdown 耗时
 
-	onHookErr func(name string, err error)
+	onHookErr func(name string, err error) // 单 Hook 错误回调（不影响主流程）
 }
 
 // New 创建一个 Manager。
+//
+// deadline <= 0 时使用默认 15 秒。
 func New(deadline time.Duration) *Manager {
 	if deadline <= 0 {
 		deadline = 15 * time.Second
@@ -65,7 +43,9 @@ func New(deadline time.Duration) *Manager {
 }
 
 // Register 注册一个 Hook。
+//
 // 注意：Shutdown 开始后不应再 Register。
+// 当 h.Fn == nil 时静默忽略。
 func (m *Manager) Register(h Hook) {
 	if h.Fn == nil {
 		return
@@ -76,7 +56,8 @@ func (m *Manager) Register(h Hook) {
 }
 
 // RegisterWith 注册带单独超时名的 Hook（兼容 shutdownx 签名）。
-// 单 hook 超时在内部通过 deadline 统一控制。
+//
+// 单 hook 超时在内部通过 deadline 统一控制；忽略传入的 _ time.Duration 参数。
 func (m *Manager) RegisterWith(name string, _ time.Duration, hook func(ctx context.Context) error) {
 	m.Register(Hook{Name: name, Fn: hook})
 }
@@ -89,13 +70,18 @@ func (m *Manager) HookCount() int {
 }
 
 // OnHookError 注册单 Hook 错误回调（不影响主流程）。
+//
+// 当某个 Hook 返回错误时，会在收集错误之前先调用 fn(name, err)；
+// fn 必须是非阻塞的，否则会拖慢 Shutdown。
 func (m *Manager) OnHookError(fn func(name string, err error)) {
 	m.mu.Lock()
 	m.onHookErr = fn
 	m.mu.Unlock()
 }
 
-// WaitForSignal 阻塞直到收到 SIGINT/SIGTERM。
+// WaitForSignal 阻塞直到收到 SIGINT 或 SIGTERM 信号。
+//
+// 接收到信号后恢复默认信号处理行为（避免影响后续 Shutdown）。
 func (m *Manager) WaitForSignal() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
@@ -104,8 +90,13 @@ func (m *Manager) WaitForSignal() {
 }
 
 // Shutdown 按注册顺序执行所有 Hook，受 deadline 约束。
-// 所有 Hook 都会尝试执行；错误被收集。
-// 总超时返回 ErrTimeout，同时仍返回所有已收集的错误。
+//
+// 行为：
+//  - 所有 Hook 都会尝试执行；错误被收集；
+//  - 总超时时返回 ErrTimeout，同时仍返回所有已收集的错误；
+//  - 重复调用 Shutdown 返回 ErrShutdown。
+//
+// 并发安全：使用 atomic.Bool 实现乐观锁，避免多个 goroutine 同时执行 Shutdown。
 func (m *Manager) Shutdown() error {
 	if m.done.Load() {
 		return ErrShutdown
@@ -179,34 +170,18 @@ func (m *Manager) Errors() []error {
 }
 
 // Elapsed 返回 Shutdown 实际耗时。
+//
+// 未执行过 Shutdown 时返回 0。
 func (m *Manager) Elapsed() time.Duration {
 	return time.Duration(m.elapsed.Load())
 }
 
 // Run 阻塞等待信号并执行停机。
+//
+// 典型场景用于 main() 中：
+//
+//	if err := mgr.Run(); err != nil { log.Println(err) }
 func (m *Manager) Run() error {
 	m.WaitForSignal()
 	return m.Shutdown()
-}
-
-// safeRun 在 panic 时返回错误。
-func safeRun(ctx context.Context, fn func(context.Context) error) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic: %v", r)
-		}
-	}()
-	return fn(ctx)
-}
-
-// joinErrors 拼接多个错误为单行字符串。
-func joinErrors(errs []error) string {
-	if len(errs) == 0 {
-		return ""
-	}
-	parts := make([]string, len(errs))
-	for i, e := range errs {
-		parts[i] = e.Error()
-	}
-	return strings.Join(parts, "; ")
 }

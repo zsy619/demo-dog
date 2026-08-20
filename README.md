@@ -686,10 +686,6 @@ sdk.Histogram(ctx, "http.duration_ms", 0.030)
 
 `/metrics` 现已暴露 12 项指标,涵盖日志/指标/链路吞吐、查询命中、热点层/冷点层水位、worker 池统计(accepted / processed / retried / failed)以及 Go 运行时(goroutines / heap / GC 暂停)。
 
-## 📅 30 天企业级落地路线图
-
-详见 [ROADMAP_30D.md](./ROADMAP_30D.md)。
-
 ---
 
 ## 📜 许可证
