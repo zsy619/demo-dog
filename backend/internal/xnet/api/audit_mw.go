@@ -54,10 +54,10 @@ func (a *auditResponseWriter) Flush() {
 	}
 }
 
-// AuditMiddleware returns an http middleware that records one
+// AuditMiddleware 返回一个 http 中间件,它会为每个请求向
 // AuditEvent per request to `sink`. Only write operations (POST,
-// PUT, DELETE) are recorded by default; readers can opt-in via
-// `recordReads`.
+// (POST、PUT、DELETE);读操作可通过 `recordReads` 选择启用。
+// (POST、PUT、DELETE);读操作可通过 `recordReads` 选择启用。
 func AuditMiddleware(sink *AuditLog, recordReads bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

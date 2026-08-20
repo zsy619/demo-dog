@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Loader is a tls.Config source that re-reads files from
+// Loader 是一个 tls.Config 源，在 Reload 时从磁盘重新读取文件，替换为新的 tls.Config。
 // disk on Reload, swapping in a fresh tls.Config.
 type Loader struct {
 	mu       sync.RWMutex
@@ -50,7 +50,7 @@ func (l *Loader) Load() error {
 	return nil
 }
 
-// Reload re-reads files and swaps in a new config.
+// Reload 重新读取文件并替换为新的 config。
 // Returns ErrUnchanged when the underlying files have not
 // changed since the last load.
 func (l *Loader) Reload() error {

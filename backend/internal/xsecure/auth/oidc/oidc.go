@@ -1,17 +1,17 @@
-// Package oidc provides OIDC federation for demo-dog.
+// Package oidc 为 demo-dog 提供 OIDC 联邦认证。
 //
-// Operators running dex or keycloak can plug demo-dog in as a
-// relying party; the OIDCProvider will fetch the discovery
-// document, verify ID tokens against the issuer JWKS, and
-// translate them into the same KeyEntry shape as the local
-// APIKeyAuth.
+// 运行 dex 或 keycloak 的运维人员可以将 demo-dog 作为
+// 依赖方接入；OIDCProvider 会拉取 discovery
+// 文档，根据 issuer 的 JWKS 校验 ID 令牌，
+// 并将其转换为与本地 APIKeyAuth 相同的
+// KeyEntry 结构。
 //
-// The mapping is intentionally minimal: the OIDC `sub` claim
-// becomes the API key identity, the `aud` claim must contain
-// our client_id, and a configurable scope claim (default
-// "scope") becomes the Scopes list.
+// 该映射刻意保持最小：OIDC 的 `sub` claim
+// 成为 API 密钥身份，`aud` claim 必须包含
+// 我们的 client_id，而一个可配置的 scope claim（默认
+// "scope"）成为 Scopes 列表。
 //
-// Use:
+// 用法：
 //
 //	ctx := context.Background()
 //	oidc, err := oidc.NewProvider(ctx, oidc.Config{
@@ -120,8 +120,8 @@ func (c *Claims) AllScopes() []string {
 	return out
 }
 
-// NewProvider creates a provider, fetches the discovery doc and
-// initial JWKS.
+// NewProvider 创建一个 provider，获取 discovery 文档与
+// 初始 JWKS。
 func NewProvider(ctx context.Context, cfg Config) (*OIDCProvider, error) {
 	if cfg.IssuerURL == "" {
 		return nil, errors.New("issuerURL required")
@@ -404,5 +404,5 @@ func audienceContains(aud []string, want string) bool {
 	return false
 }
 
-// Touch the x509 import so future cert-related additions compile.
+// 引用 x509 包，使后续与证书相关的添加能够编译通过。
 var _ = x509.MarshalPKCS8PrivateKey

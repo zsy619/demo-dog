@@ -31,7 +31,7 @@ type Store struct {
 // ErrNotFound 在请求的 ID 缺失时返回。
 var ErrNotFound = errors.New("session not found")
 
-// New creates a Store with ttl and optional maxItems (0 = no
+// New 创建一个带 ttl 和可选 maxItems (0 = 无上限) 的 Store。
 // cap).
 func New(ttl time.Duration, maxItems int) *Store {
 	if ttl <= 0 {

@@ -132,7 +132,7 @@ func (r *Ring) Size() int {
 	return len(seen)
 }
 
-// Distribution returns the fraction of keys that map to each
+// Distribution 返回映射到每个节点的 key 的占比。可用于验证均衡性。
 // node. Useful for verifying balance.
 func (r *Ring) Distribution(keys []string) map[string]float64 {
 	if len(keys) == 0 {

@@ -17,8 +17,8 @@ const (
 	PhaseAbort   Phase = "abort"
 )
 
-// Resource is a participant that can be prepared and
-// committed (or rolled back).
+// Resource 是一个可以 prepare 和 commit (或 rollback) 的参与者。
+// Resource 是一个可以 prepare 和 commit (或 rollback) 的参与者。
 type Resource struct {
 	Name    string
 	Prepare func(ctx context.Context) error
@@ -46,9 +46,9 @@ func New() *Coordinator { return &Coordinator{} }
 // ErrAborted 是事务中止时返回的哨兵错误。
 var ErrAborted = errors.New("transaction aborted")
 
-// Run runs PREPARE / COMMIT on every resource. If any
-// Prepare fails, it runs Abort on all already-prepared
-// resources.
+// Run 对每个 resource 运行 PREPARE / COMMIT。如果任何 Prepare 失败，
+// 会对所有已经 prepare 的 resource 运行 Abort。
+// 会对所有已经 prepare 的 resource 运行 Abort。
 func (c *Coordinator) Run(ctx context.Context, resources []Resource) Result {
 	res := Result{Phase: PhaseInit}
 	if len(resources) == 0 {

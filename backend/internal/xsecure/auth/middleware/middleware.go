@@ -46,8 +46,8 @@ func (p Principal) HasScope(s string) bool {
 	return false
 }
 
-// IsAdmin reports whether the principal carries the admin
-// role or scope.
+// IsAdmin 报告 principal 是否带有 admin role 或 scope。
+// IsAdmin 报告 principal 是否带有 admin role 或 scope。
 func (p Principal) IsAdmin() bool {
 	if p.Identity == "admin" {
 		return true

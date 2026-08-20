@@ -41,9 +41,9 @@ func (s *Store) WithTime(now func() time.Time) *Store {
 	return s
 }
 
-// Check returns ErrReplay if (tenant, nonce, ts) has been
+// Check 在 (tenant, nonce, ts) 在 TTL 窗口内已被见过时
 // seen before within the TTL window. Otherwise it records
-// the nonce and returns nil.
+// 返回 ErrReplay。否则它记录该 nonce 并返回 nil。
 func (s *Store) Check(tenant, nonce string, ts time.Time) error {
 	if nonce == "" {
 		return errors.New("empty nonce")

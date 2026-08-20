@@ -1,17 +1,17 @@
 // Package webhook Webhook 回调：异步发送 HTTP 回调并重试。
 package webhook
 
-// Outbound webhook delivery with HMAC signing + retry.
+// 出站 webhook 投递，支持 HMAC 签名 + 重试。
 //
-// Subscribers register a URL + secret + event filter; the
-// dispatcher signs the payload with HMAC-SHA256 and POSTs it.
-// Failures are retried with exponential backoff up to N
+// Subscribers 注册一个 URL + secret + event filter；
+// dispatcher 使用 HMAC-SHA256 对 payload 签名并 POST 它。
+// Subscribers 注册一个 URL + secret + event filter；
 // attempts; permanently failed deliveries are kept in the
-// dead-letter ring for the operator to inspect.
+// 会被保留在 dead-letter ring 中供运维人员检查。
 //
-// Designed to be wired into the alert manager: when a rule
-// trips, a webhook event is dispatched and the firing
-// webhook ID is captured in the AlertEvent.
+// 设计上会接入 alert manager：当一条规则触发时，
+// 会派发一个 webhook event，触发的 webhook ID
+// 会记录在 AlertEvent 中。
 
 import (
 	"crypto/hmac"
@@ -157,7 +157,7 @@ func (d *Dispatcher) Subscribers() []*Subscriber {
 	return out
 }
 
-// Dispatch delivers an event to every subscriber that accepts
+// Dispatch 将一个 event 投递到每一个接受它的 subscriber。该函数返回投递列表。
 // it. The function returns the list of deliveries.
 func (d *Dispatcher) Dispatch(ev Event) []Delivery {
 	if ev.Timestamp.IsZero() {

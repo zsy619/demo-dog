@@ -64,7 +64,7 @@ var ErrUnknownKey = errors.New("unknown key")
 // ErrBadSignature 在签名无效时返回。
 var ErrBadSignature = errors.New("bad signature")
 
-// VerifyMessage looks up the key for id and verifies msg
+// VerifyMessage 查找 id 对应的 key 并校验 msg 对 sig 的签名。
 // against sig.
 func (v *Verifier) VerifyMessage(id string, msg, sig []byte) error {
 	v.mu.RLock()

@@ -38,7 +38,7 @@ func New() *Manager {
 // ErrRoleExists 在 Register 被重复调用时返回。
 var ErrRoleExists = errors.New("role already exists")
 
-// ErrRoleMissing is returned when a referenced role does
+// ErrRoleMissing 在引用的 role 不存在时返回。
 // not exist.
 var ErrRoleMissing = errors.New("role missing")
 
@@ -102,7 +102,7 @@ func (m *Manager) Unassign(tenant, subject, role string) {
 	m.mu.Unlock()
 }
 
-// Permission resolves the full set of permissions for
+// Permission 在 tenant 内解析 subject 的完整权限集合，遍历 role 继承关系。
 // subject within tenant, walking role inheritance.
 func (m *Manager) Permission(tenant, subject, perm string) bool {
 	m.mu.RLock()
@@ -161,8 +161,8 @@ func (m *Manager) hasRolePermLocked(roleName, perm string, visited map[string]bo
 	return false
 }
 
-// Roles returns the set of roles for a subject within a
-// tenant (does not include parents).
+// Roles 返回一个 tenant 内 subject 的 role 集合（不包括父 role）。
+// Roles 返回一个 tenant 内 subject 的 role 集合（不包括父 role）。
 func (m *Manager) Roles(tenant, subject string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

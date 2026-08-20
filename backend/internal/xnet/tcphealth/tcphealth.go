@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Monitor tracks health of a list of TCP endpoints with
+// Monitor 跟踪一组 TCP 端点的健康状况，使用自适应超时。
 // adaptive timeouts.
 type Monitor struct {
 	mu        sync.RWMutex
@@ -33,7 +33,7 @@ type Result struct {
 	Err       error
 }
 
-// New creates a Monitor with the given targets and default
+// New 使用给定的 targets 和默认 timeout 创建一个 Monitor。
 // timeout.
 func New(addrs []string, timeout time.Duration) *Monitor {
 	if timeout <= 0 {

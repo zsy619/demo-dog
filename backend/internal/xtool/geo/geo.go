@@ -34,7 +34,7 @@ func New(precision int) *Index {
 	return &Index{prec: precision, grid: make(map[string]map[string]Feature)}
 }
 
-// Encode returns the geohash string for p at the index
+// Encode 返回 p 在 index 精度下的 geohash 字符串。
 // precision.
 func (i *Index) Encode(p Point) string {
 	return Encode(p, i.prec)
@@ -150,7 +150,7 @@ func (i *Index) Remove(id string) {
 	i.mu.Unlock()
 }
 
-// Neighbors returns the geohash strings for the 8 cells
+// Neighbors 返回围绕给定 cell 的 8 个相邻 cell (以及它自身) 的 geohash 字符串。
 // surrounding the given cell (and itself).
 func Neighbors(cell string) []string {
 	out := []string{cell}
@@ -176,9 +176,9 @@ func Neighbors(cell string) []string {
 	return out
 }
 
-// Nearby returns features whose encoded cell matches the
+// Nearby 返回 encoded cell 与查询 cell 或其 8 个邻居相匹配的 features。
 // query cell or its 8 neighbors. Fine-grain distance is
-// applied via Haversine.
+// 细粒度的距离通过 Haversine 计算。
 func (i *Index) Nearby(q Point, radiusKm float64) []Feature {
 	cell := i.Encode(q)
 	cells := Neighbors(cell)
