@@ -19,11 +19,13 @@ func New(cap int) *Buffer {
 	return &Buffer{d: make([]byte, 0, cap)}
 }
 
-// Write 追加字节。
-func (b *Buffer) Write(p []byte) {
+// Write 追加字节并返回写入长度（实现 io.Writer，永不返回错误）。
+func (b *Buffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	b.d = append(b.d, p...)
+	n := len(p)
 	b.mu.Unlock()
+	return n, nil
 }
 
 // WriteByte 追加单字节（实现 io.ByteWriter）。

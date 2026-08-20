@@ -36,9 +36,14 @@ func (s *Sem) TryAcquire() bool {
 	}
 }
 
-// Release 释放一个槽位。
-func (s *Sem) Release() {
-	<-s.ch
+// Release 释放一个槽位（空信号量上调用不阻塞，返回 false）。
+func (s *Sem) Release() bool {
+	select {
+	case <-s.ch:
+		return true
+	default:
+		return false
+	}
 }
 
 // Available 返回当前可用槽位数。
