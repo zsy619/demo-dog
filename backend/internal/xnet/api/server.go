@@ -19,7 +19,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/tenants"
 )
 
-// Server wires routes to the underlying services.
+// Server 将路由连接到各底层服务。
 type Server struct {
 	store   *store.Doris
 	ingest  *ingest.Ingestor
@@ -29,86 +29,86 @@ type Server struct {
 	rng   *rand.Rand
 	rngMu sync.Mutex
 
-	// datasources is a thread-safe registry of logical backends the
-	// collector can route queries to. Plug a real Doris / ClickHouse
-	// driver at startup via Server.Datasources().Add(...).
+	// datasources 是逻辑后端的线程安全注册表，
+	// 采集器可向其路由查询。启动时通过
+	// Server.Datasources().Add(...) 接入真实的 Doris / ClickHouse 驱动。
 	datasources *datasourceRegistry
 
-	// auth is the API-key registry. Empty by default (dev mode);
-	// populated via the -api-keys flag or DOG_API_KEYS env var.
+	// auth 是 API 密钥注册表。默认情况下为空（开发模式）；
+	// 可通过 -api-keys 参数或 DOG_API_KEYS 环境变量填充。
 	auth  *APIKeyAuth
 	authM AuthMode
 
-	// allowedOrigins controls CORS. Empty slice = wildcard "*".
-	// Populate via SetAllowedOrigins from main.
+	// allowedOrigins 控制 CORS。空切片等同于通配符 "*"。
+	// 通过 main 中的 SetAllowedOrigins 进行设置。
 	allowedOrigins []string
 
-	// rateLimiter is nil unless enabled via SetRateLimit. It uses a
-	// per-IP token bucket and returns 429 with Retry-After when a
-	// single client floods the server.
+	// rateLimiter 默认为 nil，除非通过 SetRateLimit 启用。
+	// 它使用按 IP 的令牌桶，在单个客户端
+	// 大量请求时返回 429 并附带 Retry-After。
 	rateLimiter *RateLimiter
 
-	// auditLog records every write operation (and optionally reads)
-	// for compliance + post-incident forensics. Created lazily on
-	// first access; tests can swap it via SetAuditLog.
+	// auditLog 记录每一次写操作（可选地包含读操作），
+	// 用于合规与事后取证。在首次访问时惰性创建；
+	// 测试可通过 SetAuditLog 替换实现。
 	auditLog *AuditLog
 
-	// alertsEngine evaluates SLO burn-rate rules and fires webhooks.
+	// alertsEngine 评估 SLO 烧速率规则并触发 webhook。
 	alerts *alertsEngine
 
-	// tenants is the optional in-memory tenant registry. nil when
-	// the server runs in single-tenant mode.
+	// tenants 是可选的内存租户注册表。在单租户模式下
+	// （即没有注册表时）为 nil。
 	tenants *tenants.Registry
 
-	// quota is the per-tenant quota tracker (Round 42).
+	// quota 是按租户的配额跟踪器（第 42 轮）。
 	quota *QuotaTracker
 
-	// limiter is the per-IP rate limiter (Round 42 / 48).
+	// limiter 是按 IP 的限流器（第 42 / 48 轮）。
 	limiter *RateLimiter
 
-	// breaker registry holds the circuit breakers (Round 47).
+	// breaker 注册表持有熔断器（第 47 轮）。
 	breaker *BreakerRegistry
 
-	// webhooks is the outbound dispatcher (Round 49).
+	// webhooks 是出站分发器（第 49 轮）。
 	webhooks *WebhookDispatcher
 
-	// retention is the per-tenant retention manager (Round 50).
+	// retention 是按租户的留存管理器（第 50 轮）。
 	retention *RetentionManager
 
-	// adminKeys owns the global API key table (Round 46).
+	// adminKeys 拥有全局 API 密钥表（第 46 轮）。
 	adminKeys *auth.AdminStore
 
-	// replica is the at-least-once replication state (Round 38).
+	// replica 是至少一次复制的状态（第 38 轮）。
 	replica *ReplicaStatus
 
-	// oidc is the OIDC federation provider list (Round 41).
+	// oidc 是 OIDC 联邦提供方列表（第 41 轮）。
 	oidc *OIDCRegistry
 
-	// cfg holds the data dir + admin settings for backup endpoints.
+	// cfg 保存数据目录与管理端点所需的配置。
 	cfg ServerConfig
 
-	// mux is the top-level http.ServeMux. Exposed so add-on endpoints
-	// (pprof, probes) can be mounted after construction.
+	// mux 是顶层 http.ServeMux。开放给外挂端点
+	//（如 pprof、探针）以便在构造后挂载。
 	mux *http.ServeMux
 
-	// pprofPrefix / pprofToken are set by MountPProf and consulted by
-	// the chain constructed in Handler() so pprof lives OUTSIDE the
-	// auth + audit middleware (no token = no metrics, no audit spam).
+	// pprofPrefix / pprofToken 由 MountPProf 设置，
+	// 在 Handler() 中构建的中间件链会读取它们，
+	// 从而使 pprof 位于 auth + audit 中间件之外（无令牌则无指标、无审计日志）。
 	pprofPrefix string
 	pprofToken  string
 
-	// pprofHandler is the assembled sub-mux exposed via the auth-
-	// bypass layer. Lazily constructed in Handler().
+	// pprofHandler 是通过 auth-bypass 层暴露的组合子 mux。
+	// 在 Handler() 中惰性构造。
 	pprofHandler http.Handler
 
-	// seriesCatalog walks the in-memory metric buffers and produces
-	// per-metric, per-label-set cardinality info for the
-	// /api/v1/series endpoint. Lazily constructed on first use.
+	// seriesCatalog 遍历内存中的指标缓冲区，
+	// 为 /api/v1/series 端点生成按指标、按标签集的基数信息。
+	// 在首次使用时惰性构造。
 	seriesCatalog *store.SeriesCatalog
 	seriesCatalogOnce sync.Once
 }
 
-// SeriesCatalog lazily constructs the series catalog on first use.
+// SeriesCatalog 在首次使用时惰性构造序列目录。
 func (s *Server) SeriesCatalog() *store.SeriesCatalog {
 	s.seriesCatalogOnce.Do(func() {
 		s.seriesCatalog = s.store.NewSeriesCatalog(5 * time.Second)
@@ -116,7 +116,7 @@ func (s *Server) SeriesCatalog() *store.SeriesCatalog {
 	return s.seriesCatalog
 }
 
-// New returns a new Server.
+// New 返回一个新的 Server。
 func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 	return &Server{
 		store:       s,
@@ -139,66 +139,66 @@ func New(s *store.Doris, in *ingest.Ingestor, hub *stream.Hub) *Server {
 	}
 }
 
-// ServerConfig bundles settings that the admin endpoints need.
+// ServerConfig 汇总管理端点所需的配置。
 type ServerConfig struct {
 	DataDir string
 }
 
-// SetConfig attaches runtime configuration (data dir, etc.).
+// SetConfig 绑定运行时配置（数据目录等）。
 func (s *Server) SetConfig(c ServerConfig) { s.cfg = c }
 
-// Audit returns the audit log so callers can configure capacity at
-// startup or swap the implementation for tests.
+// Audit 返回审计日志，调用方可在启动时
+// 配置容量，或在测试中替换实现。
 func (s *Server) Audit() *AuditLog { return s.auditLog }
 
-// SetAuditLog replaces the default audit log. Useful in tests or
-// when wiring a remote sink.
+// SetAuditLog 替换默认的审计日志。常用于测试
+// 或接入远程存储。
 func (s *Server) SetAuditLog(l *AuditLog) { s.auditLog = l }
 
-// Quota returns the per-tenant quota tracker (Round 42).
+// Quota 返回按租户的配额跟踪器（第 42 轮）。
 func (s *Server) Quota() *QuotaTracker { return s.quota }
 
-// Breakers returns the circuit-breaker registry.
+// Breakers 返回熔断器注册表。
 func (s *Server) Breakers() *BreakerRegistry { return s.breaker }
 
-// Webhooks returns the webhook dispatcher handle.
+// Webhooks 返回 webhook 分发器句柄。
 func (s *Server) Webhooks() *WebhookDispatcher { return s.webhooks }
 
-// Retention returns the retention manager handle.
+// Retention 返回留存管理器句柄。
 func (s *Server) Retention() *RetentionManager { return s.retention }
 
-// AdminKeys returns the admin API-key store.
+// AdminKeys 返回管理 API 密钥存储。
 func (s *Server) AdminKeys() *auth.AdminStore { return s.adminKeys }
 
-// Replica returns the replica status handle.
+// Replica 返回副本状态句柄。
 func (s *Server) Replica() *ReplicaStatus { return s.replica }
 
-// OIDC returns the OIDC registry.
+// OIDC 返回 OIDC 注册表。
 func (s *Server) OIDC() *OIDCRegistry { return s.oidc }
 
-// Datasources exposes the datasource registry so callers (e.g. a
-// driver plugin at startup) can register additional backends.
+// Datasources 暴露数据源注册表，调用方（例如
+// 启动时的驱动插件）可注册更多后端。
 func (s *Server) Datasources() *datasourceRegistry {
 	return s.datasources
 }
 
-// Auth exposes the API key registry so callers can register keys at
-// startup (or for tests). AuthMode() tells the middleware which mode
-// to enforce.
+// Auth 暴露 API 密钥注册表，调用方可在启动时
+//（或在测试中）注册密钥。AuthMode() 告诉中间件启用哪种
+// 模式。
 func (s *Server) Auth() *APIKeyAuth    { return s.auth }
 func (s *Server) AuthMode() AuthMode    { return s.authM }
 func (s *Server) SetAuthMode(m AuthMode) { s.authM = m }
 
-// SetAllowedOrigins restricts CORS Access-Control-Allow-Origin to the
-// given host list. Empty list keeps the wildcard default. Origins are
-// matched exactly (no scheme-relative quirks); set http://localhost:3000
-// if you only want to allow the dev frontend.
+// SetAllowedOrigins 将 CORS Access-Control-Allow-Origin 限制为
+// 指定的主机列表。空列表保持通配符默认。
+// 主机按精确字符串匹配（不含协议无关的怪异规则）；
+// 若只想允许开发前端，可设置 http://localhost:3000。
 func (s *Server) SetAllowedOrigins(origins []string) {
 	s.allowedOrigins = origins
 }
 
-// SetRateLimit installs a per-IP token-bucket rate limiter. Pass
-// rate=0 to disable.
+// SetRateLimit 安装按 IP 的令牌桶限流器。
+// 传入 rate=0 可禁用。
 func (s *Server) SetRateLimit(rate, burst float64) {
 	if rate <= 0 {
 		s.rateLimiter = nil
@@ -207,7 +207,7 @@ func (s *Server) SetRateLimit(rate, burst float64) {
 	s.rateLimiter = NewRateLimiter(rate, burst)
 }
 
-// Handler returns the root http.Handler with all routes mounted.
+// Handler 返回挂载了所有路由的根 http.Handler。
 func (s *Server) Handler() http.Handler {
 	s.mux = http.NewServeMux()
 	mux := s.mux
@@ -222,21 +222,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ingest/otlp", s.handleIngest)
 	mux.HandleFunc("/api/ingest/otlp-json", s.handleIngest)
 	mux.HandleFunc("/api/stream", s.handleStream)
-	// OTLP/HTTP standard transport (https://opentelemetry.io/docs/specs/otlp/#otlphttp).
-	// Each signal has its own endpoint so collectors / agents that
-	// fan out by type find the path they expect.
+	// OTLP/HTTP 标准传输（https://opentelemetry.io/docs/specs/otlp/#otlphttp）。
+	// 每种信号使用独立的端点，便于按类型分发的
+	// 采集器/代理找到其期望的路径。
 	mux.HandleFunc("/v1/logs", s.handleOTLPHTTPLogs)
 	mux.HandleFunc("/v1/metrics", s.handleOTLPHTTPMetrics)
 	mux.HandleFunc("/v1/traces", s.handleOTLPHTTPTraces)
 	mux.HandleFunc("/api/v1/series", s.handleSeries)
 	mux.HandleFunc("/api/v1/metadata", s.handleMetadata)
-	// PromQL endpoint for Grafana / Alertmanager. Subset of
-	// PromQL: selectors with label filters, sum/avg/count by (dim),
-	// rate(metric[1m]), histogram_quantile(q, metric).
+	// 面向 Grafana / Alertmanager 的 PromQL 端点。
+	// 支持 PromQL 的子集：带标签过滤的选择器，
+	// sum/avg/count by (dim)、rate(metric[1m])、histogram_quantile(q, metric)。
 	mux.HandleFunc("/api/v1/query", s.handlePromQL)
-	// Prometheus Remote Write 1.0 — accepts both /api/v1/write
-	// (the canonical path) and /api/prom/write (the aliased one).
-	// The protocol is documented at:
+	// Prometheus Remote Write 1.0 —— 同时接受
+	// /api/v1/write（规范路径）和 /api/prom/write（别名路径）。
+	// 协议文档：
 	// https://prometheus.io/docs/concepts/remote_write_spec/
 	mux.HandleFunc("/api/v1/write", s.handlePromRemoteWrite)
 	mux.HandleFunc("/api/prom/write", s.handlePromRemoteWrite)
@@ -265,7 +265,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/tenants/", s.handleTenantsDispatch)
 	mux.HandleFunc("/metrics", s.handlePromMetrics)
 
-	// Round 53 parity endpoints (admin_v1.go).
+	// 第 53 轮对齐端点（admin_v1.go）。
 	mux.HandleFunc("/api/v1/quota", s.handleQuota)
 	mux.HandleFunc("/api/v1/slos", s.handleSLOs)
 	mux.HandleFunc("/api/v1/slos/decide", s.handleSLODecide)
@@ -287,14 +287,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/oidc", s.handleOIDC)
 	mux.HandleFunc("/api/v1/auth/oidc/discovery", s.handleOIDCDiscovery)
 
-	// Layering (outer -> inner):
+	// 分层（由外向内）：
 	//   withCORS -> audit -> rateLimit -> selfTrace -> latency ->
 	//   (pprof + auth.Middleware) -> applyRoleGates -> mux
 	//
-	// auth.Middleware runs BEFORE the role gate so it has a chance
-	// to stamp X-Dog-Role on the request header. pprof routes are
-	// mounted in their own layer so a /debug/pprof/* request never
-	// reaches the auth gate.
+	// auth.Middleware 在角色网关之前运行，以便它能在
+	// 请求头中盖上 X-Dog-Role。pprof 路由挂在独立的层中，
+	// 这样 /debug/pprof/* 请求永远不会进入 auth 网关。
+	// 进入 auth 网关。
 	gated := s.applyRoleGates(mux)
 	h := s.auth.Middleware(s.authM,
 		"/api/health", "/metrics", "/api/probe",
@@ -303,9 +303,9 @@ func (s *Server) Handler() http.Handler {
 		h = s.buildPProfMux(h)
 	}
 	if s.rateLimiter != nil {
-		// Inner: per-API-key bucket (after auth middleware resolves the
-		// bearer token). Outer: per-IP bucket (for unauthenticated abuse
-		// protection). Both are short-circuit so the cost is bounded.
+		// 内层：按 API 密钥的桶（在 auth 中间件解析
+		// bearer 令牌之后）。外层：按 IP 的桶（用于未认证的滥用防护）。
+		// 两者都做短路，保证开销有界。
 		h = s.rateLimiter.Middleware()(h)
 		h = s.rateLimiter.KeyedMiddleware(func(r *http.Request) string {
 			if k := r.Header.Get("Authorization"); k != "" {
@@ -322,17 +322,17 @@ func (s *Server) Handler() http.Handler {
 	return s.withCORS(withLogging(h))
 }
 
-// perHandlerLatency wraps an http.Handler in a histogram that records
-// the wall-clock duration of every request, labelled by HTTP method
-// and (rough) route. The "route" is the URL path stripped of any
-// query string and trailing service identifier, so the metric stays
-// low-cardinality even with many distinct services.
+// perHandlerLatency 将 http.Handler 包裹在一个直方图中，
+// 记录每次请求的耗时（墙上时钟），
+// 按 HTTP 方法和（粗略的）路由打标签。这里的 "route" 是去掉了查询串
+// 和尾部服务标识的 URL 路径，这样即使存在多个不同的服务，
+// 基数也能保持稳定。
 //
-// Exposed via /metrics under the name `dog_request_duration_seconds`.
+// 通过 /metrics 暴露，名为 `dog_request_duration_seconds`。
 func perHandlerLatency(next http.Handler) http.Handler {
-	// Use a fixed bucket boundary set tuned for an observability
-	// backend: 1 ms ... 30 s. Buckets are global (not per-route) to
-	// keep the metric cardinality bounded.
+	// 使用为可观测后端调优的固定桶边界集：
+	// 1 ms ... 30 s。桶是全局的（非按路由），以保持指标基数有界。
+	// 以保持指标基数有界。
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
@@ -342,10 +342,10 @@ func perHandlerLatency(next http.Handler) http.Handler {
 	})
 }
 
-// trimRoute collapses noisy path segments to keep metric cardinality
-// predictable: service-id-like segments are replaced with `{name}`
-// and span-id-like hex strings with `{id}`. Anything else is left as
-// is.
+// trimRoute 折叠路径中的嘈杂片段以保持指标基数可预测：
+// 类似服务 ID 的片段被替换为 `{name}`，
+// 类似 span id 的十六进制字符串被替换为 `{id}`。其余保持不变。
+//
 func trimRoute(p string) string {
 	out := make([]byte, 0, len(p))
 	inName := false
@@ -357,7 +357,7 @@ func trimRoute(p string) string {
 			continue
 		}
 		if inName {
-			// Detect hex-only segment >= 16 chars (span / trace IDs).
+			// 检测长度 >= 16 的纯十六进制片段（span / trace ID）。
 			j := i
 			for j < len(p) && p[j] != '/' {
 				j++
@@ -390,22 +390,22 @@ func isHex(s string) bool {
 	return len(s) > 0
 }
 
-// MountPProf registers the net/http/pprof handlers at the given
-// prefix, gated by a token query parameter. The token check is run
-// before any pprof handler so a leaked URL alone is insufficient.
+// MountPProf 将 net/http/pprof 处理器注册到给定前缀下，
+// 由一个 token 查询参数保护。令牌检查在任何 pprof 处理器之前执行，
+// 因此仅泄露 URL 不足以访问。
 func (s *Server) MountPProf(prefix, token string) {
 	s.pprofPrefix = prefix
 	s.pprofToken = token
 }
 
-// SetTenants wires the tenant registry to the server. Once a registry
-// is attached, /api/tenants endpoints become live.
+// SetTenants 将租户注册表接入服务器。一旦注册表被绑定，
+// /api/tenants 端点便会生效。
 func (s *Server) SetTenants(reg *tenants.Registry) {
 	s.tenants = reg
 }
 
-// applyRoleGates returns a handler that gates specific routes on role.
-// Anything not in the gate list passes through unchanged.
+// applyRoleGates 返回一个按角色控制特定路由的处理器。
+// 不在控制列表中的路由将原样放行。
 func (s *Server) applyRoleGates(next http.Handler) http.Handler {
 	adminOnly := map[string]bool{
 		"/api/audit":       true,
@@ -415,7 +415,7 @@ func (s *Server) applyRoleGates(next http.Handler) http.Handler {
 		"/api/seed/stream":  true,
 		"/api/tenants":      true,
 	}
-	// writer+ so ingest is open to writers (default) and admin.
+	// writer+ 表示 ingest 对 writer（默认）和 admin 角色开放。
 	writerOrUp := map[string]bool{
 		"/api/ingest/otlp":      true,
 		"/api/ingest/otlp-json": true,
@@ -457,8 +457,8 @@ func (s *Server) withCORS(h http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 			} else if !wildcard {
-				// Unknown origin — return no ACAO header so the
-				// browser rejects the response.
+				// 未知来源 —— 不返回 ACAO 头部，
+				// 由浏览器拒绝响应。
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
@@ -513,8 +513,8 @@ func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
 		return
 	}
-	// Tenant filter: prefer the auth-bound tenant (X-Dog-Tenant), fall
-	// back to ?tenant=... (used by platform admins to impersonate).
+	// 租户过滤：优先使用 auth 绑定的租户（X-Dog-Tenant），
+	// 回退到 ?tenant=...（供平台管理员模拟使用）。
 	tenant := resolveTenant(r)
 	out := s.store.ListServices(tenant)
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -529,7 +529,7 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("missing service name"))
 		return
 	}
-	// /api/services/{name}/detail -> drill-down payload (endpoints, errors, traces).
+	// /api/services/{name}/detail -> 钻取详情负载（端点、错误、追踪）。
 	if strings.HasSuffix(name, "/detail") {
 		svc := strings.TrimSuffix(name, "/detail")
 		det, ok := s.store.ServiceDetail(svc)
@@ -548,11 +548,11 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sum)
 }
 
-// WrapWithSelfTrace enables self-tracing. When enabled, every
-// request through the server produces an OTLP span (POSTed to
-// /api/ingest/otlp on loopback) so the collector can graph its own
-// latency. The trace IDs are minted here; downstream SDKs that
-// honour W3C tracecontext will stitch into the same tree.
+// WrapWithSelfTrace 启用自追踪。启用后，每一个
+// 通过服务器的请求都会生成一个 OTLP span（POST 到
+// 回环的 /api/ingest/otlp），让采集器可以绘制自身的延迟。
+// trace ID 在此处生成；遵循 W3C tracecontext 的下游 SDK
+// 会拼接到同一棵树中。
 func (s *Server) WrapWithSelfTrace(loopback string) {
 	selfTraceMu.Lock()
 	selfTraceEnabled = true
@@ -560,11 +560,11 @@ func (s *Server) WrapWithSelfTrace(loopback string) {
 	selfTraceMu.Unlock()
 }
 
-// handleProbe is a synthetic blackbox probe endpoint. It always
-// returns 200 OK with a small JSON body that lists the engine stats.
-// K8s readinessProbe and external uptime monitors hit this endpoint.
-// No authentication is required so a misconfigured auth layer cannot
-// take the collector offline.
+// handleProbe 是一个合成的黑盒探针端点。它始终
+// 返回 200 OK 及包含引擎统计信息的小 JSON 体。
+// K8s readinessProbe 和外部的可用性监控会调用此端点。
+// 不要求认证，避免错误的 auth 配置
+// 导致采集器离线。
 func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
 	stats := s.store.Stats()
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -577,10 +577,10 @@ func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// buildPProfMux wraps `next` in a small mux that handles the
-// configured /debug/pprof/* paths (each gated by the configured
-// token) and falls through to next for everything else. Called from
-// Handler() when MountPProf was invoked.
+// buildPProfMux 将 `next` 包裹在一个小的 mux 中，
+// 用于处理配置好的 /debug/pprof/* 路径（每个都
+// 由配置的令牌保护），其他请求则透传到 next。
+// 由 Handler() 在调用了 MountPProf 时调用。
 func (s *Server) buildPProfMux(next http.Handler) http.Handler {
 	token := s.pprofToken
 	prefix := s.pprofPrefix

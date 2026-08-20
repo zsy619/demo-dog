@@ -1,5 +1,9 @@
-// Package wpool worker 池：可配置缓冲队列的任务调度。
 package wpool
+
+// pool.go:Pool 主体与所有调度方法。
+//
+// Pool 按租户 FIFO 公平调度:每个租户独立的 channel 队列;worker
+// 用 round-robin 从非空租户中取任务。
 
 import (
 	"context"
@@ -8,25 +12,19 @@ import (
 	"sync/atomic"
 )
 
-// Task is a unit of work with a tenant tag for fairness.
-type Task struct {
-	Tenant string
-	Run    func(ctx context.Context) error
-}
-
 // Pool 是按租户 FIFO 公平调度的工作池。
 type Pool struct {
-	mu       sync.Mutex
-	queues   map[string]chan Task
-	order    []string
-	inflight map[string]int
-	workers  int
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	closed   atomic.Bool
-	run      atomic.Uint64
-	reject   atomic.Uint64
+	mu       sync.Mutex             // 保护 queues / order / inflight
+	queues   map[string]chan Task   // tenant → 队列
+	order    []string               // 租户首次出现顺序
+	inflight map[string]int         // 当前在飞的租户计数
+	workers  int                    // worker 数
+	ctx      context.Context        // 全局 ctx,Close 时 cancel
+	cancel   context.CancelFunc     // ctx 的 cancel
+	wg       sync.WaitGroup         // 等待所有 worker 退出
+	closed   atomic.Bool            // 是否已关闭
+	run      atomic.Uint64          // 累计已执行任务数
+	reject   atomic.Uint64          // 累计拒绝(队列满)次数
 }
 
 // ErrClosed 在 Close 之后调用 Submit 时返回。
@@ -36,6 +34,8 @@ var ErrClosed = errors.New("pool closed")
 var ErrFull = errors.New("queue full")
 
 // New 创建带 workers 与每租户 queueSize 的 Pool。
+//
+// workers <= 0 时回退到 4;queueSize <= 0 时回退到 64。
 func New(workers, queueSize int) *Pool {
 	if workers <= 0 {
 		workers = 4
@@ -60,6 +60,9 @@ func New(workers, queueSize int) *Pool {
 	return p
 }
 
+// queueForLocked 返回指定租户的 channel;不存在则创建。
+//
+// 必须在持锁状态下调用。
 func (p *Pool) queueForLocked(tenant string) chan Task {
 	q, ok := p.queues[tenant]
 	if !ok {
@@ -69,8 +72,10 @@ func (p *Pool) queueForLocked(tenant string) chan Task {
 	return q
 }
 
-// Submit enqueues a task. Returns ErrFull if the tenant
-// queue is full.
+// Submit 将一个任务加入队列。
+//
+// 租户队列已满时返回 ErrFull(并递增 reject 计数)。
+// Close 后提交返回 ErrClosed。
 func (p *Pool) Submit(t Task) error {
 	if p.closed.Load() {
 		return ErrClosed
@@ -95,7 +100,7 @@ func (p *Pool) Submit(t Task) error {
 	}
 }
 
-// worker pulls tasks round-robin across tenants.
+// worker round-robin 跨租户取任务并执行。
 func (p *Pool) worker() {
 	defer p.wg.Done()
 	for {
@@ -113,6 +118,7 @@ func (p *Pool) worker() {
 	}
 }
 
+// next 从非空租户中按顺序取一个任务;没有任务时阻塞直到 ctx cancel 或新任务到达。
 func (p *Pool) next() (Task, bool) {
 	p.mu.Lock()
 	tenants := make([]string, 0, len(p.queues))
@@ -158,6 +164,9 @@ func (p *Pool) next() (Task, bool) {
 	}
 }
 
+// watch 合并所有租户队列到一个 channel,用于阻塞等待。
+//
+// 仅在持有 p.mu 时构造;merged 在 ctx cancel 时关闭。
 func (p *Pool) watch() <-chan Task {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -176,28 +185,12 @@ func (p *Pool) watch() <-chan Task {
 	return merged
 }
 
-// Close 排空队列并停止工作协程。
+// Close 排空队列并停止所有工作协程。
+//
+// 多次调用安全(幂等)。
 func (p *Pool) Close() {
 	if p.closed.CompareAndSwap(false, true) {
 		p.cancel()
 		p.wg.Wait()
-	}
-}
-
-// Stats 返回计数器。
-type Stats struct {
-	Workers  int    `json:"workers"`
-	Tenants  int    `json:"tenants"`
-	Run      uint64 `json:"run"`
-	Rejected uint64 `json:"rejected"`
-}
-
-// Stats 返回快照。
-func (p *Pool) Stats() Stats {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return Stats{
-		Workers: p.workers, Tenants: len(p.queues),
-		Run: p.run.Load(), Rejected: p.reject.Load(),
 	}
 }
