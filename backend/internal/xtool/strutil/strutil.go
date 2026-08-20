@@ -88,3 +88,56 @@ func MaskEmail(e string) string {
 	}
 	return e[:1] + strings.Repeat("*", at-1) + e[at:]
 }
+
+// PadLeft 用 pad 把 s 左填充到 width。
+func PadLeft(s, pad string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	if pad == "" {
+		pad = " "
+	}
+	for len(s)+len(pad) <= width {
+		s = pad + s
+	}
+	if len(s) < width {
+		s = strings.Repeat(pad, width-len(s)) + s
+	}
+	return s
+}
+
+// PadRight 用 pad 把 s 右填充到 width。
+func PadRight(s, pad string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	if pad == "" {
+		pad = " "
+	}
+	for len(s) < width {
+		s += pad
+		if len(s) > width {
+			s = s[:width]
+		}
+	}
+	return s
+}
+
+// SplitLines 把 s 按 \n 拆成多行。
+func SplitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
+// Words 把 s 按空白拆为单词列表。
+func Words(s string) []string { return strings.Fields(s) }
+
+// CountOccurrences 统计 sub 在 s 中出现的次数。
+func CountOccurrences(s, sub string) int {
+	if sub == "" {
+		return 0
+	}
+	return strings.Count(s, sub)
+}

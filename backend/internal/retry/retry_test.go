@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"strconv"
 	"context"
 	"errors"
 	"testing"
@@ -113,11 +114,11 @@ func TestDo_OnRetry(t *testing.T) {
 }
 
 func TestNextDelay(t *testing.T) {
-	d := nextDelay(100*time.Millisecond, time.Second)
+	d := nextDelay(100*time.Millisecond, time.Second, 2.0)
 	if d != 200*time.Millisecond {
 		t.Fatal(d)
 	}
-	d = nextDelay(800*time.Millisecond, time.Second)
+	d = nextDelay(800*time.Millisecond, time.Second, 2.0)
 	if d != time.Second {
 		t.Fatal(d)
 	}
@@ -147,7 +148,7 @@ func TestItoa(t *testing.T) {
 		{-7, "-7"},
 	}
 	for _, c := range cases {
-		if got := itoa(c.in); got != c.want {
+		if got := strconv.Itoa(c.in); got != c.want {
 			t.Fatalf("itoa(%d): %s want %s", c.in, got, c.want)
 		}
 	}

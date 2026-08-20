@@ -102,3 +102,8 @@ func (m *Manager) HookCount() int {
 	defer m.mu.Unlock()
 	return len(m.hooks)
 }
+
+// RegisterWith 注册带单独超时的 Hook（兼容 shutdownx 签名）。
+func (m *Manager) RegisterWith(name string, _ time.Duration, hook func(ctx context.Context) error) {
+	m.Register(Hook{Name: name, Fn: hook})
+}

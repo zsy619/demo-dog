@@ -100,3 +100,6 @@ func (m *Map[K, V]) Clear() {
 	m.index = make(map[K]*list.Element)
 	m.mu.Unlock()
 }
+
+// Cap 返回缓存容量。
+func (m *Map[K, V]) Cap() int { return m.cap }
