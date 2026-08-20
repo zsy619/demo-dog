@@ -3,6 +3,7 @@ package errorsx
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -129,3 +130,34 @@ func (m *Multi) Err() error {
 	}
 	return m
 }
+
+// Chain 是把多个 error 链接为链式错误（自带 next 指针）。
+type Chain struct {
+	cur error
+}
+
+// NewChain 创建错误链。
+func NewChain(first error) *Chain { return &Chain{cur: first} }
+
+// Append 向链尾追加一个错误。
+func (c *Chain) Append(e error) *Chain {
+	if e == nil {
+		return c
+	}
+	if c.cur == nil {
+		c.cur = e
+		return c
+	}
+	c.cur = fmt.Errorf("%w | %w", c.cur, e)
+	return c
+}
+
+// Err 返回链式错误。
+func (c *Chain) Err() error { return c.cur }
+
+// Is 简化 errors.Is 调用。
+func Is(err, target error) bool { return errors.Is(err, target) }
+
+// As 简化 errors.As 调用。
+func As(err error, target any) bool { return errors.As(err, target) }
+

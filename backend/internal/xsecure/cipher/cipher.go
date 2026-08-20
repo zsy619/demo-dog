@@ -77,3 +77,15 @@ func (b *Box) Seal(p []byte) ([]byte, error) { return SealAESGCM(b.Key, p, b.AAD
 
 // Open 解密。
 func (b *Box) Open(c []byte) ([]byte, error) { return OpenAESGCM(b.Key, c, b.AAD) }
+
+// RandomKey 生成指定位数的随机 AES 密钥（128/192/256）。
+func RandomKey(bits int) ([]byte, error) {
+	if bits != 128 && bits != 192 && bits != 256 {
+		return nil, errors.New("cipher: bits 必须是 128/192/256")
+	}
+	k := make([]byte, bits/8)
+	if _, err := io.ReadFull(rand.Reader, k); err != nil {
+		return nil, err
+	}
+	return k, nil
+}

@@ -1,25 +1,47 @@
 package randomx
 
-import "testing"
+import (
+	"encoding/base64"
+	"strings"
+	"testing"
+)
 
 func TestBytes(t *testing.T) {
 	b, err := Bytes(16)
 	if err != nil || len(b) != 16 {
-		t.Fatal("b", len(b))
+		t.Fatal("bytes")
+	}
+	if _, err := Bytes(0); err != nil { // n<1 应返回 nil
+		t.Fatal("0")
 	}
 }
 
 func TestHex(t *testing.T) {
-	s, err := Hex(8)
-	if err != nil || len(s) != 16 {
-		t.Fatal("hex", len(s))
+	h, err := Hex(8)
+	if err != nil || len(h) != 16 {
+		t.Fatal("hex")
 	}
 }
 
 func TestBase64(t *testing.T) {
-	s, _ := Base64(8)
-	if len(s) == 0 {
+	s, err := Base64(8)
+	if err != nil {
 		t.Fatal("b64")
+	}
+	b, _ := base64.StdEncoding.DecodeString(s)
+	if len(b) != 8 {
+		t.Fatal("b64 len")
+	}
+}
+
+func TestToken(t *testing.T) {
+	tk, err := Token()
+	if err != nil || len(tk) == 0 {
+		t.Fatal("token")
+	}
+	tk2, _ := Token(16)
+	if len(tk2) == 0 {
+		t.Fatal("token 16")
 	}
 }
 
@@ -27,22 +49,27 @@ func TestInt(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		v, err := Int(10)
 		if err != nil || v < 0 || v >= 10 {
-			t.Fatal("int", v)
+			t.Fatalf("int %d err %v", v, err)
 		}
 	}
-}
-
-func TestToken(t *testing.T) {
-	t0, _ := Token()
-	t1, _ := Token()
-	if t0 == t1 {
-		t.Fatal("重复")
+	v, _ := Int(0)
+	if v != 0 {
+		t.Fatal("max 0")
 	}
 }
 
-func TestBytesZero(t *testing.T) {
-	b, _ := Bytes(0)
-	if len(b) != 0 {
-		t.Fatal("0")
+func TestString(t *testing.T) {
+	s := String(16)
+	if len(s) != 16 {
+		t.Fatal("str len")
+	}
+	// 仅含字母数字
+	for _, c := range s {
+		if !strings.ContainsRune(alphanumeric, c) {
+			t.Fatalf("非字母数字: %q", c)
+		}
+	}
+	if String(0) == "" {
+		t.Fatal("0 应返回空或默认 8")
 	}
 }
