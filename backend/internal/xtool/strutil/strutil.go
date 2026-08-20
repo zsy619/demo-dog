@@ -89,21 +89,35 @@ func MaskEmail(e string) string {
 	return e[:1] + strings.Repeat("*", at-1) + e[at:]
 }
 
-// PadLeft 用 pad 把 s 左填充到 width。
+// PadLeft 用 pad 把 s 左填充到 width；
+// width 为字节数。pad 为空时默认为单空格。
 func PadLeft(s, pad string, width int) string {
-	if len(s) >= width {
+	n := len(s)
+	if n >= width {
 		return s
 	}
 	if pad == "" {
 		pad = " "
 	}
-	for len(s)+len(pad) <= width {
-		s = pad + s
+	pl := len(pad)
+	if pl == 0 {
+		return s
 	}
-	if len(s) < width {
-		s = strings.Repeat(pad, width-len(s)) + s
+	// 计算需要重复的次数 + 余量
+	diff := width - n
+	repeat := diff / pl
+	remain := diff - repeat*pl
+	// Build: pad[:remain] + pad*repeat + s
+	var b strings.Builder
+	b.Grow(width + pl)
+	if remain > 0 {
+		b.WriteString(pad[:remain])
 	}
-	return s
+	for i := 0; i < repeat; i++ {
+		b.WriteString(pad)
+	}
+	b.WriteString(s)
+	return b.String()
 }
 
 // PadRight 用 pad 把 s 右填充到 width。
