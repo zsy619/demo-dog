@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Quota is the per-tenant limit configuration.
+// Quota 是每个租户的限额配置。
 type Quota struct {
 	TenantID    string
 	Window      time.Duration
@@ -15,7 +15,7 @@ type Quota struct {
 	MaxBytes    int64
 }
 
-// QuotaUsage is the current consumption in the active window.
+// QuotaUsage 是当前活跃窗口中的消费量。
 type QuotaUsage struct {
 	TenantID    string
 	WindowStart time.Time

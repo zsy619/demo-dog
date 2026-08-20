@@ -1,20 +1,20 @@
 package api
 
-// randInt64 returns a pseudo-random int64 with a small lock-protected RNG.
+// randInt64 使用一个小型锁保护的 RNG 返回一个伪随机 int64。
 func (s *Server) randInt64() int64 {
 	s.rngMu.Lock()
 	defer s.rngMu.Unlock()
 	return s.rng.Int63()
 }
 
-// randintInt returns a pseudo-random int in [0, max).
+// randintInt 返回 [0, max) 范围内的伪随机整数。
 func (s *Server) randintInt(max int) int {
 	s.rngMu.Lock()
 	defer s.rngMu.Unlock()
 	return s.rng.Intn(max)
 }
 
-// randFloat returns a pseudo-random float in [min, max).
+// randFloat 返回 [min, max) 范围内的伪随机浮点数。
 func (s *Server) randFloat(min, max float64) float64 {
 	s.rngMu.Lock()
 	defer s.rngMu.Unlock()

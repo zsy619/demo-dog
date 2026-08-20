@@ -26,7 +26,7 @@ type Loader struct {
 	now      func() time.Time
 }
 
-// New constructs a Loader.
+// New 构造一个 Loader。
 func New(certPath, keyPath, caPath string) *Loader {
 	return &Loader{
 		certPath: certPath,
@@ -36,7 +36,7 @@ func New(certPath, keyPath, caPath string) *Loader {
 	}
 }
 
-// Load performs the first load. Required before Get.
+// Load 执行首次加载。在 Get 之前必须调用。
 func (l *Loader) Load() error {
 	cfg, err := l.build()
 	if err != nil {
@@ -75,15 +75,15 @@ func (l *Loader) Reload() error {
 	return nil
 }
 
-// Get returns the current tls.Config.
+// Get 返回当前的 tls.Config。
 func (l *Loader) Get() *tls.Config {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.cur
 }
 
-// Fingerprint returns the SHA256 of the cert (PEM-decoded DER).
-// Used to detect rotation without diffing the whole config.
+// Fingerprint 返回证书的 SHA256 (PEM 解码后的 DER)。
+// 用于在不 diff 整个 config 的情况下检测轮换。
 func (l *Loader) Fingerprint() (string, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -98,7 +98,7 @@ func (l *Loader) Fingerprint() (string, error) {
 	return hex.EncodeToString(h[:]), nil
 }
 
-// CertMetadata describes a certificate.
+// CertMetadata 描述一份证书。
 type CertMetadata struct {
 	Subject    string    `json:"subject"`
 	Issuer     string    `json:"issuer"`
@@ -108,7 +108,7 @@ type CertMetadata struct {
 	Fingerprint string    `json:"fingerprint"`
 }
 
-// Metadata returns descriptive metadata for the current cert.
+// Metadata 返回当前证书的描述性元数据。
 func (l *Loader) Metadata() (CertMetadata, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -194,5 +194,5 @@ func loadCAPool(path string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-// ErrUnchanged is returned by Reload when no file changed.
+// ErrUnchanged 在 Reload 时文件未变更的情况下返回。
 var ErrUnchanged = errors.New("tls files unchanged")

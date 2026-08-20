@@ -7,19 +7,19 @@ import (
 	"time"
 )
 
-// handleAudit returns the most-recent N events from the audit log,
-// optionally filtered.
-// Query parameters:
-//   - n:        optional, default 200, max 10 000
-//   - since:    optional RFC3339 timestamp
-//   - until:    optional RFC3339 timestamp
-//   - method:   exact match, e.g. POST
-//   - path:     substring match, e.g. "/api/"
-//   - tenant:   exact match
-//   - key:      exact match on label
-//   - status_min, status_max:   HTTP status range
+// handleAudit 返回审计日志中最近的 N 条事件,可选地
+// 进行过滤。
+// Query 参数:
+//   - n:        可选,默认 200,最大 10 000
+//   - since:    可选 RFC3339 时间戳
+//   - until:    可选 RFC3339 时间戳
+//   - method:   精确匹配,例如 POST
+//   - path:     子串匹配,例如 "/api/"
+//   - tenant:   精确匹配
+//   - key:      对 label 的精确匹配
+//   - status_min, status_max:   HTTP 状态码范围
 //
-// Requires admin role (enforced by the route gate in Handler()).
+// 需要 admin 角色(由 Handler() 中的路由门控强制)。
 func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -64,8 +64,8 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAuditStats returns the buffer stats (capacity / buffered /
-// total). Cheap to call and intended for dashboards.
+// handleAuditStats 返回缓冲统计信息(capacity / buffered /
+// total)。调用开销很低,供仪表板使用。
 func (s *Server) handleAuditStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -75,10 +75,10 @@ func (s *Server) handleAuditStats(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(s.auditLog.Stats())
 }
 
-// handleListKeys returns the registered API keys (without the raw
-// secret — just label + role). This is what makes the system
-// manageable from a CI script: a deploy can dump current keys
-// and diff against its desired state.
+// handleListKeys 返回已注册的 API keys(不包含原始
+// secret —— 只有 label + role)。这使得系统
+// 可以从 CI 脚本管理:一次部署可以转储当前的 keys
+// 并与其期望状态进行 diff。
 func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -92,8 +92,8 @@ func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	list := make([]out, 0, len(entries))
 	for _, e := range entries {
-		// Never echo the full secret — the prefix is enough for an
-		// operator to recognise which entry is which.
+		// 永远不要回显完整的 secret —— 前缀足以让
+		// 运维人员识别这是哪一条记录。
 		prefix := e.Key
 		if len(prefix) > 6 {
 			prefix = prefix[:6] + "…"

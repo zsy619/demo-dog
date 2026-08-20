@@ -94,9 +94,9 @@ type rateLimitError struct{}
 func (e *rateLimitError) Error() string { return "rate limit exceeded" }
 
 
-// AllowByKey is a per-API-key variant of Allow. Returns (allowed,
-// remaining, retryAfter). Used by middleware that authenticates the
-// caller and wants finer-grained limiting than the per-IP variant.
+// AllowByKey 是 Allow 的 per-API-key 变体。返回 (allowed,
+// remaining, retryAfter)。供对调用方进行鉴权并希望
+// 比 per-IP 变体进行更细粒度限流的中间件使用。
 func (r *RateLimiter) AllowByKey(key string) (bool, int, time.Duration) {
 	if key == "" {
 		return true, 0, 0
@@ -123,7 +123,7 @@ func (r *RateLimiter) AllowByKey(key string) (bool, int, time.Duration) {
 	return false, 0, retry
 }
 
-// Stats returns the current limiter state for /api/health.
+// Stats 返回 /api/health 的当前限流器状态。
 type RateLimiterStats struct {
 	Keys  int     `json:"keys"`
 	Rate  float64 `json:"rate"`
@@ -140,11 +140,11 @@ func (r *RateLimiter) Stats() RateLimiterStats {
 	}
 }
 
-// KeyedMiddleware wraps a handler with per-API-key rate limiting.
-// Pass a function that resolves the request to a key (typically the
-// Authorization bearer token, or the X-Dog-Tenant for anonymous
-// paths). The handler returns 429 with a Retry-After header derived
-// from the actual refill rate when the bucket is empty.
+// KeyedMiddleware 用 per-API-key 限流包裹一个处理器。
+// 传入一个将请求解析为 key 的函数（通常是
+// Authorization bearer token，或匿名路径下的 X-Dog-Tenant）。当桶为空时，
+// 处理器会返回 429，并附带根据实际补充速率
+// 计算得出的 Retry-After 头部。
 func (r *RateLimiter) KeyedMiddleware(resolveKey func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -168,8 +168,8 @@ func (r *RateLimiter) KeyedMiddleware(resolveKey func(*http.Request) string) fun
 	}
 }
 
-// strconvItoa is a local Itoa to avoid pulling strconv into the
-// imports for an existing file.
+// strconvItoa 是一个本地的 Itoa 实现，避免将 strconv 拉入
+// 已有文件的 import 列表。
 func strconvItoa(n int) string {
 	if n == 0 { return "0" }
 	neg := false

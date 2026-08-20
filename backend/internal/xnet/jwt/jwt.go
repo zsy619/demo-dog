@@ -29,8 +29,8 @@ type Key struct {
 	Created time.Time
 }
 
-// Verifier 持有按 kid 索引的密钥环，
-// 当前密钥始终位于索引 0。
+// Verifier 按 kid 保存一个 key 环，
+// 当前 key 始终位于索引 0。
 type Verifier struct {
 	mu        sync.RWMutex
 	keys      map[string]*Key
@@ -198,8 +198,8 @@ func Sign(claims map[string]any, k *Key) (string, error) {
 	return hp + "." + cp + "." + sig, nil
 }
 
-// Middleware 返回一个 http.Handler，要求传入合法的
-// bearer 令牌，并将 claims 注入到请求上下文中。
+// Middleware 返回要求有效 bearer token 的 http.Handler，
+// 并将 claims 注入请求上下文。
 func (v *Verifier) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")

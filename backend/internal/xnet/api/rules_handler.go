@@ -10,31 +10,31 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xflow/alerts"
 )
 
-// handleRules 以 Prometheus /api/v1/rules 返回的形状
-// 返回当前 SLO 烧速率规则。与 Prometheus
-// UI 的 Rules 标签页及任何对接该端点的工具兼容。
-//
-// 授权：
-//   请求必须携带包含 "rules:read" 作用域的 API 密钥。
-//   不带该作用域的密钥即使在其他端点合法，也会看到 403。
-//   只读密钥可以枚举规则；此处不需要
-//   写密钥（rules:write）。
-//
-// 查询参数（全部可选）：
-//   type=alert   只返回 alert 规则（我们只有 alert 规则）
-//   state=...    信息性字段，在响应形状中返回
-//   group=<name> 忽略（为简单起见我们按规则分组）
+// handleRules 以 Prometheus /api/v1/rules 的格式
+// 返回在线的 SLO burn-rate 规则。兼容 Prometheus
+// UI 的 Rules 选项卡以及任何与该端点对接的工具。
+// 
+// 鉴权：
+// 请求必须携带包含 "rules:read" scope 的 API key。
+// 缺少该 scope 的 key 即使对其他端点有效也会得到 403。
+// 只读 key 可以枚举规则；此处不要求
+// 写 key（rules:write）。
+// 
+// 查询参数（均为可选）：
+// type=alert   仅返回 alert 规则（我们只有 alert 规则）
+// state=...    仅作信息展示，会在响应结构中原样返回
+// group=<name> 忽略（为简单起见，我们按规则分组）
 func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
 		return
 	}
-	// 第 37 轮：按密钥的作用域强制执行。没有 rules:read 的
-	// 只读密钥即使在其他端点已认证，也会得到 403。
-	// 空的作用域列表被解释为 "无资源访问权限"，
-	// 因此我们必须显式检查资源；AllowsResource 仅在设计层面
-	// 针对旧密钥将空列表视作 "全部允许"，所以我们
-	// 双向检查：密钥必须存在且拥有该作用域。
+	// Round 37：per-key scope 强制执行。缺少
+	// rules:read 的只读 key 即使已通过其他端点的鉴权也会得到 403。
+	// 空 scope 列表被解释为 "无资源访问"，因此我们
+	// 必须显式检查该资源；AllowsResource 仅出于对历史 key 的设计
+	// 把空列表视为 "全部放行"，所以我们
+	// 两个方向都检查：key 必须存在 AND 必须拥有该 scope。
 	key := extractKey(r)
 	if key != "" {
 		if !s.auth.AllowsResource(key, "rules:read") {
@@ -131,9 +131,9 @@ func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// promQueryFor 为烧速率规则合成一个 Prometheus 形状的
-// 查询字符串。该字符串是说明性的，不可针对真实 PromQL 求值 ——
-// 但它告诉人类该规则关注的内容。
+// promQueryFor 为一条 burn-rate 规则合成一个 Prometheus 风格的查询字符串。
+// 该字符串仅作信息展示，并不能针对真实的 PromQL 求值——
+// 但能让人类直观地看到该规则监听的内容。
 func promQueryFor(r alerts.Rule) string {
 	svc := r.Service
 	if svc == "" {
@@ -143,9 +143,9 @@ func promQueryFor(r alerts.Rule) string {
 		svc, r.Window, r.FastBurn, r.SlowBurn, r.Target)
 }
 
-// ruleStateFor 默认返回 "inactive"。我们目前尚未在引擎中跟踪
-// 按规则的触发状态；rules 端点暴露配置，
-// fires 端点暴露历史。
+// ruleStateFor 默认返回 "inactive"。我们目前尚未在引擎中跟踪规则的
+// per-rule firing 状态；rules 端点暴露
+// 配置，fires 端点暴露历史记录。
 func ruleStateFor(_ alerts.Rule) string {
 	return "inactive"
 }

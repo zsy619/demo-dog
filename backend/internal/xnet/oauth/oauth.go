@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Client is one OAuth2 client (machine-to-machine).
+// Client 是一个 OAuth2 客户端（机器对机器）。
 type Client struct {
 	ID           string
 	Secret       []byte
@@ -25,7 +25,7 @@ type Client struct {
 	now          func() time.Time
 }
 
-// Server is the OAuth2 token issuer.
+// Server 是 OAuth2 令牌签发器。
 type Server struct {
 	mu       sync.RWMutex
 	clients  map[string]*Client
@@ -34,7 +34,7 @@ type Server struct {
 	now      func() time.Time
 }
 
-// New creates a Server with the given issuer URL + signing
+// New 使用指定的 issuer URL 与签名密钥创建一个 Server。
 // secret.
 func New(issuer, secret string) *Server {
 	return &Server{
@@ -45,13 +45,13 @@ func New(issuer, secret string) *Server {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试所用的时间源。
 func (s *Server) WithTime(now func() time.Time) *Server {
 	s.now = now
 	return s
 }
 
-// Register adds a client.
+// Register 添加一个客户端。
 func (s *Server) Register(c *Client) {
 	if c.AccessTTL <= 0 {
 		c.AccessTTL = 1 * time.Hour
@@ -65,7 +65,7 @@ func (s *Server) Register(c *Client) {
 	s.mu.Unlock()
 }
 
-// ClientLookup fetches a client by ID.
+// ClientLookup 按 ID 查找客户端。
 func (s *Server) ClientLookup(id string) (*Client, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -73,15 +73,15 @@ func (s *Server) ClientLookup(id string) (*Client, bool) {
 	return c, ok
 }
 
-// ErrInvalidClient is returned when the client_id / secret
+// ErrInvalidClient 在 client_id / secret 错误时返回。
 // pair is wrong.
 var ErrInvalidClient = errors.New("invalid client")
 
-// ErrInvalidScope is returned when the requested scope is
-// not allowed for the client.
+// ErrInvalidScope 在请求的作用域对客户端
+// 不允许时返回。
 var ErrInvalidScope = errors.New("invalid scope")
 
-// TokenResponse is the OAuth2 token JSON response.
+// TokenResponse 是 OAuth2 令牌的 JSON 响应。
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
@@ -90,8 +90,8 @@ type TokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
-// IssueClientCredentials implements the client_credentials
-// grant. Returns the token response on success.
+// IssueClientCredentials 实现 client_credentials grant。
+// 成功时返回 token 响应。
 func (s *Server) IssueClientCredentials(clientID, clientSecret string, scopes []string) (*TokenResponse, error) {
 	s.mu.RLock()
 	c, ok := s.clients[clientID]
@@ -140,7 +140,7 @@ func (s *Server) IssueClientCredentials(clientID, clientSecret string, scopes []
 	}, nil
 }
 
-// VerifyToken returns the token claims if signature + expiry
+// VerifyToken 在签名与有效期均合法时返回令牌 claims。
 // are valid.
 func (s *Server) VerifyToken(token string) (map[string]any, error) {
 	claims, err := s.verifyToken(token)
@@ -235,16 +235,16 @@ func splitN(s string, sep byte, n int) []string {
 	return out
 }
 
-// MintToken returns the raw access token string for tests.
+// MintToken 返回原始访问令牌字符串，供测试使用。
 func MintToken(s *Server, claims map[string]any) (string, error) {
 	return s.signToken(claims)
 }
 
-// MustDecode decodes the access token from a TokenResponse
-// into its claims map (test helper).
+// MustDecode 从 TokenResponse 中解码访问令牌到
+// 它的 claims 映射（测试辅助函数）。
 func (s *Server) MustDecode(token string) (map[string]any, error) {
 	return s.verifyToken(token)
 }
 
-// String returns a printable form for errors.
+// String 返回一个可打印的形式用于错误。
 func String(b []byte) string { return fmt.Sprintf("%s", b) }

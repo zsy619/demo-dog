@@ -7,14 +7,14 @@ import (
 	"strconv"
 )
 
-// handleSeries returns the catalog of known metric names plus per-metric
-// cardinality. This is the Prometheus-standard /api/v1/series endpoint,
-// the data source for the explore-metrics feature in Grafana and the
-// same shape used by Cortex/Mimir/Thanos.
-//
-// Query parameters:
-//   match[]=<selector>   optional, repeats
-//   limit=<int>          optional, default 1000, max 10000
+// handleSeries 返回已知 metric 名称的目录以及每个 metric 的基数。
+// 这是 Prometheus 标准的 /api/v1/series 端点，
+// 是 Grafana 中 explore-metrics 功能的数据源，也是
+// Cortex/Mimir/Thanos 使用的同一格式。
+// 
+// 查询参数：
+// match[]=<selector>   可选，可重复
+// limit=<int>          可选，默认 1000，最大 10000
 func (s *Server) handleSeries(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
@@ -73,10 +73,10 @@ func (s *Server) handleSeries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMetadata returns the Prometheus-standard metadata endpoint.
-// Grafana dashboards probe this to display type hints next to
-// metric names. Without it, standard tooling logs missing-metadata
-// warnings on every dashboard load.
+// handleMetadata 返回 Prometheus 标准的 metadata 端点。
+// Grafana 仪表盘会探测该端点以在
+// metric 名称旁显示类型提示。如果缺少该端点，
+// 标准工具会在每次加载仪表盘时输出 missing-metadata 警告。
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
@@ -112,11 +112,11 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// parseMatchName extracts the metric name from a Prometheus match
-// selector. Accepts:
-//   metric_name
-//   {__name__="metric_name"}
-// Returns the empty string when malformed.
+// parseMatchName 从 Prometheus match
+// selector 中提取 metric 名称。接受：
+// metric_name
+// {__name__="metric_name"}
+// 在格式不合法时返回空字符串。
 func parseMatchName(s string) string {
 	if s == "" {
 		return ""
@@ -150,7 +150,7 @@ func splitMatch(s string, sep byte) []string {
 	return out
 }
 
-// guessMetricKind heuristically infers type/unit from a metric name.
+// guessMetricKind 根据指标名称启发式地推断类型/单位。
 func guessMetricKind(name string) (kind, unit string) {
 	switch {
 	case hasSuffix(name, ".total") || hasSuffix(name, "_total"):

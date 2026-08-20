@@ -1,11 +1,11 @@
-// Self-tracing: middleware that wraps every request in a span POSTed
-// back to the local /api/ingest/otlp endpoint. This lets a single
-// collector graph its own latency without needing an SDK in the same
-// process.
-//
-// The implementation is deliberately tiny: a span per request, a
-// best-effort POST, no sampling, no queueing. The collector that
-// produces telemetry about itself is a bootstrapper.
+// Self-tracing：一个中间件，将每个请求包裹为一个 span 并 POST 回
+// 本地的 /api/ingest/otlp 端点。这使得单个
+// 采集器可以在同一进程中无需 SDK 的情况下
+// 绘制自身的时延图。
+// 
+// 实现刻意保持精简：每个请求一个 span，
+// best-effort POST，没有采样、没有排队。产生
+// 自身遥测数据的采集器就是一个 bootstrapper。
 
 package api
 
@@ -118,8 +118,8 @@ func encodeSeq(seq uint64) string {
 	return hex.EncodeToString(b[:])
 }
 
-// statusWriter wraps ResponseWriter so wrapping middleware can read
-// the status code AFTER the inner handler runs.
+// statusWriter 包装 ResponseWriter，以便外层中间件能够在内部处理器
+// 运行之后读取状态码。
 type statusWriter struct {
 	http.ResponseWriter
 	status int

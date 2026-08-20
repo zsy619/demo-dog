@@ -24,7 +24,7 @@ type Monitor struct {
 	failed    atomic.Uint64
 }
 
-// Result is one endpoint's current state.
+// Result 是某个端点的当前状态。
 type Result struct {
 	Addr      string
 	Healthy   bool
@@ -52,7 +52,7 @@ func New(addrs []string, timeout time.Duration) *Monitor {
 	return m
 }
 
-// Add registers a new endpoint.
+// Add 注册一个新端点。
 func (m *Monitor) Add(addr string) {
 	m.mu.Lock()
 	m.addrs = append(m.addrs, addr)
@@ -62,7 +62,7 @@ func (m *Monitor) Add(addr string) {
 	m.mu.Unlock()
 }
 
-// Check runs one health check round across all endpoints.
+// Check 对所有端点执行一轮健康检查。
 func (m *Monitor) Check(ctx context.Context) {
 	m.mu.RLock()
 	addrs := make([]string, len(m.addrs))
@@ -115,7 +115,7 @@ func (m *Monitor) checkOne(ctx context.Context, addr string) {
 	m.mu.Unlock()
 }
 
-// Snapshot returns a copy of all results.
+// Snapshot 返回所有结果的副本。
 func (m *Monitor) Snapshot() map[string]Result {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -126,10 +126,10 @@ func (m *Monitor) Snapshot() map[string]Result {
 	return out
 }
 
-// ErrNoAddr is returned when no addresses are configured.
+// ErrNoAddr 在未配置地址时返回。
 var ErrNoAddr = errors.New("no address")
 
-// Healthiest returns the lowest-latency healthy endpoint.
+// Healthiest 返回延迟最低的健康端点。
 func (m *Monitor) Healthiest() (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -152,14 +152,14 @@ func (m *Monitor) Healthiest() (string, error) {
 	return best, nil
 }
 
-// Stats returns counters.
+// Stats 返回计数器。
 type Stats struct {
 	Attempted uint64 `json:"attempted"`
 	Succeeded uint64 `json:"succeeded"`
 	Failed    uint64 `json:"failed"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回快照。
 func (m *Monitor) Stats() Stats {
 	return Stats{Attempted: m.attempted.Load(), Succeeded: m.succeeded.Load(), Failed: m.failed.Load()}
 }

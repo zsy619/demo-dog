@@ -4,7 +4,7 @@ import (
 	"strconv"
 )
 
-// atoiDefault returns the int value of s, or def if s is empty or invalid.
+// atoiDefault 返回 s 的整数值；若 s 为空或无效则返回 def。
 func atoiDefault(s string, def int) int {
 	if s == "" {
 		return def

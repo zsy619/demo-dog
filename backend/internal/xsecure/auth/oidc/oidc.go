@@ -42,7 +42,7 @@ import (
 	"time"
 )
 
-// Config configures an OIDCProvider.
+// Config 用于配置 OIDCProvider。
 type Config struct {
 	IssuerURL   string
 	ClientID    string
@@ -51,7 +51,7 @@ type Config struct {
 	JWKSRefresh time.Duration
 }
 
-// OIDCProvider is a verifying relying-party client.
+// OIDCProvider 是一个进行校验的依赖方客户端。
 type OIDCProvider struct {
 	mu         sync.RWMutex
 	cfg        Config
@@ -61,18 +61,18 @@ type OIDCProvider struct {
 	lastJWKSAt time.Time
 }
 
-// DiscoveryDoc is the OpenID Connect discovery document.
+// DiscoveryDoc 是 OpenID Connect 的发现文档。
 type DiscoveryDoc struct {
 	Issuer  string `json:"issuer"`
 	JWKSURI string `json:"jwks_uri"`
 }
 
-// JWKS is the JSON Web Key Set.
+// JWKS 是 JSON Web Key Set。
 type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
-// JWK is one key entry.
+// JWK 是单个 key 条目。
 type JWK struct {
 	Kty string `json:"kty"`
 	Kid string `json:"kid"`
@@ -85,7 +85,7 @@ type JWK struct {
 	Y   string `json:"y,omitempty"`
 }
 
-// Claims is the verified JWT payload.
+// Claims 是已校验的 JWT 载荷。
 type Claims struct {
 	Issuer        string   `json:"iss,omitempty"`
 	Subject       string   `json:"sub,omitempty"`
@@ -100,8 +100,8 @@ type Claims struct {
 	Tenant        string   `json:"tenant_id,omitempty"`
 }
 
-// AllScopes returns the union of Scope (space-separated), Scopes,
-// and Groups. Used to populate the auth KeyEntry Scopes list.
+// AllScopes 返回 Scope (空格分隔)、Scopes
+// 和 Groups 的并集。用于填充 auth KeyEntry Scopes 列表。
 func (c *Claims) AllScopes() []string {
 	set := map[string]struct{}{}
 	for _, s := range strings.Fields(c.Scope) {
@@ -149,7 +149,7 @@ func NewProvider(ctx context.Context, cfg Config) (*OIDCProvider, error) {
 	return p, nil
 }
 
-// Close stops the background JWKS refresher.
+// Close 停止后台 JWKS 刷新协程。
 func (p *OIDCProvider) Close() {}
 
 func (p *OIDCProvider) refreshDiscovery(ctx context.Context) error {
@@ -228,7 +228,7 @@ func (p *OIDCProvider) jwksRefresher(ctx context.Context) {
 	}
 }
 
-// Verify validates a raw ID token and returns claims on success.
+// Verify 校验原始 ID token，成功时返回 claims。
 func (p *OIDCProvider) Verify(ctx context.Context, raw string) (*Claims, error) {
 	parts := strings.Split(raw, ".")
 	if len(parts) != 3 {

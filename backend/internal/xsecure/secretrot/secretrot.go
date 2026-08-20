@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Store is a per-tenant secret store with auto-rotation.
+// Store 是一个按租户划分的密钥存储，并支持自动轮换。
 type Store struct {
 	mu       sync.RWMutex
 	secrets  map[string]*entry
@@ -23,7 +23,7 @@ type entry struct {
 	rotations int
 }
 
-// New creates a Store with the rotation interval.
+// New 创建一个带轮换间隔的 Store。
 func New(interval time.Duration) *Store {
 	if interval <= 0 {
 		interval = 24 * time.Hour
@@ -35,13 +35,13 @@ func New(interval time.Duration) *Store {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖用于测试的时间源。
 func (s *Store) WithTime(now func() time.Time) *Store {
 	s.now = now
 	return s
 }
 
-// ErrNotFound is returned for unknown tenants.
+// ErrNotFound 在租户未知时返回。
 var ErrNotFound = errors.New("secret not found")
 
 // Get returns the current secret for tenant. If the secret
@@ -61,7 +61,7 @@ func (s *Store) Get(tenant string) ([]byte, error) {
 	return out, nil
 }
 
-// Set installs or replaces a tenant secret.
+// Set 安装或替换一个租户的密钥。
 func (s *Store) Set(tenant string, value []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -72,7 +72,7 @@ func (s *Store) Set(tenant string, value []byte) {
 	}
 }
 
-// Rotate forces a tenant secret to be regenerated.
+// Rotate 强制重新生成某个租户的密钥。
 func (s *Store) Rotate(tenant string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,14 +84,14 @@ func (s *Store) Rotate(tenant string) error {
 	return nil
 }
 
-// Delete removes a tenant secret.
+// Delete 移除某个租户的密钥。
 func (s *Store) Delete(tenant string) {
 	s.mu.Lock()
 	delete(s.secrets, tenant)
 	s.mu.Unlock()
 }
 
-// Snapshot returns the rotation metadata for all tenants.
+// Snapshot 返回所有租户的轮换元数据。
 func (s *Store) Snapshot() map[string]time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -102,7 +102,7 @@ func (s *Store) Snapshot() map[string]time.Time {
 	return out
 }
 
-// Rotations returns the number of rotations for tenant.
+// Rotations 返回指定租户的轮换次数。
 func (s *Store) Rotations(tenant string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

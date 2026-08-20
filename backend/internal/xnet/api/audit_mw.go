@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// auditResponseWriter captures the status code and bytes written so
-// the audit middleware can include them in the log line.
+// auditResponseWriter 捕获状态码和写入的字节数,以便
+// 审计中间件可以将它们包含在日志行中。
 type auditResponseWriter struct {
 	w          http.ResponseWriter
 	status     int
@@ -36,9 +36,9 @@ func (a *auditResponseWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// Hijack lets downstream handlers (notably the WebSocket upgrade)
-// take over the connection. The audit middleware does not need
-// to wrap the hijacked stream.
+// Hijack 允许下游处理器(尤其是 WebSocket 升级)
+// 接管连接。审计中间件无需
+// 包装被劫持的流。
 func (a *auditResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if h, ok := a.w.(http.Hijacker); ok {
 		return h.Hijack()
@@ -46,8 +46,8 @@ func (a *auditResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 
-// Flush proxies through if the underlying writer supports it. Some
-// SSE handlers in the codebase rely on Flusher to push events.
+// Flush 在底层 writer 支持时进行代理转发。代码库中的
+// 一些 SSE 处理器依赖 Flusher 来推送事件。
 func (a *auditResponseWriter) Flush() {
 	if f, ok := a.w.(http.Flusher); ok {
 		f.Flush()

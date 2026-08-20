@@ -6,28 +6,28 @@ import (
 	"sync"
 )
 
-// Role is one named role with a permission set.
+// Role 是带有一组权限的单一命名角色。
 type Role struct {
 	Name        string
 	Permissions []string
 	Parents     []string // roles whose permissions are inherited
 }
 
-// Assignment binds a subject to a role within a tenant.
+// Assignment 将主体绑定到租户内的某个角色。
 type Assignment struct {
 	Tenant  string
 	Subject string
 	Role    string
 }
 
-// Manager owns roles + per-tenant assignments.
+// Manager 持有角色以及每个租户的分配关系。
 type Manager struct {
 	mu          sync.RWMutex
 	roles       map[string]*Role
 	assignments map[string]map[string]map[string]struct{} // tenant -> subject -> set of roles
 }
 
-// New creates an empty Manager.
+// New 创建一个空的 Manager。
 func New() *Manager {
 	return &Manager{
 		roles:       make(map[string]*Role),
@@ -35,14 +35,14 @@ func New() *Manager {
 	}
 }
 
-// ErrRoleExists is returned when Register is called twice.
+// ErrRoleExists 在 Register 被重复调用时返回。
 var ErrRoleExists = errors.New("role already exists")
 
 // ErrRoleMissing is returned when a referenced role does
 // not exist.
 var ErrRoleMissing = errors.New("role missing")
 
-// Register adds a role.
+// Register 添加一个角色。
 func (m *Manager) Register(r *Role) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -58,14 +58,14 @@ func (m *Manager) Register(r *Role) error {
 	return nil
 }
 
-// MustRegister panics on error.
+// MustRegister 在出错时 panic。
 func (m *Manager) MustRegister(r *Role) {
 	if err := m.Register(r); err != nil {
 		panic(err)
 	}
 }
 
-// Get returns a role by name.
+// Get 按名称返回一个角色。
 func (m *Manager) Get(name string) (*Role, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -73,7 +73,7 @@ func (m *Manager) Get(name string) (*Role, bool) {
 	return r, ok
 }
 
-// Assign binds subject to role within tenant.
+// Assign 将主体绑定到租户内的某个角色。
 func (m *Manager) Assign(tenant, subject, role string) error {
 	m.mu.Lock()
 	if _, ok := m.roles[role]; !ok {
@@ -91,7 +91,7 @@ func (m *Manager) Assign(tenant, subject, role string) error {
 	return nil
 }
 
-// Unassign removes the role from subject.
+// Unassign 从主体上移除该角色。
 func (m *Manager) Unassign(tenant, subject, role string) {
 	m.mu.Lock()
 	if t, ok := m.assignments[tenant]; ok {

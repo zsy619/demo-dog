@@ -1,6 +1,6 @@
 package api
 
-// Rules CRUD endpoints (Round 53 parity work).
+// Rules CRUD 端点（Round 53 对齐工作）。
 
 import (
 	"encoding/json"
@@ -81,8 +81,8 @@ func (s *Server) handleRulesAdmin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) allowedFor(r *http.Request, scope string) bool {
 	key := extractKey(r)
 	if key == "" {
-		// No key presented. AuthModeOff means anyone can write; the
-		// production modes always require a key for write endpoints.
+		// 未提供 key。AuthModeOff 意味着任何人都可以写入；
+		// 生产模式下，写入端点始终要求 key。
 		return s.authM == AuthModeOff
 	}
 	if !s.auth.AllowsResource(key, scope) {

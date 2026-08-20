@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Doc is the stored record.
+// Doc 是存储的记录。
 type Doc struct {
 	ID     string
 	Values map[string]any
@@ -21,7 +21,7 @@ type Store struct {
 	indexes  map[string]map[string]map[string]struct{} // field -> value -> set of IDs
 }
 
-// New creates an empty store.
+// New 创建一个空的存储。
 func New() *Store {
 	return &Store{
 		docs:    make(map[string]*Doc),
@@ -29,10 +29,10 @@ func New() *Store {
 	}
 }
 
-// ErrNotFound is returned when the requested ID is missing.
+// ErrNotFound 在请求的 ID 缺失时返回。
 var ErrNotFound = errors.New("doc not found")
 
-// Put inserts or replaces a document. The doc must have an ID.
+// Put 插入或替换一个文档。该文档必须具有 ID。
 func (s *Store) Put(d *Doc) error {
 	if d.ID == "" {
 		return errors.New("doc ID required")
@@ -52,7 +52,7 @@ func (s *Store) Put(d *Doc) error {
 	return nil
 }
 
-// Get returns the document by ID.
+// Get 按 ID 返回文档。
 func (s *Store) Get(id string) (*Doc, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -64,7 +64,7 @@ func (s *Store) Get(id string) (*Doc, bool) {
 	return cp, true
 }
 
-// Delete removes a document.
+// Delete 删除一个文档。
 func (s *Store) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -79,7 +79,7 @@ func (s *Store) Delete(id string) error {
 	return nil
 }
 
-// FindByIndex returns all docs where field == value.
+// FindByIndex 返回所有 field == value 的文档。
 func (s *Store) FindByIndex(field string, value string) []*Doc {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -98,14 +98,14 @@ func (s *Store) FindByIndex(field string, value string) []*Doc {
 	return out
 }
 
-// Count returns the number of documents.
+// Count 返回文档的数量。
 func (s *Store) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.docs)
 }
 
-// ListIDs returns all doc IDs sorted.
+// ListIDs 返回所有已排序的文档 ID。
 func (s *Store) ListIDs() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

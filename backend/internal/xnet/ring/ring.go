@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// Ring is a consistent hash ring with virtual nodes.
+// Ring 是一个带有虚拟节点的一致性哈希环。
 type Ring struct {
 	mu       sync.RWMutex
 	replicas int
@@ -29,7 +29,7 @@ func New(replicas int) *Ring {
 	}
 }
 
-// Add introduces a node to the ring.
+// Add 向环中引入一个节点。
 func (r *Ring) Add(node string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -41,7 +41,7 @@ func (r *Ring) Add(node string) {
 	sort.Slice(r.keys, func(i, j int) bool { return r.keys[i] < r.keys[j] })
 }
 
-// Remove drops a node from the ring.
+// Remove 从环中移除一个节点。
 func (r *Ring) Remove(node string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,7 +59,7 @@ func (r *Ring) Remove(node string) {
 	}
 }
 
-// Lookup returns the node responsible for key.
+// Lookup 返回负责 key 的节点。
 func (r *Ring) Lookup(key string) (string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -105,7 +105,7 @@ func (r *Ring) LookupN(key string, n int) ([]string, error) {
 	return out, nil
 }
 
-// Nodes returns the unique set of nodes in the ring.
+// Nodes 返回环中节点的唯一集合。
 func (r *Ring) Nodes() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -121,7 +121,7 @@ func (r *Ring) Nodes() []string {
 	return out
 }
 
-// Size returns the unique node count.
+// Size 返回唯一节点的数量。
 func (r *Ring) Size() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

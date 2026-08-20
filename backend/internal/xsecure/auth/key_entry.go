@@ -5,15 +5,15 @@
 //   - token.go       密码学 token 生成与哈希
 //   - admin_store.go AdminStore 主体（key 表的 CRUD + 轮换）
 //
-// Key rotation lets an operator mint a new key, mark the old
-// one as expiring (still valid for a grace window), and
-// eventually delete it. The auth layer is unaffected: tokens
-// continue to match by hash.
-//
-// Tenant helpers provide CRUD + list operations for
-// /api/admin/tenants. The full registry lives in
-// xdata/tenants; this package re-exports the operations
-// the admin handler wires up.
+// Key rotation 让运维人员可以签发一个新 key，将旧 key
+// 标记为即将过期（在一个宽限期内仍然有效），
+// 并最终删除它。Auth 层不受影响：tokens
+// 仍然按 hash 匹配。
+// 
+// Tenant 辅助函数为 /api/admin/tenants
+// 提供 CRUD + list 操作。完整的注册表位于
+// xdata/tenants；本 package 重新导出 admin handler
+// 需要接入的操作。
 package auth
 
 import "time"

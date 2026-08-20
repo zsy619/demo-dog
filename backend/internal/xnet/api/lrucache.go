@@ -6,19 +6,19 @@ import (
 	"time"
 )
 
-// LRUCache 是线程安全的进程内最近最少使用缓存，
-// 可选地支持按条目的 TTL。它刻意保持小巧（几百行）
-// 且仅依赖标准库，以便 demo-dog 采集器
-// 不引入任何新依赖。
-//
-// 使用场景：
-//   * 缓存 /api/v1/query（PromQL）的响应。
-//   * 在没有变化时缓存 /api/services。
-//   * 缓存 /api/admin/keys（很少变化）。
-//
-// 缓存同时受最大条目数和可选的全局字节预算约束。
-// 当任一约束被突破时，最久未使用的条目会被驱逐。
+// LRUCache 是一个线程安全的、进程内的最近最少使用缓存,
+// 支持可选的每条目 TTL。它故意写得很小(几百行),
+// 并且只使用标准库,因此 demo-dog collector 不会
+// 引入任何新依赖。
 // 
+// 用例:
+// * `/api/v1/query` (PromQL) 响应的缓存。
+// * 在没有变化时对 `/api/services` 进行缓存。
+// * 对很少变化的 `/api/admin/keys` 进行缓存。
+// 
+// 缓存同时受最大条目数和
+// 可选的全局字节预算限制。当任一限制被超出时,
+// 最近最少使用的条目将被驱逐。
 type LRUCache struct {
 	mu       sync.Mutex
 	cap      int
@@ -41,9 +41,9 @@ type lruEntry struct {
 }
 
 // NewLRUCache 返回一个新的缓存。
-//   cap: 最大条目数（0 = 1024）
-//   maxBytes: 总字节预算（0 = 无限制）
-//   ttl: 按条目的 TTL（0 = 不过期）
+// cap: 最大条目数(0 = 1024)
+// maxBytes: 总字节预算(0 = 无限制)
+// ttl: 每条目 TTL(0 = 不过期)
 func NewLRUCache(cap int, maxBytes int64, ttl time.Duration) *LRUCache {
 	if cap <= 0 {
 		cap = 1024
@@ -57,8 +57,8 @@ func NewLRUCache(cap int, maxBytes int64, ttl time.Duration) *LRUCache {
 	}
 }
 
-// Get 返回缓存的值并报告是否命中。
-// 超过 TTL 的值会被视为未命中。
+// Get 返回缓存值并报告是否命中。
+// 早于 TTL 的值被视为未命中。
 func (c *LRUCache) Get(key string) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -81,8 +81,8 @@ func (c *LRUCache) Get(key string) ([]byte, bool) {
 	return out, true
 }
 
-// Set 插入或替换一个条目。值会被拷贝，
-// 因此调用方可以在调用后修改其切片。
+// Set 插入或替换一个条目。值会被拷贝,
+// 因此调用方可以在调用之后修改其切片。
 func (c *LRUCache) Set(key string, value []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -160,8 +160,8 @@ func (c *LRUCache) removeElement(el *list.Element) {
 	delete(c.items, ent.key)
 }
 
-// evict 移除最旧的条目，直到同时满足 cap 和
-// maxBytes 预算为止。
+// evict 移除最旧的条目,直到我们同时满足 cap 和
+// maxBytes 预算。
 func (c *LRUCache) evict() {
 	for c.order.Len() > c.cap {
 		el := c.order.Back()

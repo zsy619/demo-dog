@@ -1,8 +1,8 @@
-// Package-level metrics registry. We deliberately stay stdlib-only
-// (the backend has zero external dependencies) so the metrics
-// infrastructure is hand-rolled: a small label-set histogram with a
-// Prometheus text exposition writer. The shape mirrors what the
-// prom client lib would emit, so any off-the-shelf scraper works.
+// 包级 metrics 注册表。我们刻意保持只使用 stdlib
+// (本后端没有任何外部依赖)，因此 metrics
+// 基础设施是手写的：一个带 label 集的小型 histogram 加上
+// Prometheus 文本导出器。其形态与 prom client 库输出保持一致，
+// 因此任何开箱即用的 scraper 都能工作。
 
 package api
 
@@ -14,9 +14,9 @@ import (
 	"sync"
 )
 
-// labels is the canonical label-key ordering used for both hash and
-// exposition. We sort keys so the same labels always hash to the same
-// bucket regardless of map iteration order.
+// labels 是用于 hash 和导出的标准 label-key 排序。
+// 我们对 key 进行排序，使相同的 label 始终 hash 到相同的
+// bucket，无论 map 迭代顺序如何。
 func labels(m map[string]string) string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -33,8 +33,8 @@ func labels(m map[string]string) string {
 	return b.String()
 }
 
-// histogramSeries is a per-label histogram with a fixed bucket
-// boundary set. Buckets are upper bounds (Prometheus convention).
+// histogramSeries 是带固定 bucket
+// 边界集的 per-label histogram。Bucket 为上界 (Prometheus 约定)。
 type histogramSeries struct {
 	mu      sync.Mutex
 	labels  map[string]string
@@ -89,8 +89,8 @@ func formatBound(b float64) string {
 	return fmt.Sprintf("%g", b)
 }
 
-// histogramVec is a labelled histogram vector indexed by a hash of
-// the label tuple. Lookups are O(1) via map.
+// histogramVec 是按 label tuple 的 hash 索引的带标签 histogram vector。
+// 通过 map 实现 O(1) 查找。
 type histogramVec struct {
 	mu       sync.Mutex
 	bounds   []float64
@@ -135,15 +135,15 @@ func (v *histogramVec) WriteText(w io.Writer, name string) {
 	}
 }
 
-// Default bucket boundaries for HTTP request latency, in seconds.
+// HTTP 请求延迟的默认桶边界，单位为秒。
 var requestDurationBuckets = []float64{
 	0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30,
 }
 
-// requestDuration is the per-handler latency histogram.
+// requestDuration 是每个处理器的延迟直方图。
 var requestDuration = newHistogramVec(requestDurationBuckets)
 
-// WriteMetrics emits every registered metric in Prometheus text format.
+// WriteMetrics 以 Prometheus 文本格式输出每个已注册的指标。
 func WriteMetrics(w io.Writer) {
 	fmt.Fprintln(w, "# HELP dog_request_duration_seconds Request duration by method and route.")
 	fmt.Fprintln(w, "# TYPE dog_request_duration_seconds histogram")

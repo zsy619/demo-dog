@@ -6,7 +6,7 @@
 //
 // 使用者：
 //   * docs/openapi.json（由 gen/main.go 生成）
-//   * 客户端 SDK 代码生成（openapi-generator、oapi-codegen）
+//   * Client SDK codegen (openapi-generator, oapi-codegen)
 //   * Postman / Insomnia 导入
 //
 // 用法：

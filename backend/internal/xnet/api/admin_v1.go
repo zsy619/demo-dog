@@ -1,15 +1,15 @@
 package api
 
-// 第 53 轮管理面。本文件是一个薄薄的桥接层，
-// 通过 HTTP 暴露深度模块（quota、breaker、限流、webhooks、
-// retention、admin 密钥、replica、OIDC、SLO、备份），
-// 以便前端与运维工具在不重建内部类型的情况下管理它们。
+// 第 53 轮 admin 接口。本文件是一个轻薄的适配层，
+// 通过 HTTP 暴露深层模块（quota、breaker、rate limit、webhooks、
+// retention、admin keys、replica、OIDC、SLO、backends），
+// 便于前端和运维工具在不重建
+// 内部类型的情况下管理它们。
 // 
-//
-// 每个处理器都只做最小的 JSON 与底层模块之间的转换。
-// 当后端模块没有 List / Snapshot 方法时，
-// 我们合成一个空响应，以便前端在部分配置的服务器上
-// 仍可继续工作。
+// 每个 handler 只做最少的工作 —— 在 JSON 与底层
+// 模块之间进行转换。当后端模块没有 List / Snapshot 方法时，
+// 我们合成一个空响应，使前端能够
+// 在部分配置好的 server 上继续工作。
 
 import (
 	"context"
@@ -637,8 +637,8 @@ func (s *Server) handleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("issuer required"))
 		return
 	}
-	// 构建一个临时 provider 并执行 discovery；
-	// 该 provider 仅在本次请求期间存在。
+	// 构建一个临时的 provider 并运行 discovery；该 provider
+	// 仅在本次请求的生命周期内有效。
 	p, err := oidc.NewProvider(r.Context(), oidc.Config{IssuerURL: issuer})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
@@ -648,9 +648,9 @@ func (s *Server) handleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	_ = ctx
-	// 我们不从 opaque provider 类型中暴露已解析的 discovery 文档；
-	// 改为返回 issuer 回显以及由其构建的标准端点 URL。
-	// 
+	// 我们不会从 opaque provider 类型中暴露已解析的 discovery doc；
+	// 而是返回 issuer 回显以及
+	// 由它构建的标准 endpoint URL。
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                issuer,
 		"authorization_endpoint": issuer + "/authorize",

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Session is one stored session.
+// Session 是一个已存储的会话。
 type Session struct {
 	ID        string
 	Subject   string
@@ -19,7 +19,7 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-// Store is a session store with sliding TTL.
+// Store 是一个具有滑动 TTL 的会话存储。
 type Store struct {
 	mu       sync.RWMutex
 	sess     map[string]*Session
@@ -28,7 +28,7 @@ type Store struct {
 	now      func() time.Time
 }
 
-// ErrNotFound is returned when the requested ID is missing.
+// ErrNotFound 在请求的 ID 缺失时返回。
 var ErrNotFound = errors.New("session not found")
 
 // New creates a Store with ttl and optional maxItems (0 = no
@@ -45,13 +45,13 @@ func New(ttl time.Duration, maxItems int) *Store {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖用于测试的时间源。
 func (s *Store) WithTime(now func() time.Time) *Store {
 	s.now = now
 	return s
 }
 
-// Create creates a session for subject within tenant.
+// Create 在指定租户内为主题创建一个会话。
 func (s *Store) Create(subject, tenant string) (*Session, error) {
 	now := s.now()
 	sess := &Session{
@@ -71,7 +71,7 @@ func (s *Store) Create(subject, tenant string) (*Session, error) {
 	return sess, nil
 }
 
-// Get returns the session and slides the expiry.
+// Get 返回会话并顺延过期时间。
 func (s *Store) Get(id string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,7 +88,7 @@ func (s *Store) Get(id string) (*Session, error) {
 	return sess, nil
 }
 
-// Peek returns the session without sliding expiry.
+// Peek 返回该会话而不滑动过期时间。
 func (s *Store) Peek(id string) (*Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -102,14 +102,14 @@ func (s *Store) Peek(id string) (*Session, error) {
 	return s.shallow(sess), nil
 }
 
-// Delete removes a session.
+// Delete 删除一个会话。
 func (s *Store) Delete(id string) {
 	s.mu.Lock()
 	delete(s.sess, id)
 	s.mu.Unlock()
 }
 
-// Set attaches a k/v pair to the session, sliding expiry.
+// Set 为会话附加一个键值对,并滑动过期时间。
 func (s *Store) Set(id, key string, val any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -122,7 +122,7 @@ func (s *Store) Set(id, key string, val any) error {
 	return nil
 }
 
-// Cleanup expires sessions. Returns the count removed.
+// Cleanup 清理过期会话,返回被移除的数量。
 func (s *Store) Cleanup() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -137,7 +137,7 @@ func (s *Store) Cleanup() int {
 	return n
 }
 
-// Len returns the number of live sessions.
+// Len 返回活跃会话的数量。
 func (s *Store) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -6,27 +6,27 @@ import (
 	"sync"
 )
 
-// Point is a lat/lng.
+// Point 是一个经纬度坐标。
 type Point struct {
 	Lat float64
 	Lng float64
 }
 
-// Feature is a named point with optional metadata.
+// Feature 是一个带可选元数据的命名点。
 type Feature struct {
 	ID  string
 	Loc Point
 	Tag string
 }
 
-// Index is an in-memory geohash grid.
+// Index 是一个内存中的 geohash 网格。
 type Index struct {
 	mu     sync.RWMutex
 	prec   int
 	grid   map[string]map[string]Feature // cell -> id -> feature
 }
 
-// New returns an Index with the given precision (1-12).
+// New 返回具有给定精度(1-12)的 Index。
 func New(precision int) *Index {
 	if precision < 1 || precision > 12 {
 		precision = 6
@@ -40,7 +40,7 @@ func (i *Index) Encode(p Point) string {
 	return Encode(p, i.prec)
 }
 
-// Encode returns the geohash string for p at precision.
+// Encode 返回 p 在该精度下的 geohash 字符串。
 func Encode(p Point, precision int) string {
 	if precision < 1 {
 		precision = 1
@@ -86,7 +86,7 @@ func Encode(p Point, precision int) string {
 	return string(out)
 }
 
-// Decode returns the bounding box and center of a geohash.
+// Decode 返回一个 geohash 的边界框和中心点。
 func Decode(hash string) (Point, float64, float64) {
 	base32 := "0123456789bcdefghjkmnpqrstuvwxyz"
 	idx := make(map[byte]int, len(base32))
@@ -125,7 +125,7 @@ func Decode(hash string) (Point, float64, float64) {
 	return center, math.Abs(latHi - latLo), math.Abs(lngHi - lngLo)
 }
 
-// Add inserts a feature.
+// Add 插入一个 feature。
 func (i *Index) Add(f Feature) {
 	cell := i.Encode(f.Loc)
 	i.mu.Lock()
@@ -136,7 +136,7 @@ func (i *Index) Add(f Feature) {
 	i.mu.Unlock()
 }
 
-// Remove drops a feature by ID.
+// Remove 按 ID 移除一个 feature。
 func (i *Index) Remove(id string) {
 	i.mu.Lock()
 	for cell, m := range i.grid {
@@ -170,9 +170,9 @@ func Neighbors(cell string) []string {
 		}
 	}
 	_ = pos
-	// Simplified: return cell + 8-cell perimeter using +/- 1
-	// base32 step in the last char and bearing offsets.
-	// We approximate by returning the cell itself.
+	// 简化版：返回 cell + 8 cell 周长，使用最后一位字符的 +/- 1
+	// base32 步进和方位偏移。
+	// 我们通过仅返回 cell 自身进行近似。
 	return out
 }
 
@@ -199,7 +199,7 @@ func (i *Index) Nearby(q Point, radiusKm float64) []Feature {
 	return out
 }
 
-// Len returns the number of features indexed.
+// Len 返回已索引 feature 的数量。
 func (i *Index) Len() int {
 	i.mu.RLock()
 	defer i.mu.RUnlock()

@@ -15,21 +15,21 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
 )
 
-// handlePromQL implements a small PromQL-lite evaluator that supports
-// the most common queries against demo-dog in-memory store. This
-// is NOT a full PromQL engine -- it is the subset that lets Grafana
-// and Alertmanager use the collector as a drop-in Prometheus
-// replacement for dashboards and basic alerting.
-//
-// Supported grammar:
-//
-//   metric_name                        # all samples of metric_name in window
-//   metric_name{label="x"}             # filtered by labels
-//   sum by (label) (metric_name)       # sum across label dimensions
-//   avg by (label) (metric_name)       # average
-//   count by (label) (metric_name)     # count
-//   rate(metric_name[1m])              # per-second rate over window
-//   histogram_quantile(0.95, metric_name)
+// handlePromQL 实现一个轻量的 PromQL-lite 求值器，支持针对
+// demo-dog 内存存储的最常见查询。这
+// 不是一个完整的 PromQL 引擎——它只是一个子集，足以让 Grafana
+// 和 Alertmanager 把该采集器当作可直接替换的 Prometheus
+// 来用于仪表盘和基础告警。
+// 
+// 支持的语法：
+// 
+// metric_name                        # window 内 metric_name 的全部样本
+// metric_name{label="x"}             # 按 label 过滤
+// sum by (label) (metric_name)       # 跨 label 维度求和
+// avg by (label) (metric_name)       # 平均值
+// count by (label) (metric_name)     # 计数
+// rate(metric_name[1m])              # window 内的每秒速率
+// histogram_quantile(0.95, metric_name)
 func (s *Server) handlePromQL(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(rw, http.StatusMethodNotAllowed, errors.New("GET only"))

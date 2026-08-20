@@ -50,8 +50,8 @@ type mintKeyReq struct {
 	Role  string `json:"role"`
 }
 
-// handleTenantMintKey 为一个租户生成一个新的 API 密钥。
-// 明文仅返回一次。
+// handleTenantMintKey 为一个 tenant 生成一个新的 API key。
+// 明文密钥仅返回一次。
 func (s *Server) handleTenantMintKey(w http.ResponseWriter, r *http.Request) {
 	if s.tenants == nil {
 		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("tenants disabled"))
@@ -105,8 +105,8 @@ func resolveTenant(r *http.Request) string {
 var _ = subtle.ConstantTimeCompare
 var _ = tenants.ErrNotFound
 
-// handleTenantsRoute 将 /api/tenants/<id>/keys 分发到
-// minter。/api/tenants/ 下其他内容返回 404。
+// handleTenantsRoute 将 /api/tenants/<id>/keys 分发到 minter。
+// /api/tenants/ 下的其他任何路径都返回 404。
 func (s *Server) handleTenantsRoute(w http.ResponseWriter, r *http.Request) {
 	suffix := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
 	if strings.HasSuffix(suffix, "/keys") {
@@ -116,9 +116,9 @@ func (s *Server) handleTenantsRoute(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-// handleTenantsDispatch 同时服务 /api/tenants（列出 + 创建）和
-// /api/tenants/<id>/keys（签发密钥）。Go 标准库的 mux
-// 不会在单个 HandleFunc 上对后缀做模式匹配，因此按 URL 形状分发。
+// handleTenantsDispatch 同时服务于 /api/tenants (列表 + 创建) 和
+// /api/tenants/<id>/keys (mint)。Go stdlib mux 不能在单个 HandleFunc 上
+// 模式匹配后缀，因此我们按 URL 形状分发。
 func (s *Server) handleTenantsDispatch(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/api/tenants":

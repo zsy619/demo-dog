@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Harness runs smoke checks and reports results.
+// Harness 运行冒烟检查并报告结果。
 type Harness struct {
 	mu       sync.Mutex
 	checks   []Check
@@ -19,13 +19,13 @@ type Harness struct {
 	failFast bool
 }
 
-// Check is one named smoke check.
+// Check 是一个命名的冒烟检查。
 type Check struct {
 	Name string
 	Fn   func() error
 }
 
-// Result is the outcome of running one Check.
+// Result 是运行一次 Check 的结果。
 type Result struct {
 	Name    string
 	OK      bool
@@ -33,25 +33,25 @@ type Result struct {
 	Elapsed time.Duration
 }
 
-// New creates a Harness writing to w.
+// New 创建一个向 w 写入的 Harness。
 func New(w io.Writer) *Harness {
 	return &Harness{out: w}
 }
 
-// WithFailFast aborts the harness on the first failure.
+// WithFailFast 在首次失败时中止 harness。
 func (h *Harness) WithFailFast() *Harness {
 	h.failFast = true
 	return h
 }
 
-// Add registers a check.
+// Add 注册一个 check。
 func (h *Harness) Add(name string, fn func() error) {
 	h.mu.Lock()
 	h.checks = append(h.checks, Check{Name: name, Fn: fn})
 	h.mu.Unlock()
 }
 
-// Run executes all checks and returns a slice of results.
+// Run 执行所有 check 并返回结果切片。
 func (h *Harness) Run() []Result {
 	var results []Result
 	for _, c := range h.checks {
@@ -70,7 +70,7 @@ func (h *Harness) Run() []Result {
 	return results
 }
 
-// Report writes a human-readable report.
+// Report 写入一份可读的报告。
 func (h *Harness) Report() {
 	fmt.Fprintln(h.out, "smoke harness report")
 	fmt.Fprintln(h.out, strings.Repeat("-", 60))
@@ -98,14 +98,14 @@ func (h *Harness) Report() {
 	fmt.Fprintf(h.out, "%d/%d passed\n", passed, total)
 }
 
-// Summary returns aggregate counts.
+// Summary 返回汇总的计数。
 type Summary struct {
 	Total  int
 	Passed int
 	Failed int
 }
 
-// Summary returns the aggregate counts.
+// Summary 返回汇总的计数。
 func (h *Harness) Summary() Summary {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -120,55 +120,55 @@ func (h *Harness) Summary() Summary {
 	return s
 }
 
-// Assert is a small assertion helper.
+// Assert 是一个小的断言辅助工具。
 type Assert struct {
 	t testingT
 }
 
-// testingT is the minimal interface *testing.T satisfies.
+// testingT 是 *testing.T 所满足的最小接口。
 type testingT interface {
 	Errorf(format string, args ...any)
 }
 
-// NewAssert wraps a *testing.T.
+// NewAssert 包装一个 *testing.T。
 func NewAssert(t testingT) *Assert {
 	return &Assert{t: t}
 }
 
-// True fails if v is false.
+// True 在 v 为 false 时失败。
 func (a *Assert) True(v bool, msg string) {
 	if !v {
 		a.t.Errorf("expected true: %s", msg)
 	}
 }
 
-// False fails if v is true.
+// False 在 v 为 true 时失败。
 func (a *Assert) False(v bool, msg string) {
 	if v {
 		a.t.Errorf("expected false: %s", msg)
 	}
 }
 
-// Nil fails if err is not nil.
+// Nil 在 err 不为 nil 时失败。
 func (a *Assert) Nil(err error, msg string) {
 	if err != nil {
 		a.t.Errorf("expected nil: %s: %v", msg, err)
 	}
 }
 
-// Equal fails if a != b.
+// Equal 在 a != b 时失败。
 func (a *Assert) Equal(a1, b1 any, msg string) {
 	if fmt.Sprintf("%v", a1) != fmt.Sprintf("%v", b1) {
 		a.t.Errorf("expected %v == %v: %s", a1, b1, msg)
 	}
 }
 
-// NoErr returns an error-wrapping fn.
+// NoErr 返回一个包装错误的函数。
 func NoErr(fn func() error) error {
 	return fn()
 }
 
-// ErrIs returns true if target is in chain.
+// ErrIs 当 target 位于错误链中时返回 true。
 func ErrIs(err, target error) bool {
 	return errors.Is(err, target)
 }

@@ -19,11 +19,11 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xflow/stream"
 )
 
-// parseFilter 从 URL 查询参数构建 store.QueryFilter。
-// 重复的 "label" 参数（label=key=value）会构建一个标签匹配器。
-// Severity 接受精确值（如 "ERROR"）或
-// "至少"比较（"severity>=WARN"），后者会暴露该
-// 级别及以上的所有条目 —— 这与 LogQL/PromQL 的前端用法保持一致。
+// parseFilter 从 URL query 参数构建 store.QueryFilter。
+// 重复的 "label" 参数(label=key=value)用于构建 label 匹配。
+// Severity 既接受精确值("ERROR"),也接受
+// "至少"比较("severity>=WARN"),后者会展示从该等级起
+// 及以上的所有内容 —— 这与前端的 LogQL/PromQL 习惯用法一致。
 func parseFilter(q url.Values) store.QueryFilter {
 	sev := q.Get("severity")
 	f := store.QueryFilter{
@@ -65,9 +65,9 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	typ := q.Get("type")
 	f := parseFilter(q)
-	// 租户过滤：优先使用 auth 绑定的租户，回退到 ?tenant=...
-	//（供平台管理员模拟使用）。当密钥被绑定到
-	// 某个租户时，过滤会被强制执行：非管理员无法绕过。
+	// Tenant 过滤：优先 auth 绑定，回退到 ?tenant=...
+	// (供平台管理员模拟使用)。当 key 绑定到
+	// tenant 时，过滤器会被强制：非管理员无法越权。
 	f.Tenant = resolveTenant(r)
 	switch typ {
 	case "logs":
@@ -139,10 +139,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, errors.New("POST only"))
 		return
 	}
-	// 限制 ingest 请求体大小，防止单个超大负载
-	// 耗尽服务器内存。默认 4 MiB 对于 OTel 风格的批量请求
-	// （典型 < 100 KiB）足够宽裕，但又足够小以防止攻击者 OOM。
-	// 采集器。
+	// 限制 ingest body 大小，防止单个超大的 payload
+	// 耗尽 server 内存。默认 4 MiB 对 OTel 风格的批量
+	// (通常 <100 KiB) 已经很宽松，但足够小，
+	// 不会让攻击者 OOM 采集器。
 	const maxBodyBytes = 4 << 20
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	body, err := io.ReadAll(r.Body)
@@ -152,8 +152,8 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// 根据 content-type 选择解码器。默认使用我们简化的 JSON；
-	// OTLP/JSON 信封由 OTel SDK 和导出器使用。
+	// 根据 content-type 选择 decoder。默认使用我们的简化版 JSON；
+	// OTLP/JSON 信封由 OTel SDK 和 exporter 使用。
 	var req model.OTLPRequest
 	ct := r.Header.Get("Content-Type")
 	if strings.Contains(ct, "application/json+otlp") || strings.Contains(r.URL.Path, "otlp-json") {
@@ -168,16 +168,16 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// X-Tenant-Id 头部仅在请求体未指定 tenant_id 时生效。
-	// 这样调用方可以通过头部方便地路由，同时仍允许
-	// 每个请求独立覆盖。
+	// X-Tenant-Id 头部仅在 body 未显式
+	// 指定 tenant_id 时生效。这允许调用方按 header
+	// 路由以便使用，同时仍支持按请求覆盖。
 	if h := r.Header.Get("X-Tenant-Id"); h != "" && req.TenantID == "" {
 		req.TenantID = h
 	}
-	// 由 auth 绑定的租户（X-Dog-Tenant，由中间件在
-	// API 密钥注册到某个租户时盖上）优先级高于
-	// 请求体和 X-Tenant-Id 头部。非管理员密钥
-	// 即使伪造请求体也无法越出自己的租户。
+	// Auth 绑定的 tenant (X-Dog-Tenant，由中间件在
+	// API key 注册到 tenant 时盖戳) 优先级高于 body
+	// 和 X-Tenant-Id 头部。非 admin key
+	// 即便通过 body 伪造也无法越权到其他 tenant。
 	if h := r.Header.Get("X-Dog-Tenant"); h != "" {
 		req.TenantID = h
 	}
@@ -220,13 +220,13 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !s.ingest.Submit(norm) {
-		// Ingest 流水线已满。此前这里会降级为同步写入，
-		// 这会阻塞 HTTP 处理协程，导致所有后续请求
-		// 被卡住。这是负载下典型的延迟爆炸式失败模式。
-		// 我们改为返回 503 + Retry-After，让上游 SDK 退避并
-		// 重试。同步路径仍可通过单独的
-		// 显式 "force=true" 查询参数访问，仅供调试使用。
-		// 调试使用。
+		// Ingest 流水线已满。我们之前在此降级为
+		// 同步写，这会阻塞 HTTP handler
+		// goroutine，并使所有后续请求停滞。这是负载下
+		// 经典的延迟爆炸失败模式。我们改为
+		// 返回 503 + Retry-After，让上游 SDK 可以退避后
+		// 重试。同步路径仍然可通过单独的
+		// "force=true" query 参数访问，仅供调试使用。
 		if r.URL.Query().Get("force") == "true" {
 			resp := s.ingest.SubmitSync(norm)
 			resp.RetryLogs += len(norm.Logs)
@@ -304,8 +304,8 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 	}
 	n := atoiDefault(r.URL.Query().Get("n"), 5)
 	req := s.generateSeed(svc, n)
-	// 将种子记录固定到调用方的租户，避免管理员为
-	// 租户 A 播种时意外污染租户 B。
+	// 将 seed 记录钉到调用方的 tenant，使 admin 为 A 注入 seed 时
+	// 不会意外污染 B。
 	req.TenantID = resolveTenant(r)
 	s.ingest.SubmitSync(req)
 	for _, m := range req.Metrics {
@@ -622,9 +622,9 @@ func (s *Server) handlePromMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# TYPE dog_ingest_jobs_failed_total counter\n")
 	fmt.Fprintf(w, "dog_ingest_jobs_failed_total %d\n", poolStats.Failed)
 
-	// Go 运行时指标 —— 最小集合，使运维人员能查看
-	// 协程 / 堆压力，无需引入完整的 Prometheus
-	// 客户端库。
+	// Go runtime 指标 —— 最小集合，便于运维人员
+	// 查看 goroutine / 堆压力而无需引入完整的 Prometheus
+	// client 库。
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	fmt.Fprintf(w, "# HELP dog_go_goroutines Number of goroutines that currently exist.\n")

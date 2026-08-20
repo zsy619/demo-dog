@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 )
 
-// Backend is a single upstream.
+// Backend 是一个上游。
 type Backend struct {
 	Name   string
 	URL    string
@@ -16,8 +16,8 @@ type Backend struct {
 	Weight int
 }
 
-// BackendPicker picks a backend per call. Strategy is the
-// caller-side: the Pool returns a stable pick by index.
+// BackendPicker 每次调用选取一个 backend。策略由调用方侧决定：
+// Pool 按索引返回一个稳定的 pick。
 type Pool struct {
 	mu       sync.RWMutex
 	backends []*Backend
@@ -26,7 +26,7 @@ type Pool struct {
 	misses   atomic.Uint64
 }
 
-// New creates a Pool with the given backends.
+// New 用给定的 backends 创建一个 Pool。
 func New(backends []*Backend) *Pool {
 	for _, b := range backends {
 		b.Alive.Store(true)
@@ -34,10 +34,10 @@ func New(backends []*Backend) *Pool {
 	return &Pool{backends: backends}
 }
 
-// ErrNoBackend is returned when no backend is alive.
+// ErrNoBackend 在没有存活 backend 时返回。
 var ErrNoBackend = errors.New("no backend available")
 
-// Pick returns the next live backend via round-robin.
+// Pick 通过轮询返回下一个存活的 backend。
 func (p *Pool) Pick() (*Backend, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -57,7 +57,7 @@ func (p *Pool) Pick() (*Backend, error) {
 	return nil, ErrNoBackend
 }
 
-// MarkUp / MarkDown toggle a backend's alive state.
+// MarkUp / MarkDown 切换 backend 的存活状态。
 func (p *Pool) MarkUp(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -68,7 +68,7 @@ func (p *Pool) MarkUp(name string) {
 	}
 }
 
-// MarkDown sets a backend dead.
+// MarkDown 将一个 backend 标记为下线。
 func (p *Pool) MarkDown(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -91,7 +91,7 @@ func (p *Pool) Backends() []BackendView {
 	return out
 }
 
-// BackendView is a snapshot of a backend's state.
+// BackendView 是 backend 状态的一个快照。
 type BackendView struct {
 	Name   string `json:"name"`
 	URL    string `json:"url"`
@@ -99,22 +99,22 @@ type BackendView struct {
 	Weight int    `json:"weight"`
 }
 
-// Stats returns the counter snapshot.
+// Stats 返回计数器的快照。
 type Stats struct {
 	Picks   uint64       `json:"picks"`
 	Misses  uint64       `json:"misses"`
 	Backends []BackendView `json:"backends"`
 }
 
-// Stats returns the snapshot.
+// Stats 返回快照。
 func (p *Pool) Stats() Stats {
 	return Stats{Picks: p.picks.Load(), Misses: p.misses.Load(), Backends: p.Backends()}
 }
 
-// BackendCall is a single call to a backend.
+// BackendCall 是对 backend 的一次调用。
 type BackendCall func(ctx context.Context, b *Backend) error
 
-// DoWithFallback iterates backends in order until one succeeds.
+// DoWithFallback 按顺序遍历 backend，直到有一个成功。
 func (p *Pool) DoWithFallback(ctx context.Context, call BackendCall) error {
 	p.mu.Lock()
 	bs := make([]*Backend, len(p.backends))

@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// Store keeps a sliding-window record of seen nonces to
-// prevent token replay attacks.
+// Store 保留一个 sliding-window 记录已见的 nonces，
+// 用于防止 token 重放攻击。
 type Store struct {
 	mu       sync.RWMutex
 	seen     map[string]time.Time
@@ -19,10 +19,10 @@ type Store struct {
 	now      func() time.Time
 }
 
-// ErrReplay is returned when a nonce has been seen before.
+// ErrReplay 在 nonce 已被使用过的情况下返回。
 var ErrReplay = errors.New("nonce replay")
 
-// New creates a Store with ttl and an optional maxItems cap.
+// New 创建一个 Store，带 ttl 与可选的 maxItems 上限。
 func New(ttl time.Duration, maxItems int) *Store {
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
@@ -35,7 +35,7 @@ func New(ttl time.Duration, maxItems int) *Store {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖用于测试的时间源。
 func (s *Store) WithTime(now func() time.Time) *Store {
 	s.now = now
 	return s
@@ -64,7 +64,7 @@ func (s *Store) Check(tenant, nonce string, ts time.Time) error {
 	return nil
 }
 
-// Forget removes a nonce from the store.
+// Forget 从存储中移除一个 nonce。
 func (s *Store) Forget(tenant, nonce string) {
 	key := hashKey(tenant, nonce)
 	s.mu.Lock()
@@ -88,7 +88,7 @@ func (s *Store) Cleanup() int {
 	return n
 }
 
-// Len returns the number of stored nonces.
+// Len 返回已存储 nonce 的数量。
 func (s *Store) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

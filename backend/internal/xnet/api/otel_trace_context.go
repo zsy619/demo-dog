@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
-// W3C Trace Context（https://www.w3.org/TR/trace-context/）解析器。
-//
-// `traceparent` 头部格式如下：
-//
-//   version-traceid-spanid-flags
-//
+// W3C Trace Context (https://www.w3.org/TR/trace-context/) 解析器。
+// 
+// `traceparent` 头部的格式为：
+// 
+// version-traceid-spanid-flags
+// 
 // 其中 version 是两个十六进制字符，traceid 是 32 个十六进制字符，
-// spanid 是 16 个十六进制字符，flags 是两个十六进制字符（位 0 = 已采样）。
-//
+// spanid 是 16 个十六进制字符，flags 是两个十六进制字符
+// (bit 0 = sampled)。
+// 
 // 示例：
-//
-//   traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
-//
-// `tracestate` 是一个以逗号分隔的厂商特定
-// key=value 对列表，用于补充 trace。我们按原样接受
-// 并重新发出。
+// 
+// traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+// 
+// `tracestate` 是逗号分隔的厂商特定
+// key=value 对列表，用于扩充 trace。我们原样接受并重新输出。
 
 type TraceContext struct {
 	Version    string
@@ -37,9 +37,9 @@ var (
 	invalidHex  = regexp.MustCompile(`^0+$`)
 )
 
-// ParseTraceContext 从请求头中提取 W3C trace context。
-// 如果缺失或无效则返回 nil，调用方可以
-// 回退到生成一个新的 context。
+// ParseTraceContext 从请求头部提取 W3C trace context。
+// 当缺失或无效时返回 nil；调用方可以回退到
+// 生成一个新的 context。
 func ParseTraceContext(r *http.Request) *TraceContext {
 	tp := strings.TrimSpace(r.Header.Get("traceparent"))
 	if tp == "" {
@@ -59,9 +59,9 @@ func ParseTraceContext(r *http.Request) *TraceContext {
 	sampled := false
 	// 第一个半字节的位 0 是已采样标志。
 	if len(flags) >= 1 {
-		// flags 字节编码为两个十六进制字符：flags[0] 是高位半字节，
-		// flags[1] 是低位半字节。已采样标志是字节的位 0。
-		// 
+		// flags 字节以两个十六进制字符编码：flags[0] 是
+		// 高位 nibble，flags[1] 是低位 nibble。
+		// sampled 标志是该字节的 bit 0。
 		hi := hexNibble(flags[0])
 		lo := hexNibble(flags[1])
 		if hi >= 0 && lo >= 0 && ((hi<<4 | lo) & 1) == 1 {
@@ -92,9 +92,9 @@ func InjectTraceContext(rw http.ResponseWriter, tc *TraceContext) {
 	}
 }
 
-// GenerateTraceContext 返回一对新的 trace + span id。
-// 用于请求未携带传入 context、但仍希望
-// 将其附加到响应上的情况。
+// GenerateTraceContext 返回一对全新的 trace + span id。用于
+// 请求没有传入 context，但仍希望
+// 给响应附加一个的场景。
 func GenerateTraceContext() *TraceContext {
 	return &TraceContext{
 		Version: "00",
@@ -105,17 +105,17 @@ func GenerateTraceContext() *TraceContext {
 	}
 }
 
-// childSpanID 生成一个新的 16 字符十六进制的 span id；
-// 抽出此辅助函数以便 trace 传播代码可自顶向下阅读。
+// childSpanID 生成一个全新的 16 位十六进制 span id；提供该辅助函数是为了让
+// trace 传播相关代码可以自顶向下阅读。
 func childSpanID() string { return randomHex(16) }
 
-// randomHex 通过 stdlib 的 crypto/rand 生成 n 个十六进制字符。
-// 这里 import 是为了使 trace context 生成代码集中在此文件。
+// randomHex 通过 stdlib 从 crypto/rand 生成 n 个十六进制字符。
+// 我们在此处导入，以便 trace context 的生成逻辑都集中在本文件中。
 func randomHex(n int) string {
 	const hex = "0123456789abcdef"
 	b := make([]byte, n)
-	// 通过 stdlib 使用 crypto/rand。内联导入避免
-	// 与 api 包产生导入循环。
+	// 通过 stdlib 使用 crypto/rand。内联导入可以避免与 api 包之间
+	// 产生循环导入。
 	r := cryptoRandBytes((n + 1) / 2)
 	for i := range b {
 		if i%2 == 0 {

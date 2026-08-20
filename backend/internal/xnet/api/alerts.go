@@ -21,14 +21,14 @@ func newAlertsEngine(s *store.Doris) *alertsEngine {
 	return &alertsEngine{eng: alerts.NewEngine(provider)}
 }
 
-// AddSLO appends an SLO definition.
+// AddSLO 追加一个 SLO 定义。
 func (a *alertsEngine) AddSLO(s *alerts.SLO) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.slos = append(a.slos, s)
 }
 
-// SLOStatus computes a fresh budget status for every registered SLO.
+// SLOStatus 为每个已注册的 SLO 计算最新的预算状态。
 func (a *alertsEngine) SLOStatus(now time.Time) []alerts.BudgetStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -43,7 +43,7 @@ func (a *alertsEngine) SLOStatus(now time.Time) []alerts.BudgetStatus {
 	return out
 }
 
-// zeroCountSink is a placeholder sink that reports no traffic.
+// zeroCountSink 是一个占位的接收器，上报无流量。
 type zeroCountSink struct{}
 
 func (zeroCountSink) Counter(name string, window time.Duration) int64 { return 0 }

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Errors returned by the auth layer.
+// Errors 由认证层返回的错误。
 var (
 	ErrNoAuth       = errors.New("missing authentication")
 	ErrBadAuth      = errors.New("malformed authentication")
@@ -21,7 +21,7 @@ var (
 	ErrForbidden    = errors.New("forbidden")
 )
 
-// Principal is the authenticated caller.
+// Principal 是已认证的调用方。
 type Principal struct {
 	Subject  string
 	Tenant   string
@@ -30,10 +30,10 @@ type Principal struct {
 	Method   string
 }
 
-// HasScope returns true if the principal has the named scope.
-// Empty Scopes list = unscoped legacy keys that match
-// everything (so they pass role/scope checks). Authenticated
-// callers minted by RequireScope must have explicit scopes.
+// HasScope 在 principal 拥有指定 scope 时返回 true。
+// 空的 Scopes 列表 = 旧式无作用域 key，
+// 匹配所有内容（因此能通过 role/scope 检查）。
+// 由 RequireScope 签发的已认证调用方必须具有显式 scope。
 func (p Principal) HasScope(s string) bool {
 	if len(p.Scopes) == 0 {
 		return true
@@ -62,24 +62,24 @@ func (p Principal) IsAdmin() bool {
 
 type ctxKey struct{}
 
-// PrincipalFromContext extracts the principal from ctx.
+// PrincipalFromContext 从 ctx 中提取 principal。
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(ctxKey{}).(Principal)
 	return p, ok
 }
 
-// WithPrincipal attaches p to ctx.
+// WithPrincipal 将 p 挂到 ctx 上。
 func WithPrincipal(ctx context.Context, p Principal) context.Context {
 	return context.WithValue(ctx, ctxKey{}, p)
 }
 
-// bearerEntry is the interface returned by the bearer lookup.
+// bearerEntry 是 bearer 查找所返回的接口。
 type bearerEntry interface {
 	IsValid(time.Time) bool
 	HasScope(string) bool
 }
 
-// BearerEntry is a thin adapter for any KeyEntry-shaped value.
+// BearerEntry 是任意 KeyEntry 形状值的轻量适配器。
 type BearerEntry struct {
 	Valid    func(time.Time) bool
 	Scopes   []string
@@ -107,17 +107,17 @@ func (b BearerEntry) HasScope(s string) bool {
 	return false
 }
 
-// MTLSVerifier checks a peer certificate.
+// MTLSVerifier 校验对等方证书。
 type MTLSVerifier interface {
 	VerifyPeer(subject string) (string, bool)
 }
 
-// OIDCVerifier validates a raw ID token.
+// OIDCVerifier 校验原始 ID token。
 type OIDCVerifier interface {
 	VerifyToken(ctx context.Context, raw string) (subject, tenant string, scopes []string, err error)
 }
 
-// Middleware is the top-level auth chain.
+// Middleware 是顶层认证链。
 type Middleware struct {
 	Bearer   map[string]bearerEntry
 	MTLS     MTLSVerifier
@@ -133,8 +133,8 @@ func (m *Middleware) nowFn() func() time.Time {
 	return m.Time
 }
 
-// Authenticate inspects the request and returns a Principal.
-// First match wins: mTLS > Bearer > OIDC.
+// Authenticate 检查请求并返回一个 Principal。
+// 首个匹配获胜：mTLS > Bearer > OIDC。
 func (m *Middleware) Authenticate(r *http.Request) (Principal, error) {
 	if m.MTLS != nil && m.PeerCert != nil {
 		if cn := m.PeerCert(r); cn != "" {
@@ -188,7 +188,7 @@ func splitAuth(s string) (kind, raw string) {
 	return s[:idx], s[idx+1:]
 }
 
-// RequireAny rejects unauthenticated callers with 401.
+// RequireAny 拒绝未认证的调用方，返回 401。
 func (m *Middleware) RequireAny(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := m.Authenticate(r)
@@ -201,7 +201,7 @@ func (m *Middleware) RequireAny(next http.Handler) http.Handler {
 	})
 }
 
-// RequireRole rejects callers without the given identity.
+// RequireRole 拒绝不具备指定身份的调用方。
 func (m *Middleware) RequireRole(role string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := m.Authenticate(r)
@@ -218,7 +218,7 @@ func (m *Middleware) RequireRole(role string, next http.Handler) http.Handler {
 	})
 }
 
-// RequireScope rejects callers without the named scope.
+// RequireScope 拒绝不具备指定 scope 的调用方。
 func (m *Middleware) RequireScope(scope string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := m.Authenticate(r)
@@ -235,7 +235,7 @@ func (m *Middleware) RequireScope(scope string, next http.Handler) http.Handler 
 	})
 }
 
-// HasScope is a convenience check from the request handler.
+// HasScope 是请求处理器中的便捷检查。
 func HasScope(r *http.Request, s string) bool {
 	p, ok := PrincipalFromContext(r.Context())
 	if !ok {
@@ -244,36 +244,36 @@ func HasScope(r *http.Request, s string) bool {
 	return p.HasScope(s)
 }
 
-// HashToken returns sha256 hex of the token.
+// HashToken 返回 token 的 sha256 十六进制。
 func HashToken(raw string) string {
 	h := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(h[:])
 }
 
-// CompareTokens is constant-time comparison.
+// CompareTokens 是常量时间比较。
 func CompareTokens(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// PrincipalMap is a small in-memory verifier.
+// PrincipalMap 是一个轻量的内存验证器。
 type PrincipalMap struct {
 	mu   sync.RWMutex
 	keys map[string]Principal
 }
 
-// NewPrincipalMap returns an empty map.
+// NewPrincipalMap 返回一个空的 map。
 func NewPrincipalMap() *PrincipalMap {
 	return &PrincipalMap{keys: make(map[string]Principal)}
 }
 
-// Register adds a principal accessible by raw token.
+// Register 添加一个可通过原始 token 访问的 principal。
 func (pm *PrincipalMap) Register(raw string, p Principal) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	pm.keys[raw] = p
 }
 
-// AsMiddleware adapts a PrincipalMap into a Middleware.
+// AsMiddleware 将 PrincipalMap 适配为 Middleware。
 func (pm *PrincipalMap) AsMiddleware() *Middleware {
 	return &Middleware{Bearer: pm.snapshot()}
 }
@@ -288,7 +288,7 @@ func (pm *PrincipalMap) snapshot() map[string]bearerEntry {
 	return out
 }
 
-// DecodeAuthorization splits a header into kind + raw.
+// DecodeAuthorization 将头部拆分为种类与原始值。
 func DecodeAuthorization(s string) (string, string, error) {
 	k, r := splitAuth(s)
 	if k == "" {
@@ -297,11 +297,11 @@ func DecodeAuthorization(s string) (string, string, error) {
 	return k, r, nil
 }
 
-// ComposeBearer constructs an "Authorization: Bearer X" string.
+// ComposeBearer 构造一个 "Authorization: Bearer X" 字符串。
 func ComposeBearer(raw string) string {
 	return fmt.Sprintf("Bearer %s", raw)
 }
 
-// IsValid lets Principal satisfy bearerEntry.
+// IsValid 让 Principal 满足 bearerEntry。
 func (p Principal) IsValid(time.Time) bool { return true }
 

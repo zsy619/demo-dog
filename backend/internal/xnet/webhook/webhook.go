@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-// Event is one delivery payload.
+// Event 是一个投递负载。
 type Event struct {
 	ID        string            `json:"id"`
 	Type      string            `json:"type"`
@@ -39,7 +39,7 @@ type Event struct {
 	Payload   map[string]string `json:"payload"`
 }
 
-// Subscriber describes one outbound target.
+// Subscriber 描述一个出站目标。
 type Subscriber struct {
 	ID         string
 	URL        string
@@ -74,7 +74,7 @@ func (s *Subscriber) maxRetries() int {
 	return s.MaxRetries
 }
 
-// Accept reports whether the subscriber wants this event type.
+// Accept 报告 subscriber 是否需要此事件类型。
 func (s *Subscriber) Accept(eventType string) bool {
 	if len(s.EventTypes) == 0 {
 		return true
@@ -87,7 +87,7 @@ func (s *Subscriber) Accept(eventType string) bool {
 	return false
 }
 
-// Delivery is one attempted send.
+// Delivery是一次发送尝试。
 type Delivery struct {
 	EventID    string
 	SubscriberID string
@@ -98,10 +98,10 @@ type Delivery struct {
 	LastTry    time.Time
 }
 
-// Success reports whether the delivery ultimately succeeded.
+// Success 报告投递最终是否成功。
 func (d Delivery) Success() bool { return d.Error == "" }
 
-// Dispatcher owns subscribers + the dead-letter ring.
+// Dispatcher 持有订阅者与死信环形缓冲区。
 type Dispatcher struct {
 	mu          sync.RWMutex
 	subscribers map[string]*Subscriber
@@ -113,7 +113,7 @@ type Dispatcher struct {
 	dlqHead     int
 }
 
-// NewDispatcher returns a dispatcher.
+// NewDispatcher 返回一个 dispatcher。
 func NewDispatcher(dlqCap int) *Dispatcher {
 	if dlqCap <= 0 {
 		dlqCap = 256
@@ -127,7 +127,7 @@ func NewDispatcher(dlqCap int) *Dispatcher {
 	return d
 }
 
-// AddSubscriber registers a subscriber.
+// AddSubscriber 注册一个订阅者。
 func (d *Dispatcher) AddSubscriber(s *Subscriber) error {
 	if s.ID == "" || s.URL == "" {
 		return errors.New("id and url required")
@@ -138,14 +138,14 @@ func (d *Dispatcher) AddSubscriber(s *Subscriber) error {
 	return nil
 }
 
-// RemoveSubscriber unregisters one.
+// RemoveSubscriber 注销一个订阅者。
 func (d *Dispatcher) RemoveSubscriber(id string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.subscribers, id)
 }
 
-// Subscribers returns the current set.
+// Subscribers 返回当前的订阅者集合。
 func (d *Dispatcher) Subscribers() []*Subscriber {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -222,7 +222,7 @@ func (d *Dispatcher) deliver(ev Event, s *Subscriber) Delivery {
 	return del
 }
 
-// backoff returns the delay before retry n (1-indexed).
+// backoff 返回第 n 次重试前的延迟（从 1 开始计数）。
 func backoff(attempt int) time.Duration {
 	d := time.Duration(math.Pow(2, float64(attempt))) * time.Second
 	if d > 30*time.Second {
@@ -252,15 +252,15 @@ func (d *Dispatcher) post(s *Subscriber, body []byte, sig, eventID string) (int,
 	return resp.StatusCode, nil
 }
 
-// Sign returns the lowercase hex HMAC-SHA256 of body keyed by
-// secret, formatted as "sha256=<hex>".
+// Sign 返回 body 的小写十六进制 HMAC-SHA256，以 secret 作为 key，
+// 格式为 "sha256=<hex>"。
 func Sign(body []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
-// Verify checks a signature produced by Sign.
+// Verify 校验由 Sign 生成的签名。
 func Verify(body []byte, secret, signature string) bool {
 	want := Sign(body, secret)
 	return hmac.Equal([]byte(want), []byte(signature))
@@ -277,7 +277,7 @@ func (d *Dispatcher) recordDLQ(del Delivery) {
 	}
 }
 
-// DeadLetters returns a copy of the ring buffer.
+// DeadLetters 返回环形缓冲区的一个副本。
 func (d *Dispatcher) DeadLetters() []Delivery {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -293,7 +293,7 @@ func (d *Dispatcher) DeadLetters() []Delivery {
 	return out
 }
 
-// Stats is the JSON-stable view.
+// Stats 是 JSON 稳定的视图。
 type Stats struct {
 	Subscribers int   `json:"subscribers"`
 	Delivered   int64 `json:"delivered"`
@@ -301,7 +301,7 @@ type Stats struct {
 	DLQ         int   `json:"dlq"`
 }
 
-// Stats returns current dispatcher counters.
+// Stats 返回当前 dispatcher 的计数器。
 func (d *Dispatcher) Stats() Stats {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

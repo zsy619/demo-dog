@@ -7,9 +7,9 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// Service graph used by the seed so the service-map view actually
-// shows caller → callee edges. Each chain is a top-level service
-// (e.g. checkout) that issues calls into a chain of helpers.
+// seed 使用的服务图，使 service-map 视图实际能够
+// 展示 caller → callee 边。每个 chain 是一个顶层 service
+//（例如 checkout），它向下游一系列 helper 发起调用。
 var seedChains = [][]string{
 	{"checkout", "auth", "postgres"},
 	{"checkout", "inventory", "postgres"},
@@ -21,13 +21,13 @@ var seedChains = [][]string{
 	{"inventory", "postgres"},
 }
 
-// generateSeed synthesizes a small batch of OTLP records for a service.
-// Used by /api/seed and /api/seed/stream to bootstrap the demo.
+// generateSeed 为某个 service 合成一小批 OTLP 记录。
+// 由 /api/seed 和 /api/seed/stream 用于引导 demo。
 //
-// When the requested service is the entry point of a chain (e.g. "checkout"),
-// the seed produces a span tree that walks through every link of the chain
-// so the service-map gets realistic caller → callee edges. When the service
-// is not in any chain, we fall back to a self-referential root+child pair.
+// 当请求的 service 是某条 chain 的入口点时，
+// 会产出一条遍历 chain 中每一环的 span 树，
+// 使 service-map 获得逼真的 caller → callee 边。当 service
+// 不在任何 chain 中时，我们回退到一个自引用的 root+child 对。
 func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 	now := time.Now()
 	logs := make([]model.LogRecord, 0, n*2)
@@ -55,8 +55,8 @@ func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 		"system.mem.used",
 	}
 
-	// Pick the first chain that starts with the requested service, else
-	// fall back to a 2-link synthetic chain so the trace still has depth.
+	// 选择以请求 service 开头的第一条 chain，否则
+	// 回退到一条 2 环合成 chain，使 trace 仍具有深度。
 	chain := []string{service, service + "-dep"}
 	for _, c := range seedChains {
 		if c[0] == service {
@@ -65,10 +65,10 @@ func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 		}
 	}
 
-	// Spread `n` events evenly across a 5-minute window so QPS / latency
-	// windows pick up a meaningful rate instead of all events landing in
-	// the same second. Capped at 5m so older data falls outside the
-	// default hot tier.
+	// 将 `n` 个事件均匀铺开到 5 分钟窗口内，使 QPS / latency
+	// 窗口能呈现有意义的速率，而不是所有事件都集中在
+	// 同一秒。上限为 5 分钟，使较老的数据落在
+	// 默认的 hot tier 之外。
 	span := 5 * time.Minute
 	step := time.Second
 	if n > 1 {
@@ -82,9 +82,9 @@ func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 		t := now.Add(-time.Duration(i) * step)
 		traceID := fmt.Sprintf("%016x", s.randInt64())
 
-		// Build a chain of spans; the first is the root, each subsequent
-		// span is a child of the previous one and runs in a different
-		// service so the service-map can derive cross-service edges.
+		// 构造一条 span chain；第一条是根，随后每一条
+		// span 都是前一条的子 span，并在不同的
+		// service 中运行，使 service-map 能够派生跨服务边。
 		var prevSpan string
 		for chainIdx, svc := range chain {
 			spanID := fmt.Sprintf("%016x", s.randInt64())
@@ -113,7 +113,7 @@ func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 			})
 			prevSpan = spanID
 
-			// The first link also gets the request log entry + metrics.
+		// 第一个链路还会写入请求日志条目与指标。
 			if chainIdx == 0 {
 				logs = append(logs, model.LogRecord{
 					Timestamp: t,
@@ -153,8 +153,8 @@ func (s *Server) generateSeed(service string, n int) model.OTLPRequest {
 	}
 }
 
-// endpointName returns a more interesting operation name per chain link so
-// the service-detail drill-down shows realistic endpoint rows.
+// endpointName 为 chain 中的每一环返回更有意思的操作名，使
+// service-detail 下钻视图能够展示逼真的端点行。
 func endpointName(svc string, idx int) string {
 	if idx == 0 {
 		return "GET /" + svc

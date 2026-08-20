@@ -10,27 +10,27 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// handleOTLPHTTP 为所有三种信号实现 OTLP/HTTP（1.0）传输。
-// 协议文档：
+// handleOTLPHTTP 为全部
+// 三种信号实现 OTLP/HTTP 传输 (1.0)。该协议在以下文档中说明：
 // https://opentelemetry.io/docs/specs/otlp/#otlphttp-default-ports
-//
-// 端点：
-//   POST /v1/logs
-//   POST /v1/metrics
-//   POST /v1/traces
-//
-// 三者使用相同的 JSON 信封形状（`ExportLogsServiceRequest`、
-// `ExportMetricsServiceRequest`、`ExportTracesServiceRequest`）。
-// 我们只关心资源属性和每个信号的
-// 记录，这正是我们简化的 ingest 契约
-// 已经理解的部分。
-//
-// 该服务接受 OTLP 标准 JSON 形式并将其
-// 转换到我们的内部模型。转换是尽力而为：
-// 额外字段被忽略，缺失字段使用默认值。线路是无损往返。
 // 
-//
-// 认证：与其余 ingest API 一致 —— 角色网关强制
+// Endpoints:
+// POST /v1/logs
+// POST /v1/metrics
+// POST /v1/traces
+// 
+// 三者使用相同的 JSON 信封结构（`ExportLogsServiceRequest`、
+// `ExportMetricsServiceRequest`、`ExportTracesServiceRequest`）。我们只关心
+// resource attributes 和每个信号对应的
+// 记录，这恰好也是我们简化版 ingest 契约
+// 已经能够理解的内容。
+// 
+// 该服务接受 OTLP 规范的 JSON 形式，并将其
+// 转换为内部模型。转换是尽力而为的：额外的
+// 字段会被忽略，缺失的字段使用默认值。线上传输可
+// 无损往返。
+// 
+// 鉴权：与 ingest API 的其余部分相同——由角色网关强制执行
 // admin / writer / reader 角色。
 
 func (s *Server) handleOTLPHTTPLogs(rw http.ResponseWriter, r *http.Request) {
@@ -62,9 +62,9 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 
 	tenant := resolveTenant(r)
 
-	// 我们按一种宽容的形态解析。任何更丰富的内容（例如 exemplars、
-	// aggregation temporality、scope spans）会通过
-	// attributes 映射保留下来。
+	// 我们解析一种宽松的结构。任何更丰富的内容（例如 exemplars、
+	// aggregation temporality、scope spans）都会通过
+	// attributes map 原样保留。
 	var doc otlpDoc
 	if err := json.Unmarshal(body, &doc); err != nil {
 		writeError(rw, http.StatusBadRequest, err)
@@ -78,8 +78,8 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 	} else {
 		req.ResourceAttrs = map[string]string{}
 	}
-	// 如果请求体显式设置了 tenant_id，则对管理员密钥而言
-	// 它优先于 auth 绑定的值（非管理员密钥无法绕过）。
+	// 如果 body 显式设置了 tenant_id，则对于 admin key 它会覆盖
+	// 鉴权绑定的值（非 admin key 无法越权）。
 	if doc.TenantID != "" {
 		req.TenantID = doc.TenantID
 	}
@@ -111,9 +111,9 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 		}
 	}
 
-	// 往返到我们自己的流水线。SubmitSync 可接受，
-	// 因为 OTLP 路径针对低吞吐的 agent 流量；
-	// 批量导出走更简单的 /api/ingest/otlp。
+	// 往返进入我们自己的流水线。这里使用 SubmitSync 是可以接受的，
+	// 因为 OTLP 路径面向的是低吞吐量的 agent
+	// 流量；批量导出走更简单的 /api/ingest/otlp。
 	s.ingest.SubmitSync(req)
 
 	rw.Header().Set("Content-Type", "application/json")
@@ -123,9 +123,9 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 	))
 }
 
-// otlpDoc 是三个 service-request 形状的并集。
-// 无论信号如何，我们都解码到相同的结构，
-// 因为我们关心的字段都已按命名空间组织（如 `resource_logs`）。
+// otlpDoc 是三种 service-request 结构的并集。无论信号类型如何，我们都
+// 解码到同一个结构体，因为我们关心的
+// 字段都带有命名空间前缀（如 `resource_logs` 等）。
 type otlpDoc struct {
 	TenantID      string         `json:"tenant_id,omitempty"`
 	Resource      *otlpResource  `json:"resource,omitempty"`

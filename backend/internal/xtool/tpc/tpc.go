@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Phase is the current phase of a 2PC transaction.
+// Phase 表示 2PC 事务的当前阶段。
 type Phase string
 
 const (
@@ -26,7 +26,7 @@ type Resource struct {
 	Abort   func(ctx context.Context) error
 }
 
-// Result describes the outcome.
+// Result 描述执行结果。
 type Result struct {
 	Phase    Phase
 	Error    error
@@ -35,15 +35,15 @@ type Result struct {
 	Aborted  []string
 }
 
-// Coordinator runs two-phase commit.
+// Coordinator 运行两阶段提交。
 type Coordinator struct {
 	mu sync.Mutex
 }
 
-// New returns a Coordinator.
+// New 返回一个 Coordinator。
 func New() *Coordinator { return &Coordinator{} }
 
-// ErrAborted is the sentinel returned when the tx aborts.
+// ErrAborted 是事务中止时返回的哨兵错误。
 var ErrAborted = errors.New("transaction aborted")
 
 // Run runs PREPARE / COMMIT on every resource. If any

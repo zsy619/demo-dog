@@ -12,10 +12,10 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xflow/alerts"
 )
 
-// LoadAlertRulesFile parses a YAML or JSON file of alert rules. The
-// format matches alerts.Rule JSON tags. YAML support is a small
-// hand-rolled subset (top-level rules: array of "- name:" entries)
-// since pulling a real YAML parser would add a dependency.
+// LoadAlertRulesFile 解析一个 YAML 或 JSON 格式的告警规则文件。其
+// 格式与 alerts.Rule 的 JSON tag 一致。YAML 支持是一个小型
+// 手写的子集（顶层 rules 是 "- name:" 条目组成的数组），
+// 因为引入真正的 YAML 解析器会增加依赖。
 func LoadAlertRulesFile(path string) ([]alerts.Rule, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

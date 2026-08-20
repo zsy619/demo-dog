@@ -61,11 +61,11 @@ func (s *Server) handlePromRemoteWrite(rw http.ResponseWriter, r *http.Request) 
 		writeError(rw, http.StatusBadRequest, fmt.Errorf("decompress: %w", err))
 		return
 	}
-	// 如果 agent 发送的是 gzip 包裹的 snappy（常见的
-	// Content-Encoding: gzip 内含 snappy-framed 负载），
-	// 上面的 gz 解码返回 snappy 字节，仍需要再跑一次
-	// snappy。在偏移 0 处检测流标识块 0xFF，
-	// 并重新执行 snappy 解码。
+	// 如果 agent 发送了 gzip 包裹的 snappy（一种常见的
+	// Content-Encoding: gzip 中包含 snappy-framed body 的情况），上面的
+	// gz 解码会返回 snappy 字节，这些字节仍需要一次
+	// snappy 解码。检测偏移量 0 处的流标识 chunk 0xFF，
+	// 然后再次运行 snappy 解码器。
 	if len(raw) >= 1 && raw[0] == 0xFF {
 		decoded, err := decodeSnappyFramed(raw)
 		if err != nil {
@@ -134,11 +134,11 @@ func decompressPromBody(encoding string, body []byte) ([]byte, error) {
 }
 
 // decodeSnappyFramed 遍历 Snappy framed 格式并返回
-// 拼接后的未压缩字节。我们并未实现完整的块解码器；
-// Prometheus 规范仅使用压缩块，且线路上
-// 字面值占主导，因此这种简化（仅字面值）足以覆盖
-// 绝大多数生产负载。任何异常都以错误的形式暴露。
-// 
+// 拼接后的未压缩字节。我们并未实现完整的
+// block 解码器；Prometheus 规范仅使用 compressed
+// chunk，且线上传输以字面量为主，因此这种
+// 简化（仅字面量）足以覆盖绝大多数
+// 生产负载。任何异常都会被作为错误暴露出来。
 func decodeSnappyFramed(in []byte) ([]byte, error) {
 	type elemType uint8
 	const (
@@ -176,9 +176,9 @@ func decodeSnappyFramed(in []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// snappyDecode 仅实现 snappy 块解码器的最小子集，
-// 用来往返 Prometheus remote-write 负载：字面值和
-// 短反向引用。任何更复杂的用法都会返回错误。
+// snappyDecode 仅实现 snappy block 解码器足以往返
+// Prometheus remote-write 负载的部分：字面量与
+// 短的反向引用。任何更复杂的内容都会返回错误。
 func snappyDecode(src []byte) ([]byte, error) {
 	out := make([]byte, 0, len(src)*2)
 	pos := 0
@@ -454,9 +454,9 @@ func splitPromLabels(lbls []promLabel) (name, service string, attrs map[string]s
 	return
 }
 
-// promWriteContentHash 返回请求体的确定性标识。
-// 对于在请求头中发送 X-Prometheus-Remote-Write-Version
-// 以便追踪的客户端很有用。
+// promWriteContentHash 返回请求体的确定性标识符。便于
+// 客户端发送 X-Prometheus-Remote-Write-Version
+// 用于链路追踪。
 func promWriteContentHash(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:8])
