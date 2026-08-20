@@ -74,3 +74,70 @@ func TestSketch_Reset(t *testing.T) {
 		t.Fatal("reset 后应降低")
 	}
 }
+
+func TestContains(t *testing.T) {
+	c := New(16)
+	c.Put("a", 1)
+	if !c.Contains("a") {
+		t.Fatal("contains")
+	}
+	if c.Contains("missing") {
+		t.Fatal("missing")
+	}
+}
+
+func TestPeek(t *testing.T) {
+	c := New(16)
+	c.Put("a", 1)
+	v, ok := c.Peek("a")
+	if !ok || v.(int) != 1 {
+		t.Fatal("peek", v, ok)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	c := New(16)
+	c.Put("a", 1)
+	if !c.Delete("a") {
+		t.Fatal("delete")
+	}
+	if c.Delete("a") {
+		t.Fatal("double delete")
+	}
+}
+
+func TestStats(t *testing.T) {
+	c := New(4)
+	c.Put("a", 1)
+	c.Get("a")
+	c.Get("missing")
+	// 触发 evict
+	for i := 0; i < 10; i++ {
+		c.Put(string(rune('b'+i)), i)
+	}
+	st := c.Stats()
+	if st.Hits == 0 || st.Misses == 0 {
+		t.Fatalf("stats: %+v", st)
+	}
+	if st.Evictions == 0 {
+		t.Fatal("evictions 应 > 0")
+	}
+}
+
+func TestClear(t *testing.T) {
+	c := New(4)
+	for i := 0; i < 10; i++ {
+		c.Put(string(rune('a'+i)), i)
+	}
+	c.Clear()
+	if c.Len() != 0 {
+		t.Fatal("clear")
+	}
+}
+
+func TestCap(t *testing.T) {
+	c := New(8)
+	if c.Cap() != 8 {
+		t.Fatal("cap")
+	}
+}

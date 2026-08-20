@@ -77,7 +77,6 @@ func TestPanicShared(t *testing.T) {
 			n.Add(1)
 			time.Sleep(50 * time.Millisecond)
 			panic("boom")
-			return 0, nil
 		})
 		res <- result{v, err}
 	}()
