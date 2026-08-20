@@ -6,19 +6,19 @@ import (
 	"time"
 )
 
-// LRUCache is a thread-safe, in-process least-recently-used cache
-// with an optional per-entry TTL. It is intentionally tiny (a few
-// hundred lines) and stdlib-only so the demo-dog collector does not
-// pull in any new dependencies.
+// LRUCache 是线程安全的进程内最近最少使用缓存，
+// 可选地支持按条目的 TTL。它刻意保持小巧（几百行）
+// 且仅依赖标准库，以便 demo-dog 采集器
+// 不引入任何新依赖。
 //
-// Use cases:
-//   * Cache for `/api/v1/query` (PromQL) responses.
-//   * Cache for `/api/services` when nothing has changed.
-//   * Cache for `/api/admin/keys` which changes very rarely.
+// 使用场景：
+//   * 缓存 /api/v1/query（PromQL）的响应。
+//   * 在没有变化时缓存 /api/services。
+//   * 缓存 /api/admin/keys（很少变化）。
 //
-// The cache is bounded by both a maximum entry count and an
-// optional global byte budget. When either is exceeded, the least
-// recently used entry is evicted.
+// 缓存同时受最大条目数和可选的全局字节预算约束。
+// 当任一约束被突破时，最久未使用的条目会被驱逐。
+// 
 type LRUCache struct {
 	mu       sync.Mutex
 	cap      int
@@ -40,10 +40,10 @@ type lruEntry struct {
 	expires time.Time
 }
 
-// NewLRUCache returns a fresh cache.
-//   cap: maximum number of entries (0 = 1024)
-//   maxBytes: total byte budget (0 = unlimited)
-//   ttl: per-entry TTL (0 = no expiry)
+// NewLRUCache 返回一个新的缓存。
+//   cap: 最大条目数（0 = 1024）
+//   maxBytes: 总字节预算（0 = 无限制）
+//   ttl: 按条目的 TTL（0 = 不过期）
 func NewLRUCache(cap int, maxBytes int64, ttl time.Duration) *LRUCache {
 	if cap <= 0 {
 		cap = 1024
@@ -57,8 +57,8 @@ func NewLRUCache(cap int, maxBytes int64, ttl time.Duration) *LRUCache {
 	}
 }
 
-// Get returns the cached value and reports whether it was found.
-// A value older than the TTL is treated as a miss.
+// Get 返回缓存的值并报告是否命中。
+// 超过 TTL 的值会被视为未命中。
 func (c *LRUCache) Get(key string) ([]byte, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -81,8 +81,8 @@ func (c *LRUCache) Get(key string) ([]byte, bool) {
 	return out, true
 }
 
-// Set inserts or replaces an entry. The value is copied so the
-// caller can mutate its slice after the call.
+// Set 插入或替换一个条目。值会被拷贝，
+// 因此调用方可以在调用后修改其切片。
 func (c *LRUCache) Set(key string, value []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -108,7 +108,7 @@ func (c *LRUCache) Set(key string, value []byte) {
 	c.evict()
 }
 
-// Delete removes a key from the cache.
+// Delete 从缓存中移除指定键。
 func (c *LRUCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -117,14 +117,14 @@ func (c *LRUCache) Delete(key string) {
 	}
 }
 
-// Len returns the number of cached entries.
+// Len 返回缓存中的条目数。
 func (c *LRUCache) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.order.Len()
 }
 
-// LRUStats is a small summary suitable for /api/health.
+// LRUStats 是适合 /api/health 展示的小摘要。
 type LRUStats struct {
 	Size       int     `json:"size"`
 	Capacity   int     `json:"capacity"`
@@ -160,8 +160,8 @@ func (c *LRUCache) removeElement(el *list.Element) {
 	delete(c.items, ent.key)
 }
 
-// evict removes oldest entries until we are within both cap and
-// maxBytes budgets.
+// evict 移除最旧的条目，直到同时满足 cap 和
+// maxBytes 预算为止。
 func (c *LRUCache) evict() {
 	for c.order.Len() > c.cap {
 		el := c.order.Back()

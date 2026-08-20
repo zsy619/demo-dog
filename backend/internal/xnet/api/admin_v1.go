@@ -1,15 +1,15 @@
 package api
 
-// Round 53 admin surfaces. This file is a thin shim layer that
-// exposes the deep modules (quota, breaker, rate limit, webhooks,
-// retention, admin keys, replica, OIDC, SLO, backups) over HTTP so
-// the frontend and ops tooling can manage them without rebuilding
-// internal types.
+// 第 53 轮管理面。本文件是一个薄薄的桥接层，
+// 通过 HTTP 暴露深度模块（quota、breaker、限流、webhooks、
+// retention、admin 密钥、replica、OIDC、SLO、备份），
+// 以便前端与运维工具在不重建内部类型的情况下管理它们。
+// 
 //
-// Each handler does the minimum it needs to translate JSON <-> the
-// underlying module. Where a backend module does not have a List /
-// Snapshot method we synthesise an empty response so the frontend
-// can keep working against a partially-configured server.
+// 每个处理器都只做最小的 JSON 与底层模块之间的转换。
+// 当后端模块没有 List / Snapshot 方法时，
+// 我们合成一个空响应，以便前端在部分配置的服务器上
+// 仍可继续工作。
 
 import (
 	"context"
@@ -31,7 +31,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xnet/webhook"
 )
 
-// ---- quota (Round 42) ----
+// ---- quota（第 42 轮） ----
 
 func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 	if s.quota == nil {
@@ -66,7 +66,7 @@ func quotaPayload(tenant string, u QuotaUsage) map[string]any {
 	}
 }
 
-// ---- SLO (Round 44) ----
+// ---- SLO（第 44 轮） ----
 
 func (s *Server) handleSLOs(w http.ResponseWriter, r *http.Request) {
 	if s.alerts == nil {
@@ -115,7 +115,7 @@ func (s *Server) handleSLODecide(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- admin keys (Round 46) ----
+// ---- admin 密钥（第 46 轮） ----
 
 func (s *Server) handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 	if s.adminKeys == nil {
@@ -211,7 +211,7 @@ func (s *Server) handleAdminKeyItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ---- circuit breakers (Round 47) ----
+// ---- 熔断器（第 47 轮） ----
 
 type BreakerRegistry struct {
 	mu       sync.RWMutex
@@ -281,7 +281,7 @@ func (s *Server) handleCircuitItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"reset": parts[0]})
 }
 
-// ---- rate limiter (Round 48) ----
+// ---- 限流（第 48 轮） ----
 
 func (s *Server) handleRateLimits(w http.ResponseWriter, r *http.Request) {
 	if s.rateLimiter == nil {
@@ -303,7 +303,7 @@ func (s *Server) handleRateLimits(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- webhooks (Round 49) ----
+// ---- webhooks（第 49 轮） ----
 
 type WebhookDispatcher struct {
 	mu   sync.RWMutex
@@ -419,7 +419,7 @@ func (s *Server) handleWebhookStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- retention (Round 50) ----
+// ---- 留存（第 50 轮） ----
 
 type RetentionManager struct {
 	mu sync.RWMutex
@@ -503,7 +503,7 @@ func (s *Server) handleRetentionReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- replica state (Round 38) ----
+// ---- 副本状态（第 38 轮） ----
 
 type ReplicaStatus struct {
 	mu        sync.RWMutex
@@ -538,7 +538,7 @@ func (s *Server) handleReplicaState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.replica.Snapshot())
 }
 
-// ---- OIDC (Round 41) ----
+// ---- OIDC（第 41 轮） ----
 
 type OIDCBundle struct {
 	Issuer     string   `json:"issuer"`
@@ -637,8 +637,8 @@ func (s *Server) handleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("issuer required"))
 		return
 	}
-	// Build a transient provider and run discovery; the provider
-	// lives only for the lifetime of this request.
+	// 构建一个临时 provider 并执行 discovery；
+	// 该 provider 仅在本次请求期间存在。
 	p, err := oidc.NewProvider(r.Context(), oidc.Config{IssuerURL: issuer})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
@@ -648,9 +648,9 @@ func (s *Server) handleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	_ = ctx
-	// We do not surface the parsed discovery doc from the opaque
-	// provider type; instead return the issuer echo plus the
-	// standard endpoint URLs built from it.
+	// 我们不从 opaque provider 类型中暴露已解析的 discovery 文档；
+	// 改为返回 issuer 回显以及由其构建的标准端点 URL。
+	// 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                issuer,
 		"authorization_endpoint": issuer + "/authorize",
@@ -660,7 +660,7 @@ func (s *Server) handleOIDCDiscovery(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---- backups (Round 43) ----
+// ---- 备份（第 43 轮） ----
 
 func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -736,5 +736,5 @@ func (s *Server) handleBackupsRestore(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// _ ensures auth package is used (admin keys bridge).
+// _ 用于保证 auth 包被使用（admin 密钥桥接）。
 var _ = (*auth.AdminStore)(nil)

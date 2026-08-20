@@ -1,22 +1,22 @@
-// Package openapi generates an OpenAPI 3.1 spec for the demo-dog
-// HTTP API. The spec is hand-built from the route list in this
-// package; we do not introspect runtime handlers because we want
-// the spec to be stable, reviewable, and decoupled from any
-// reflection magic.
+// Package openapi 为 demo-dog HTTP API 生成 OpenAPI 3.1 规范。
+// 该规范由本包的路由列表手工构建，
+// 我们不内省运行时的处理器，因为希望
+// 规范保持稳定、可审阅，并解耦于任何
+// 反射机制。
 //
-// Consumers:
-//   * docs/openapi.json (rendered by gen/main.go)
-//   * Client SDK codegen (openapi-generator, oapi-codegen)
-//   * Postman / Insomnia import
+// 使用者：
+//   * docs/openapi.json（由 gen/main.go 生成）
+//   * 客户端 SDK 代码生成（openapi-generator、oapi-codegen）
+//   * Postman / Insomnia 导入
 //
-// Usage:
+// 用法：
 //
 //	go run ./cmd/gen-openapi > docs/openapi.json
 package openapi
 
 import "encoding/json"
 
-// Spec is the root OpenAPI 3.1 document.
+// Spec 是根 OpenAPI 3.1 文档。
 type Spec struct {
 	OpenAPI      string                 `json:"openapi"`
 	Info         Info                   `json:"info"`
@@ -150,7 +150,7 @@ type Tag struct {
 	Description string `json:"description,omitempty"`
 }
 
-// New returns the OpenAPI 3.1 spec for demo-dog.
+// New 返回 demo-dog 的 OpenAPI 3.1 规范。
 func New() *Spec {
 	return &Spec{
 		OpenAPI: "3.1.0",
@@ -176,7 +176,7 @@ func New() *Spec {
 	}
 }
 
-// JSON renders the spec as indented JSON.
+// JSON 将规范渲染为缩进的 JSON。
 func (s *Spec) JSON() ([]byte, error) {
 	return json.MarshalIndent(s, "", "  ")
 }
@@ -269,7 +269,7 @@ func paths() map[string]PathItem {
 
 	p := map[string]PathItem{}
 
-	// Health.
+	// 健康检查。
 	p["/api/health"] = mk(&Op{
 		Summary:     "Health check",
 		Tags:        []string{"observability"},
@@ -281,7 +281,7 @@ func paths() map[string]PathItem {
 		},
 	})
 
-	// Query.
+	// 查询。
 	p["/api/v1/query"] = mk(&Op{
 		Summary:     "PromQL query (instant)",
 		Tags:        []string{"query"},
@@ -300,7 +300,7 @@ func paths() map[string]PathItem {
 		},
 	})
 
-	// Series.
+	// 序列。
 	p["/api/v1/series"] = mk(&Op{
 		Summary:     "Series discovery",
 		Tags:        []string{"query"},
@@ -314,7 +314,7 @@ func paths() map[string]PathItem {
 		},
 	})
 
-	// Rules.
+	// 规则。
 	p["/api/v1/rules"] = mk(&Op{
 		Summary:     "Active alerting rules",
 		Tags:        []string{"alerts"},
@@ -331,7 +331,7 @@ func paths() map[string]PathItem {
 		},
 	})
 
-	// Ingest.
+	// Ingest。
 	p["/v1/logs"] = mk(&Op{
 		Summary:     "OTLP/HTTP logs ingest",
 		Tags:        []string{"ingest"},
@@ -378,7 +378,7 @@ func paths() map[string]PathItem {
 		},
 	})
 
-	// Tenant admin.
+	// 租户管理。
 	p["/api/tenants"] = mk(&Op{
 		Summary:     "List / create tenants",
 		Tags:        []string{"admin"},
@@ -401,7 +401,7 @@ func paths() map[string]PathItem {
 		Security:    []map[string][]string{{"ApiKey": {}}},
 	})
 
-	// Replica.
+	// 副本。
 	p["/replica/ack"] = mk(&Op{
 		Summary:     "Follower offset ack",
 		Tags:        []string{"admin"},
@@ -441,7 +441,7 @@ func paths() map[string]PathItem {
 	return p
 }
 
-// Method is a tiny shim to keep the mk() helper compact.
+// Method 是一个微型 shim，用于保持 mk() 辅助函数紧凑。
 func (o *Op) Method() string {
 	switch {
 	case o.OperationID == "queryInstant" || o.OperationID == "getSeries" || o.OperationID == "getRules" ||
