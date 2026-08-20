@@ -708,7 +708,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 		return model.ServiceDetail{}, false
 	}
 	detail := model.ServiceDetail{Summary: sum}
-	// Always start with non-nil slices so the JSON encoder emits `[]` instead
+	// 始终以非 nil 切片开始，使 JSON 编码器输出 `[]` 而非
 	// of `null`. Frontend code can then call `.length` / `.map(...)` without
 	// null-safety guards.
 	detail.Endpoints = []model.EndpointStats{}

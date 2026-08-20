@@ -149,7 +149,7 @@ func (p *Pool) next() (Task, bool) {
 	if p.closed.Load() {
 		return Task{}, false
 	}
-	// Block until something arrives.
+	// 阻塞直到有消息到达。
 	select {
 	case <-p.ctx.Done():
 		return Task{}, false
