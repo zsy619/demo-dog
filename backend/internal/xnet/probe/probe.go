@@ -4,6 +4,7 @@ package probe
 
 import (
 	"context"
+	"net"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -162,3 +163,16 @@ func (p *Prober) loop() {
 
 // Rounds 返回已执行轮数。
 func (p *Prober) Rounds() uint64 { return p.round.Load() }
+
+// TCPProbe 返回一个通过 TCP 连接判定目标健康的探测函数。
+// 它会在 timeout 内尝试 Dial ctx、addr（形如 "host:port"）。
+func TCPProbe() Probe {
+	return func(ctx context.Context, addr string) error {
+		d := net.Dialer{}
+		c, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return err
+		}
+		return c.Close()
+	}
+}
