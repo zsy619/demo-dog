@@ -62,7 +62,7 @@ func NewRecordingEngine() *RecordingEngine {
 	return &RecordingEngine{rules: make(map[string]*recordingState), stopCh: make(chan struct{})}
 }
 
-// Add registers a rule. Returns the previous rule if any.
+// Add 注册一条规则。如果已存在则返回旧规则。
 func (e *RecordingEngine) Add(r RecordingRule) *RecordingRule {
 	if r.Interval <= 0 {
 		r.Interval = 30 * time.Second
@@ -80,7 +80,7 @@ func (e *RecordingEngine) Add(r RecordingRule) *RecordingRule {
 	return nil
 }
 
-// Remove unregisters a rule. Returns true if it existed.
+// Remove 注销一条规则。若存在则返回 true。
 func (e *RecordingEngine) Remove(name string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()

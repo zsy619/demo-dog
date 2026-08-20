@@ -13,7 +13,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// QueryFilter is a unified filter struct passed by HTTP handlers.
+// QueryFilter 是 HTTP handler 传递的统一过滤器结构。
 // Empty fields are treated as "match anything".
 type QueryFilter struct {
 	Tenant          string            // tenant id (or empty = all)
@@ -527,7 +527,7 @@ func (d *Doris) ServiceListForLog() []string {
 	return out
 }
 
-// HistogramCounts returns a tiny histogram suitable for a sparkline.
+// HistogramCounts 返回适合 sparkline 的微型直方图。
 //
 // Uses fixed logarithmic bucket boundaries so the histogram is meaningful
 // regardless of the input range (no more "maxV=1 collapses everything to
@@ -549,7 +549,7 @@ func (d *Doris) HistogramCounts(service string, bins int) []int {
 	if len(samples) == 0 || bins <= 0 {
 		return []int{}
 	}
-	// Fixed bucket edges in ms (chosen for typical web service latency:
+	// 固定桶边界（毫秒）（针对典型 Web 服务延迟选择：
 	// sub-ms … multi-second). Last edge is inclusive overflow.
 	edges := []int64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000}
 	counts := make([]int, len(edges)+1)
@@ -776,7 +776,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	// TopOps is the same data but ordered descending — frontend can use either.
 	detail.TopOps = detail.Endpoints
 
-	// Metric names for this service.
+	// 该服务的指标名称。
 	names := map[string]bool{}
 	d.muMetrics.RLock()
 	for key, pts := range d.hotMetrics {

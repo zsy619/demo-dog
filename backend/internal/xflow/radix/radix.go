@@ -88,7 +88,7 @@ func insert(n *node, key string, value any) {
 	}
 }
 
-// Lookup returns the value for key, or nil if not present.
+// Lookup 返回 key 对应的值，若不存在则返回 nil。
 func (t *Tree) Lookup(key string) any {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

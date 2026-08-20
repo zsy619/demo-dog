@@ -66,7 +66,7 @@ func (t *Tree) Keys() []string {
 	return out
 }
 
-// Equal returns true if the two trees have the same root.
+// Equal 当两棵树根相同时返回 true。
 func (t *Tree) Equal(other *Tree) bool {
 	if t == nil || other == nil {
 		return t == other
@@ -111,13 +111,13 @@ func buildRoot(leaves [][]byte) []byte {
 	return level[0]
 }
 
-// Proof is a membership proof for a key.
+// Proof 是一个 key 的成员性证明。
 type Proof struct {
 	Key  string
 	Path []string
 }
 
-// Proof returns a membership proof for key if present.
+// Proof 若 key 存在则返回其成员性证明。
 // Returns nil if the key is not in the tree.
 func (t *Tree) Proof(key string) *Proof {
 	t.mu.RLock()

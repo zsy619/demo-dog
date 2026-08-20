@@ -91,7 +91,7 @@ func repairWAL(f *os.File) error {
 		_ = binary.BigEndian.Uint32(hdr[4:8])  // version
 		length := binary.BigEndian.Uint32(hdr[12:16])
 		if length > 16<<20 {
-			// A 16 MiB single record is nonsense for our payloads;
+			// 对我们的负载来说 16 MiB 的单条记录毫无意义；
 			// treat as corruption.
 			break
 		}

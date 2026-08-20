@@ -64,7 +64,7 @@ func (m *Memtable) Delete(key string) {
 	m.size++
 }
 
-// Get returns (value, true, false) for a live key, (_, false,
+// Get 对活跃 key 返回 (value, true, false)，对缺失返回 (_, false,
 // false) for missing, and (_, false, true) for tombstone.
 func (m *Memtable) Get(key string) ([]byte, bool, bool) {
 	m.mu.RLock()
@@ -144,7 +144,7 @@ func (s *StringTable) Delete(key string) {
 	s.mu.Unlock()
 }
 
-// Get reads from memtable then runs oldest-to-newest if not
+// Get 先从 memtable 读取，若未命中则按从旧到新
 // found.
 func (s *StringTable) Get(key string) ([]byte, bool) {
 	s.mu.RLock()

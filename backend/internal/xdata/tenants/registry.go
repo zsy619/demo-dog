@@ -100,7 +100,7 @@ func (r *Registry) List() []Tenant {
 	return out
 }
 
-// MintKey generates a fresh API key for the given tenant + role. The
+// MintKey 为给定租户 + 角色生成新 API key。
 // plaintext is returned exactly once so the caller can hand it to the
 // human operator.
 func (r *Registry) MintKey(tenantID, label, role string) (*Key, error) {

@@ -127,7 +127,7 @@ func (p *PrimaryState) RetainedForFollower(fromOffset int64) []Record {
 	return out
 }
 
-// AckHandler returns the HTTP handler for POST /replica/ack.
+// AckHandler 返回 POST /replica/ack 的 HTTP 处理函数。
 func (p *PrimaryState) AckHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

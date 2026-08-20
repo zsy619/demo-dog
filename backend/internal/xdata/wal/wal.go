@@ -1,44 +1,27 @@
-// Package wal 预写日志：先写日志再修改状态，支持崩溃恢复与重放。
 package wal
+
+// wal.go:WAL 主体。
+//
+// WAL 是仅追加的预写日志,支持周期性快照压缩。
+// 使用 sync.Mutex 保护写操作与 snap / hasSnap 字段。
 
 import (
 	"bufio"
-	"encoding/binary"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"hash/crc32"
-	"io"
 	"os"
 	"sync"
 )
 
-// 磁盘上的帧格式：
-//   4 bytes  magic 'WAL1'
-//   4 bytes  length of payload (LE u32)
-//   payload bytes
-//   4 bytes  CRC32 of (magic+length+payload) (LE u32)
-//
-// The CRC catches torn writes / corruption.
-var magic = [4]byte{'W', 'A', 'L', '1'}
-
 // WAL 是支持定期快照的仅追加日志。
 type WAL struct {
-	mu      sync.Mutex
-	path    string
-	file    *os.File
-	writer  *bufio.Writer
-	snap    *Snapshot
-	hasSnap bool
+	mu      sync.Mutex   // 保护写并发
+	path    string       // 磁盘路径
+	file    *os.File     // 文件句柄
+	writer  *bufio.Writer // 缓冲写入器
+	snap    *Snapshot    // 最近一次快照
+	hasSnap bool         // 是否存在快照
 }
 
-// Snapshot 存储最近的快照状态。
-type Snapshot struct {
-	Seq     uint64 `json:"seq"`
-	Payload []byte `json:"payload"`
-}
-
-// Open 在给定路径打开（或创建）WAL。
+// Open 在给定路径打开(或创建)WAL。
 func Open(path string) (*WAL, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
@@ -75,8 +58,9 @@ func (w *WAL) Append(seq uint64, payload []byte) error {
 	return w.writer.Flush()
 }
 
-// WriteSnapshot 持久化快照负载，截断条目
-// with seq <= snap.Seq.
+// WriteSnapshot 持久化快照负载并截断 seq <= snap.Seq 的旧条目。
+//
+// 内部调用 compactLocked 完成截断。
 func (w *WAL) WriteSnapshot(seq uint64, payload []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -85,7 +69,7 @@ func (w *WAL) WriteSnapshot(seq uint64, payload []byte) error {
 	return w.compactLocked()
 }
 
-// LastSnapshot returns the in-memory snapshot (if any).
+// LastSnapshot 返回内存中的最近快照(深拷贝);不存在时返回 nil。
 func (w *WAL) LastSnapshot() *Snapshot {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -97,8 +81,9 @@ func (w *WAL) LastSnapshot() *Snapshot {
 	return &cp
 }
 
-// compactLocked rewrites the WAL keeping only entries after
-// snap.Seq.
+// compactLocked 重写 WAL,只保留 snap.Seq 之后的条目。
+//
+// 必须持有 w.mu 时调用。
 func (w *WAL) compactLocked() error {
 	if err := w.writer.Flush(); err != nil {
 		return err
@@ -118,87 +103,4 @@ func (w *WAL) compactLocked() error {
 		return err
 	}
 	return w.writer.Flush()
-}
-
-// encodeSnapshotBlob returns a JSON-encoded snapshot record.
-func encodeSnapshotBlob(s *Snapshot) []byte {
-	b, _ := json.Marshal(s)
-	return b
-}
-
-// encodeFrame builds the on-disk frame.
-func encodeFrame(seq uint64, payload []byte) []byte {
-	h := make([]byte, 16+len(payload))
-	copy(h[:4], magic[:])
-	binary.LittleEndian.PutUint32(h[4:8], uint32(len(payload)+8)) // length includes 8 bytes seq
-	binary.LittleEndian.PutUint64(h[8:16], seq)
-	copy(h[16:], payload)
-	c := crc32.NewIEEE()
-	c.Write(h[:16+len(payload)])
-	cs := c.Sum32()
-	var crcBytes [4]byte
-	binary.LittleEndian.PutUint32(crcBytes[:], cs)
-	return append(h, crcBytes[:]...)
-}
-
-// decodeFrame returns (seq, payload, err).
-func decodeFrame(b []byte) (uint64, []byte, error) {
-	if len(b) < 12 {
-		return 0, nil, io.ErrShortBuffer
-	}
-	if string(b[:4]) != string(magic[:]) {
-		return 0, nil, errors.New("bad magic")
-	}
-	length := binary.LittleEndian.Uint32(b[4:8])
-	total := int(12 + length)
-	if total > len(b) {
-		return 0, nil, io.ErrShortBuffer
-	}
-	seq := binary.LittleEndian.Uint64(b[8:16])
-	payload := make([]byte, length-8)
-	copy(payload, b[16:16+length-8])
-	got := binary.LittleEndian.Uint32(b[16+length-8 : 16+length-4])
-	c := crc32.NewIEEE()
-	c.Write(b[:16+length-8])
-	want := c.Sum32()
-	if got != want {
-		return 0, nil, fmt.Errorf("crc mismatch: got %x want %x", got, want)
-	}
-	return seq, payload, nil
-}
-
-// Reader 从文件（或路径）迭代帧。
-type Reader struct {
-	file *os.File
-	r    *bufio.Reader
-}
-
-// NewReader opens a reader for the WAL file.
-func NewReader(path string) (*Reader, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	return &Reader{file: f, r: bufio.NewReader(f)}, nil
-}
-
-// Close 关闭读取器。
-func (r *Reader) Close() error { return r.file.Close() }
-
-// Next 返回下一个 (seq, payload) 或 io.EOF。
-func (r *Reader) Next() (uint64, []byte, error) {
-	hdr := make([]byte, 8)
-	if _, err := io.ReadFull(r.r, hdr); err != nil {
-		return 0, nil, err
-	}
-	length := binary.LittleEndian.Uint32(hdr[4:8])
-	if int(length) < 8 || int(length) > 16*1024*1024 {
-		return 0, nil, fmt.Errorf("bad length %d", length)
-	}
-	body := make([]byte, length+4)
-	if _, err := io.ReadFull(r.r, body); err != nil {
-		return 0, nil, err
-	}
-	frame := append(append([]byte{}, hdr...), body...)
-	return decodeFrame(frame)
 }

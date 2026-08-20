@@ -31,7 +31,7 @@ type Clock struct {
 	heartbeats atomic.Uint64
 }
 
-// New creates a Clock for the given node ID with the given
+// New 为给定节点 ID 创建 Clock，并给定
 // set of peer IDs (including self).
 func New(self string, peers []string, heartTTL time.Duration) *Clock {
 	if heartTTL <= 0 {
@@ -75,7 +75,7 @@ func (c *Clock) Heartbeat(from string, term uint64) error {
 	return nil
 }
 
-// MaybeElect runs an election if the current leader has not
+// MaybeElect 在当前 leader 未
 // sent a heartbeat within heartTTL. The caller becomes
 // leader for a new term.
 func (c *Clock) MaybeElect() bool {

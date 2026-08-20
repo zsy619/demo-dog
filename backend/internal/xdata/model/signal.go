@@ -1,4 +1,4 @@
-// Package model defines unified data models for the three observability pillars.
+// Package model 定义三大可观测性支柱的统一数据模型。
 //
 // All observability signals are stored in-memory as LogRecord / MetricPoint /
 // SpanRecord through the Store, which writes to an "In-Memory Doris" engine.
@@ -153,7 +153,7 @@ type MVBucket struct {
 	Max   float64 `json:"max"`
 }
 
-// Mean returns the bucket mean (0 if empty).
+// Mean 返回桶均值（空时为 0）。
 func (b MVBucket) Mean() float64 {
 	if b.Count == 0 {
 		return 0
@@ -175,7 +175,7 @@ type HistogramView struct {
 	Max    float64   `json:"max"`
 }
 
-// MetricSeries is a labeled time series for frontend charts.
+// MetricSeries 是用于前端图表的标签时间序列。
 type MetricSeries struct {
 	Name    string        `json:"name"`
 	Service string        `json:"service"`
@@ -250,7 +250,7 @@ type ServiceDetail struct {
 	QPS          []SeriesPoint   `json:"qps"`
 }
 
-// EndpointStats aggregates span activity for one endpoint / span name.
+// EndpointStats 聚合一个 endpoint / span name 的 span 活动。
 type EndpointStats struct {
 	Name   string  `json:"name"`
 	Count  int64   `json:"count"`

@@ -31,7 +31,7 @@ func (d *Doris) updateHistograms(in []model.MetricPoint) {
 	}
 }
 
-// HistogramSnapshot returns the aggregated histogram for one (service,
+// HistogramSnapshot 返回单个 (service,
 // name) pair, or nil if no histogram data has been received.
 func (d *Doris) HistogramSnapshot(service, name string) *model.HistogramView {
 	d.muHistograms.RLock()

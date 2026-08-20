@@ -36,7 +36,7 @@ func (r *Registry) Set(key string, value any, reason string) {
 	r.version.Add(1)
 }
 
-// Get returns the value for key.
+// Get 返回 key 对应的值。
 func (r *Registry) Get(key string) (any, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -44,7 +44,7 @@ func (r *Registry) Get(key string) (any, bool) {
 	return v, ok
 }
 
-// Reason returns the reason for the last set.
+// Reason 返回最近设置的 reason。
 func (r *Registry) Reason(key string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -27,7 +27,7 @@ const (
 	ChannelSlack     ChannelKind = "slack"
 )
 
-// NotifyOpts is the per-call options bag for delivery.
+// NotifyOpts 是单次投递的选项包。
 type NotifyOpts struct {
 	Subject   string
 	Body      string

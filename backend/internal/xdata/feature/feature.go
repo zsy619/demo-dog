@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// Kind identifies the value type of a flag.
+// Kind 标识 flag 的值类型。
 type Kind int
 
 const (
@@ -28,7 +28,7 @@ const (
 	KindInt
 )
 
-// Flag is the metadata for one named feature.
+// Flag 是某个命名特性的元数据。
 type Flag struct {
 	Name        string
 	Description string
@@ -151,7 +151,7 @@ func (m *Manager) List() []*Flag {
 	return out
 }
 
-// Evaluate returns the effective value of flag for tenant.
+// Evaluate 返回某租户 flag 的有效值。
 func (m *Manager) Evaluate(name, tenant string) (any, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -186,7 +186,7 @@ func (m *Manager) String(name, tenant string) (string, bool) {
 	return s, ok
 }
 
-// Int returns the int value for the tenant.
+// Int 返回租户的整数值。
 func (m *Manager) Int(name, tenant string) (int, bool) {
 	v, ok := m.Evaluate(name, tenant)
 	if !ok {
@@ -249,7 +249,7 @@ func (m *Manager) ClearOverride(name, tenant, actor string) error {
 	return nil
 }
 
-// Overrides returns all overrides for one flag.
+// Overrides 返回一个 flag 的所有覆盖。
 func (m *Manager) Overrides(name string) []*Override {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

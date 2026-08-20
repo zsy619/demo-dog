@@ -18,17 +18,17 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// handlePromRemoteWrite implements the Prometheus Remote Write 1.0
-// protocol (https://prometheus.io/docs/concepts/remote_write_spec/).
-// This is the HTTP+protobuf path used by every Prometheus agent /
-// OTel collector exporter / VictoriaMetrics / Mimir agent, so
-// enabling it gives the collector a drop-in upgrade path for
-// production users.
+// handlePromRemoteWrite 实现 Prometheus Remote Write 1.0
+// 协议（https://prometheus.io/docs/concepts/remote_write_spec/）。
+// 每一个 Prometheus agent / OTel collector exporter /
+// VictoriaMetrics / Mimir agent 都使用此 HTTP+protobuf 路径，
+// 启用它能为生产用户提供一条无缝的升级路径，
+// 将其接入采集。
 //
-// The protocol is intentionally simple: an HTTP POST with a snappy-
-// compressed protobuf body. We do not depend on any Prometheus
-// library because the wire format is documented and trivial to
-// decode by hand. The shape is:
+// 该协议刻意保持简洁：一个带有 snappy 压缩
+// protobuf 请求体的 HTTP POST。我们不依赖任何 Prometheus 库，
+// 因为其线路格式已文档化且可手工解码。
+// 数据结构如下：
 //
 //   message WriteRequest {
 //     repeated TimeSeries timeseries = 1;
@@ -40,9 +40,9 @@ import (
 //   message Label  { string name  = 1; string value = 2; }
 //   message Sample { double value = 1; int64 timestamp = 2; }
 //
-// The endpoint is admin-only: production Prometheus agents should
-// authenticate with an API key bound to the tenant so metrics
-// arrive in the right slice.
+// 该端点仅限管理员：生产环境的 Prometheus agent 应
+// 使用绑定到租户的 API 密钥进行认证，以便
+// 指标落到正确的分片中。
 func (s *Server) handlePromRemoteWrite(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(rw, http.StatusMethodNotAllowed, errors.New("POST only"))
@@ -61,11 +61,11 @@ func (s *Server) handlePromRemoteWrite(rw http.ResponseWriter, r *http.Request) 
 		writeError(rw, http.StatusBadRequest, fmt.Errorf("decompress: %w", err))
 		return
 	}
-	// If the agent sent gzip-wrapped snappy (a common
-	// Content-Encoding: gzip containing a snappy-framed body), the
-	// gz-decode above returned snappy bytes which still need a
-	// snappy pass. Detect the stream-identifier chunk 0xFF at offset
-	// 0 and re-run the snappy decoder.
+	// 如果 agent 发送的是 gzip 包裹的 snappy（常见的
+	// Content-Encoding: gzip 内含 snappy-framed 负载），
+	// 上面的 gz 解码返回 snappy 字节，仍需要再跑一次
+	// snappy。在偏移 0 处检测流标识块 0xFF，
+	// 并重新执行 snappy 解码。
 	if len(raw) >= 1 && raw[0] == 0xFF {
 		decoded, err := decodeSnappyFramed(raw)
 		if err != nil {
@@ -133,12 +133,12 @@ func decompressPromBody(encoding string, body []byte) ([]byte, error) {
 	}
 }
 
-// decodeSnappyFramed walks the Snappy framed format and returns
-// the concatenated uncompressed bytes. We do not implement the
-// full block decoder; the Prometheus spec only uses compressed
-// chunks and the wire is dominated by literals so the
-// simplification (literal-only) covers the vast majority of
-// production payloads. Anything weird is surfaced as an error.
+// decodeSnappyFramed 遍历 Snappy framed 格式并返回
+// 拼接后的未压缩字节。我们并未实现完整的块解码器；
+// Prometheus 规范仅使用压缩块，且线路上
+// 字面值占主导，因此这种简化（仅字面值）足以覆盖
+// 绝大多数生产负载。任何异常都以错误的形式暴露。
+// 
 func decodeSnappyFramed(in []byte) ([]byte, error) {
 	type elemType uint8
 	const (
@@ -176,16 +176,16 @@ func decodeSnappyFramed(in []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// snappyDecode implements just enough of the snappy block decoder
-// to round-trip Prometheus remote-write payloads: literals and
-// short back-references. Anything fancier returns an error.
+// snappyDecode 仅实现 snappy 块解码器的最小子集，
+// 用来往返 Prometheus remote-write 负载：字面值和
+// 短反向引用。任何更复杂的用法都会返回错误。
 func snappyDecode(src []byte) ([]byte, error) {
 	out := make([]byte, 0, len(src)*2)
 	pos := 0
 	for pos < len(src) {
 		c := src[pos]
 		pos++
-		// Top 2 bits are the element type.
+		// 高 2 位表示元素类型。
 		tag := (c >> 6) & 0x3
 		switch tag {
 		case 0x0:
@@ -454,9 +454,9 @@ func splitPromLabels(lbls []promLabel) (name, service string, attrs map[string]s
 	return
 }
 
-// promWriteContentHash returns a deterministic identifier for the
-// request body. Useful for clients that send X-Prometheus-Remote-Write-Version
-// for tracing.
+// promWriteContentHash 返回请求体的确定性标识。
+// 对于在请求头中发送 X-Prometheus-Remote-Write-Version
+// 以便追踪的客户端很有用。
 func promWriteContentHash(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:8])

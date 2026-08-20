@@ -57,7 +57,7 @@ func (s *SLO) Budget() float64 {
 	return 1 - s.Target
 }
 
-// CountSink is the source of truth for counter values.
+// CountSink 是计数器值的唯一可信源。
 type CountSink interface {
 	Counter(name string, window time.Duration) int64
 }
@@ -77,7 +77,7 @@ type BudgetStatus struct {
 	AsOf              time.Time
 }
 
-// Compute returns the current budget state for the SLO.
+// Compute 返回 SLO 的当前预算状态。
 func Compute(s *SLO, sink CountSink, now time.Time) (BudgetStatus, error) {
 	if err := s.Validate(); err != nil {
 		return BudgetStatus{}, err
@@ -127,7 +127,7 @@ type BurnRate struct {
 	Rate   float64
 }
 
-// BurnRates computes burn rates for several windows at once.
+// BurnRates 一次计算多个窗口的 burn rate。
 // Common sets per the Google SRE workbook:
 //
 //	5m, 30m, 1h, 2h, 6h, 1d, 3d, 7d

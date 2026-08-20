@@ -115,7 +115,7 @@ func (m *Manager) SetPolicy(p Policy) error {
 	return nil
 }
 
-// Get returns the policy for a tenant.
+// Get 返回租户的策略。
 func (m *Manager) Get(tenant string) (Policy, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -274,7 +274,7 @@ type RetentionReport struct {
 	Keep    int
 }
 
-// Report inspects a snapshot of rows for one tenant.
+// Report 检查一个租户的快照行。
 func (m *Manager) Report(tenant string, rows []Row) RetentionReport {
 	r := RetentionReport{Tenant: tenant}
 	p, ok := m.Get(tenant)

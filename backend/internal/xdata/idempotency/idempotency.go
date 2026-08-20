@@ -66,7 +66,7 @@ func (s *Store) Save(key string, status int, body []byte, hdr http.Header) {
 	}
 }
 
-// Lookup returns the stored record for key, or nil.
+// Lookup 返回 key 对应的存储记录，若无则返回 nil。
 func (s *Store) Lookup(key string) *Record {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -139,7 +139,7 @@ type Middleware struct {
 	MismatchBodyHash bool
 }
 
-// Lookup returns the stored record if the request is
+// Lookup 在请求时返回存储记录
 // replayed. If MismatchBodyHash is set and the body hash
 // differs, it returns nil (the caller should re-process).
 func (m *Middleware) Lookup(r *http.Request) (*Record, error) {

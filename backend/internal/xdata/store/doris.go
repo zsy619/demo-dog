@@ -41,7 +41,7 @@ type Config struct {
 	MaxCardinality int
 }
 
-// DefaultConfig returns sensible defaults for the demo.
+// DefaultConfig 返回适合 demo 的合理默认。
 func DefaultConfig() Config {
 	return Config{
 		HotLogTTL:      5 * time.Minute,
@@ -109,7 +109,7 @@ type Doris struct {
 	mvMinute     map[string][]model.MVBucket
 	mvFiveMinute map[string][]model.MVBucket
 
-	// Bookkeeping for service summaries.
+	// 服务摘要的簿记。
 	muSum sync.RWMutex
 	sum   map[string]*model.ServiceSummary
 
@@ -255,7 +255,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	for _, p := range in {
 		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		bucket := d.hotMetrics[key]
-		// Cardinality gate: if we have never observed this exact
+		// 基数门控：如果此前从未观察到该精确的
 		// label-set before AND we are at the cap, drop the point.
 		if d.cfg.MaxCardinality > 0 && !bucketContainsLabelSet(bucket, p.Labels) {
 			if d.seriesCardinality.Load() >= int64(d.cfg.MaxCardinality) {
@@ -482,7 +482,7 @@ func (d *Doris) ListServices(tenant string) []model.ServiceSummary {
 		if tenant != "" && s.TenantID != tenant {
 			continue
 		}
-		// Naive but acceptable for demo: derive error rate from hot logs.
+		// 天真但对 demo 可接受：从热日志推导错误率。
 		s.ErrorRate = d.computeErrorRate(s.Name)
 		s.P50Ms, s.P95Ms, s.P99Ms = d.PercentileLatencies(s.Name)
 		s.QPS = d.computeQPS(s.Name)
@@ -639,7 +639,7 @@ func appendMVBucket(series []model.MVBucket, value float64, ts int64) []model.MV
 		return series
 	}
 	if ts < last.Ts {
-		// Out-of-order arrival: linear search for bucket.
+		// 乱序到达：对桶进行线性查找。
 		for i := range series {
 			if series[i].Ts == ts {
 				b := series[i]
@@ -744,7 +744,7 @@ func (d *Doris) QueryLogs(service string, severity string, limit int, sinceMs in
 	}
 }
 
-// QueryMetrics returns time series for a metric name.
+// QueryMetrics 返回某指标名称的时间序列。
 // It uses the 1m materialized view when the requested window is large.
 // Tenant parameter isolates data per-tenant; empty = legacy mode.
 func (d *Doris) QueryMetrics(tenant, service, name, window string, limit int) model.QueryResult {
@@ -788,7 +788,7 @@ func (d *Doris) QueryMetrics(tenant, service, name, window string, limit int) mo
 	}
 }
 
-// QueryTraces returns spans for a given trace id or all recent spans.
+// QueryTraces 返回给定 trace id 的 span 或所有最近的 span。
 func (d *Doris) QueryTraces(traceID, service string, limit int) model.QueryResult {
 	start := time.Now()
 	d.queriesServed.Add(1)

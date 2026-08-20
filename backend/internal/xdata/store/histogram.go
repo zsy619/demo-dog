@@ -52,7 +52,7 @@ func newHistogramAgg(p model.MetricPoint) *histogramAgg {
 		h.max = p.HistogramMax
 		h.hasData = true
 	}
-	// Derive total/count if exporter omitted it.
+	// 在导出端省略时推导 total/count。
 	if h.total == 0 {
 		for _, c := range h.counts {
 			h.total += c

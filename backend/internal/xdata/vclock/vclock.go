@@ -33,7 +33,7 @@ func (c *Clock) Tick(self string) uint64 {
 	return c.entry[self]
 }
 
-// Get returns the counter for node, or 0.
+// Get 返回节点的计数器，若无则返回 0。
 func (c *Clock) Get(node string) uint64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -195,7 +195,7 @@ func (n *Node) tick() {
 	}
 }
 
-// Handler returns the HTTP handler for the primary side.
+// Handler 返回 primary 端的 HTTP 处理函数。
 func (n *Node) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/replica/offset", func(w http.ResponseWriter, r *http.Request) {

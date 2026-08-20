@@ -40,7 +40,7 @@ type BackupResult struct {
 	WALIncluded bool      `json:"wal_included"`
 }
 
-// NewBackupManager creates a manager for the given data directory.
+// NewBackupManager 为给定数据目录创建管理器。
 func NewBackupManager(dataDir string) *BackupManager {
 	return &BackupManager{dataDir: dataDir}
 }

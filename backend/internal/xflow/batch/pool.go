@@ -1,4 +1,4 @@
-// Package batch implements a bounded worker pool for the OTLP ingest pipeline.
+// Package batch 为 OTLP 摄取管道实现一个有界工作池。
 //
 // The Collector-style feature set the demo targets needs three things from the
 // write side:
@@ -100,7 +100,7 @@ func (p *Pool) Submit(j Job) bool {
 	}
 }
 
-// Close drains the queue and waits for workers to exit.
+// Close 排空队列并等待工作协程退出。
 func (p *Pool) Close() {
 	close(p.queue)
 	p.cancel()

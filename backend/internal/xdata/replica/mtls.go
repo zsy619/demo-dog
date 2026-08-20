@@ -62,7 +62,7 @@ func (m *mTLSConfig) ServerTLSConfig() (*tls.Config, error) {
 	return cfg, nil
 }
 
-// ClientTLSConfig returns a *tls.Config for the follower HTTP client.
+// ClientTLSConfig 返回 follower HTTP 客户端使用的 *tls.Config。
 func (m *mTLSConfig) ClientTLSConfig(serverName string) (*tls.Config, error) {
 	if len(m.Cert) == 0 || len(m.Key) == 0 {
 		return nil, errors.New("client cert/key required")
@@ -116,7 +116,7 @@ func CertFingerprint(cert *x509.Certificate) string {
 	return hex.EncodeToString(h[:])
 }
 
-// CertSubjectCN returns the CN (or first SAN DNS / IP for SPIFFE).
+// CertSubjectCN 返回 CN（或 SPIFFE 的首个 SAN DNS / IP）。
 func CertSubjectCN(cert *x509.Certificate) string {
 	if cert.Subject.CommonName != "" {
 		return cert.Subject.CommonName
@@ -150,7 +150,7 @@ func PeerCertFromRequest(r *http.Request) *x509.Certificate {
 	return r.TLS.PeerCertificates[0]
 }
 
-// CertAllowedBySAN reports whether the cert is permitted for the
+// CertAllowedBySAN 报告证书是否被允许用于
 // expected hostname. Looks at DNSNames and IPAddresses in the SAN.
 func CertAllowedBySAN(cert *x509.Certificate, hostname string) bool {
 	if cert == nil {

@@ -78,10 +78,10 @@ func (b *Bus) Publish(topic string, payload []byte) {
 	}
 }
 
-// Messages returns the receive channel for the subscriber.
+// Messages 返回订阅者的接收 channel。
 func (s *Subscriber) Messages() <-chan Message { return s.ch }
 
-// Dropped returns the number of messages dropped for this
+// Dropped 返回该订阅丢弃的消息数。
 // subscriber.
 func (s *Subscriber) Dropped() uint64 { return s.dropped.Load() }
 

@@ -29,7 +29,7 @@ type Ingestor struct {
 	store *store.Doris
 	pool  *batch.Pool
 
-	// Recent payloads kept for debugging / replay.
+	// 保留最近负载用于调试/重放。
 	recentMu sync.RWMutex
 	recent   []model.OTLPRequest
 }
@@ -200,7 +200,7 @@ func (in *Ingestor) SubmitSync(req model.OTLPRequest) model.OTLPResponse {
 	}
 }
 
-// RecentPayloads returns a snapshot of the last seen payloads (for demos).
+// RecentPayloads 返回最近看到的负载快照（用于 demo）。
 func (in *Ingestor) RecentPayloads() []model.OTLPRequest {
 	in.recentMu.RLock()
 	defer in.recentMu.RUnlock()
