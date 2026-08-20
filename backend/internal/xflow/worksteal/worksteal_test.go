@@ -28,3 +28,48 @@ func TestClose(t *testing.T) {
 	// 再 Close 应不 panic
 	s.Close()
 }
+
+func TestPanic(t *testing.T) {
+	s := New(2)
+	s.Submit(func() { panic("boom") })
+	s.Submit(func() {})
+	s.Close()
+	st := s.Stats()
+	if st.Panics < 1 {
+		t.Fatal("应记录 panic")
+	}
+}
+
+func TestCloseIdempotent(t *testing.T) {
+	s := New(2)
+	s.Close()
+	s.Close()
+}
+
+func TestSubmitAfterClose(t *testing.T) {
+	s := New(1)
+	s.Close()
+	if s.Submit(func() {}) {
+		t.Fatal("应拒绝")
+	}
+}
+
+func TestNilJob(t *testing.T) {
+	s := New(1)
+	defer s.Close()
+	if s.Submit(nil) {
+		t.Fatal("nil job 应 false")
+	}
+}
+
+func TestLoadDistribution(t *testing.T) {
+	s := New(4)
+	defer s.Close()
+	for i := 0; i < 100; i++ {
+		s.Submit(func() {})
+	}
+	s.Close()
+	if s.Stats().Submits != 100 {
+		t.Fatal("submit 计数")
+	}
+}
