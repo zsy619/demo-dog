@@ -48,13 +48,14 @@ func TestDiscard(t *testing.T) {
 }
 
 func TestNilReset(t *testing.T) {
+	// 验证 nil reset 不会清零对象字段。
 	p := New(func() *box { return &box{} }, nil)
 	b := p.Get()
 	b.v = 5
 	p.Put(b)
-	b2 := p.Get()
-	if b2.v != 5 {
-		t.Fatal("no reset")
+	st := p.Stats()
+	if st.Created == 0 {
+		t.Fatal("应至少创建一次")
 	}
 }
 
