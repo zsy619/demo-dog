@@ -1,3 +1,4 @@
+// Package vclock 向量时钟：为分布式事件分配偏序时间戳，检测因果关系。
 package vclock
 
 import (

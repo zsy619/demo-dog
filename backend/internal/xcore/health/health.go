@@ -1,3 +1,4 @@
+// Package health 健康检查：探测外部依赖并汇总健康状态。
 package health
 
 // Health aggregator.

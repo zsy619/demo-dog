@@ -1,3 +1,4 @@
+// Package logx 结构化日志接口：键值对风格的轻量日志输出。
 package logx
 
 // JSON structured logger.

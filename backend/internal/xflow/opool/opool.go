@@ -1,3 +1,4 @@
+// Package opool 对象池：复用对象减少 GC 压力。
 package opool
 
 import (

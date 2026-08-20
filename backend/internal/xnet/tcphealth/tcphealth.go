@@ -1,3 +1,4 @@
+// Package tcphealth TCP 健康探测：建立 TCP 连接并检测响应。
 package tcphealth
 
 import (

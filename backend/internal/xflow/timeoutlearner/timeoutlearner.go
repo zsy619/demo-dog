@@ -1,3 +1,4 @@
+// Package timeoutlearner 自适应超时：根据历史数据动态调整超时阈值。
 package timeoutlearner
 
 import (

@@ -1,3 +1,4 @@
+// Package proxy HTTP/SOCKS 代理：URL 解析与连接转发。
 package proxy
 
 import (

@@ -1,3 +1,4 @@
+// Package saga 分布式事务 saga：步骤编排 + 失败补偿。
 package saga
 
 import (

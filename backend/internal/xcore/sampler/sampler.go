@@ -1,3 +1,4 @@
+// Package sampler 概率采样器：根据成功率动态调整采样率。
 package sampler
 
 import (

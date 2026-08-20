@@ -1,3 +1,4 @@
+// Package pubsub 进程内 pub/sub：发布订阅模式，扇出消息。
 package pubsub
 
 import (

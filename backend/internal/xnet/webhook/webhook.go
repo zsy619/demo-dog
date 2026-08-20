@@ -1,3 +1,4 @@
+// Package webhook Webhook 回调：异步发送 HTTP 回调并重试。
 package webhook
 
 // Outbound webhook delivery with HMAC signing + retry.

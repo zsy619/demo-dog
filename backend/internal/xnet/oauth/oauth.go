@@ -1,3 +1,4 @@
+// Package oauth OAuth 授权码流程：state 校验 + token 交换。
 package oauth
 
 import (

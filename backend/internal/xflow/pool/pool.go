@@ -1,3 +1,4 @@
+// Package pool 通用 goroutine 池：固定大小工作协程池。
 package pool
 
 import (

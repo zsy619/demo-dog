@@ -1,3 +1,4 @@
+// Package slo SLO 追踪：记录成功/失败计数与烧毁率。
 package slo
 
 import (

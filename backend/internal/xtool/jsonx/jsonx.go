@@ -1,3 +1,4 @@
+// Package jsonx JSON 扩展：增量编解码、字段合并、流式解析。
 package jsonx
 
 import (

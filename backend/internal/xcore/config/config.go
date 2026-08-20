@@ -1,3 +1,4 @@
+// Package config 配置加载：从环境变量 / 配置文件 / 默认值按优先级读取。
 package config
 
 // Hot-reload configuration.

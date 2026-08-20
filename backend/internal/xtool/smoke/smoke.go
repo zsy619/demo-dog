@@ -1,3 +1,4 @@
+// Package smoke 烟雾测试：批量发送预定义请求验证服务可用。
 package smoke
 
 import (

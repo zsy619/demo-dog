@@ -1,3 +1,4 @@
+// Package quota 配额管理器：按 key 维护容量配额，支持租户隔离。
 package quota
 
 import (

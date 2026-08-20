@@ -1,3 +1,4 @@
+// Package debug 调试端点：暴露内部状态（pprof 之外的调试信息）。
 package debug
 
 import (

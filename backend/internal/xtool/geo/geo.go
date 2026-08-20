@@ -1,3 +1,4 @@
+// Package geo 地理编码：地址/经纬度转换 + 距离计算。
 package geo
 
 import (

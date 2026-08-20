@@ -1,3 +1,4 @@
+// Package lru2c 2Q 风格 LRU：通过 A1/A2 两段队列模拟 LRU 近似。
 package lru2c
 
 import (

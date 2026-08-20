@@ -1,3 +1,4 @@
+// Package retention 保留策略：自动删除过期数据并统计空间占用。
 package retention
 
 // Per-tenant retention policies + cold-storage eviction.

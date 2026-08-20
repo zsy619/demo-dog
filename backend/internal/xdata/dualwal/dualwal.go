@@ -1,3 +1,4 @@
+// Package dualwal 双写 WAL：写入双份日志以提高持久性。
 package dualwal
 
 import (

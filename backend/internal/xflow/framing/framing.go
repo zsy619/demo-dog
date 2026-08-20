@@ -1,3 +1,4 @@
+// Package framing 帧协议：分隔符 + 长度前缀的流式消息编解码。
 package framing
 
 import (

@@ -1,3 +1,4 @@
+// Package iplimit IP 级限流：按客户端 IP 维度跟踪请求速率。
 package iplimit
 
 import (

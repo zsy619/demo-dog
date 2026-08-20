@@ -1,3 +1,4 @@
+// Package tpc 三方提交：协调 prepare/commit 阶段的一致性。
 package tpc
 
 import (

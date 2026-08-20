@@ -1,3 +1,4 @@
+// Package tracing 调用链路追踪：Span / Trace ID 上下文传播。
 package tracing
 
 // Distributed tracing primitives.

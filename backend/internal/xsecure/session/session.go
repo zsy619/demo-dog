@@ -1,3 +1,4 @@
+// Package session 会话管理：会话存储 + 超时清理。
 package session
 
 import (

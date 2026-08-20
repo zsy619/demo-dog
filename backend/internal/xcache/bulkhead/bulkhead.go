@@ -1,3 +1,4 @@
+// Package bulkhead 隔板限流：通过并发上限隔离不同 key 集合的负载。
 package bulkhead
 
 import (

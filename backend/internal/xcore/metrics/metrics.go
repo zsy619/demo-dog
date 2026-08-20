@@ -1,3 +1,4 @@
+// Package metrics Prometheus 指标注册器：Counter / Gauge / Histogram。
 package metrics
 
 // Prometheus-compatible metrics registry.

@@ -1,3 +1,4 @@
+// Package idempotency 幂等键管理：检测重放请求并去重。
 package idempotency
 
 import (

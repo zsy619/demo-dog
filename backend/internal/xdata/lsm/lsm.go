@@ -1,3 +1,4 @@
+// Package lsm LSM 结构：内存 + 多层磁盘的写入优化存储。
 package lsm
 
 import (

@@ -1,3 +1,4 @@
+// Package pipeline Pipeline 模式：阶段链式处理，支持 ctx 取消。
 package pipeline
 
 import (

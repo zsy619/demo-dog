@@ -1,3 +1,4 @@
+// Package tarx tar 扩展：流式打包/解包，避免全部加载。
 package tarx
 
 import (

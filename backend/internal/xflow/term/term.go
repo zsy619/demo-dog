@@ -1,3 +1,4 @@
+// Package term 终止信号：监听 SIGTERM/SIGINT 触发优雅停机。
 package term
 
 import (

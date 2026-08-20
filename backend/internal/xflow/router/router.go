@@ -1,3 +1,4 @@
+// Package router HTTP 路由：路径段匹配 + 方法分发。
 package router
 
 import (

@@ -1,3 +1,4 @@
+// Package softdel 软删除：标记删除而非真正删除，支持恢复。
 package softdel
 
 import (

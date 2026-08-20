@@ -1,3 +1,4 @@
+// Package secretrot 密钥轮换：定期更新密钥并保留历史。
 package secretrot
 
 import (

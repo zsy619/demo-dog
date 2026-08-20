@@ -1,3 +1,4 @@
+// Package merkle 默克尔树：构建内容哈希摘要以校验一致性。
 package merkle
 
 import (

@@ -1,3 +1,4 @@
+// Package lifecycle 进程生命周期：注册启动/停止钩子，统一编排。
 package lifecycle
 
 // Graceful shutdown with drain timeout.

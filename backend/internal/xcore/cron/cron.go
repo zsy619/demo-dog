@@ -1,3 +1,4 @@
+// Package cron 定时任务：解析 5 段 cron 表达式并周期触发任务。
 package cron
 
 import (

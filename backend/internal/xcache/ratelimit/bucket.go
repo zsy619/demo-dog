@@ -1,3 +1,4 @@
+// Package ratelimit 速率限制：令牌桶与漏桶，支持按 key 隔离。
 package ratelimit
 
 // Token bucket + leaky bucket rate limiter.

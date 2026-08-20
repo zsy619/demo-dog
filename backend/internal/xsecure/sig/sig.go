@@ -1,3 +1,4 @@
+// Package sig 签名校验：通用请求签名工具。
 package sig
 
 import (

@@ -1,3 +1,4 @@
+// Package vault 凭证保管：加密存储 API key / 密码等敏感配置，支持生命周期管理。
 package vault
 
 import (

@@ -1,3 +1,4 @@
+// Package topo 拓扑结构：表示节点/边的层级关系，支持序列化与遍历。
 package topo
 
 import (

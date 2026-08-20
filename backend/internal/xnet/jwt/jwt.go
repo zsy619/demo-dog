@@ -1,3 +1,4 @@
+// Package jwt JWT 签发与校验：支持多种签名算法。
 package jwt
 
 import (

@@ -1,3 +1,4 @@
+// Package wal 预写日志：先写日志再修改状态，支持崩溃恢复与重放。
 package wal
 
 import (

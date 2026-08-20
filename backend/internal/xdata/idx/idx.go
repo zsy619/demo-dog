@@ -1,3 +1,4 @@
+// Package idx 通用索引抽象：定义索引接口，便于替换实现。
 package idx
 
 import (

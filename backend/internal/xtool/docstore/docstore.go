@@ -1,3 +1,4 @@
+// Package docstore 文档存储辅助：基于 key-value 的文档 CRUD。
 package docstore
 
 import (

@@ -1,3 +1,4 @@
+// Package breaker 断路器：跟踪失败率，超过阈值时短路以保护下游。
 package breaker
 
 import (

@@ -1,3 +1,4 @@
+// Package rbac RBAC 引擎：角色继承 + 权限校验。
 package rbac
 
 import (

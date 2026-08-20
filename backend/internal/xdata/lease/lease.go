@@ -1,3 +1,4 @@
+// Package lease 租约管理：自动续约与过期检测。
 package lease
 
 import (

@@ -1,3 +1,4 @@
+// Package ring 一致性哈希环：节点映射 + 副本定位。
 package ring
 
 import (

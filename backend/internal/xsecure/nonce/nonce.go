@@ -1,3 +1,4 @@
+// Package nonce Nonce 防重放：跟踪 nonce 使用情况。
 package nonce
 
 import (

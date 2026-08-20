@@ -1,3 +1,4 @@
+// Package cache 通用内存缓存：支持 GetOrLoad、TTL、容量淘汰。
 package cache
 
 import (

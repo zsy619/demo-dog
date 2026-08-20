@@ -1,3 +1,4 @@
+// Package tlsconfig TLS 配置：生成安全的 tls.Config 实例。
 package tlsconfig
 
 import (

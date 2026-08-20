@@ -1,3 +1,4 @@
+// Package wpool worker 池：可配置缓冲队列的任务调度。
 package wpool
 
 import (

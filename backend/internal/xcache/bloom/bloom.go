@@ -1,3 +1,4 @@
+// Package bloom 布隆过滤器：判断一个 key 是否可能在集合中（可能有误报，无漏报）。
 package bloom
 
 import (

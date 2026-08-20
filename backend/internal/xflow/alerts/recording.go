@@ -10,6 +10,7 @@
 //
 // Recording rules live alongside alert rules in /api/v1/rules and
 // appear under data.groups[].rules[] with type=recording.
+// Package alerts 告警规则引擎：评估规则并触发告警事件。
 package alerts
 
 import (

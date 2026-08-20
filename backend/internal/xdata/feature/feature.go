@@ -1,3 +1,4 @@
+// Package feature 特性开关：按 key 评估启用/禁用，支持租户隔离。
 package feature
 
 // Per-tenant feature flags with audit trail.

@@ -1,3 +1,4 @@
+// Package radix Radix 树：最长前缀匹配，支持压缩节点。
 package radix
 
 import (

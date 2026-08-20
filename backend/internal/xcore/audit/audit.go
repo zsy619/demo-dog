@@ -1,3 +1,4 @@
+// Package audit 审计事件日志：记录关键操作，支持查询与过滤。
 package audit
 
 import (

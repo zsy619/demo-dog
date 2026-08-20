@@ -1,3 +1,4 @@
+// Package registry 服务注册表：按名字注册与查找服务实例。
 package registry
 
 import (
