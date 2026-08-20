@@ -37,7 +37,7 @@ func TestStrengthString(t *testing.T) {
 
 func TestHashVerify(t *testing.T) {
 	p := "MyStrongPass!1"
-	h, err := Hash(p, 1000)
+	h, err := Hash(p, MinIterations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,3 +63,35 @@ func TestVerify_BadFormat(t *testing.T) {
 		t.Fatal("应报错")
 	}
 }
+
+func TestNeedsUpgrade(t *testing.T) {
+	if !NeedsUpgrade("1000:abc:def") {
+		t.Fatal("低 iter 应升级")
+	}
+	h, err := Hash("p", MinIterations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if NeedsUpgrade(h) {
+		t.Fatal("新 hash 不应升级")
+	}
+}
+
+func TestLowIterRejected(t *testing.T) {
+	if _, err := Hash("p", 100); err != ErrInvalidIterations {
+		t.Fatal("应 ErrInvalidIterations")
+	}
+}
+
+func TestVerifyOldHashRejected(t *testing.T) {
+	// 模拟旧系统的低 iter hash
+	old := "10000:YWJj:ZWQ" // 手动构造
+	ok, err := Verify(old, "x")
+	if err != ErrInvalidIterations {
+		t.Fatalf("err=%v ok=%v 应 ErrInvalidIterations", err, ok)
+	}
+	if ok {
+		t.Fatal("低 iter 应 false")
+	}
+}
+

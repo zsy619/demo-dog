@@ -101,10 +101,21 @@ func isCommon(p string) bool {
 	return false
 }
 
-// Hash 是 PBKDF2-SHA256 编码后的字符串（salt:hash）。
+// 推荐迭代次数（OWASP 2024 标准）。
+const MinIterations = 600_000
+
+// ErrInvalidIterations 在迭代次数过低时返回（低于 MinIterations）。
+var ErrInvalidIterations = errors.New("password: 迭代次数过低（最少 600000）")
+
+// ErrEncodedFormat 在编码格式错误时返回。
+var ErrEncodedFormat = errors.New("password: 编码格式错误")
+
+// Hash 用 PBKDF2-SHA256 编码密码，输出格式 "iter:salt:hash"。
+// iter < MinIterations 时返回 ErrInvalidIterations；
+// 调用方应基于硬件性能选择合适的 iter（OWASP 推荐 600000+）。
 func Hash(password string, iter int) (string, error) {
-	if iter < 1000 {
-		iter = 10000
+	if iter < MinIterations {
+		return "", ErrInvalidIterations
 	}
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -115,25 +126,42 @@ func Hash(password string, iter int) (string, error) {
 }
 
 // Verify 校验明文密码与已编码字符串。
+// iter 低于 MinIterations 也会返回 false（视为不通过）。
 func Verify(encoded, password string) (bool, error) {
-	parts := strings.Split(encoded, ":")
+	parts := strings.SplitN(encoded, ":", 3)
 	if len(parts) != 3 {
-		return false, errors.New("password: 编码格式错误")
+		return false, ErrEncodedFormat
 	}
 	iter, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("password: 解析迭代次数: %w", err)
+	}
+	if iter < MinIterations {
+		return false, ErrInvalidIterations
 	}
 	salt, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("password: 解析 salt: %w", err)
 	}
 	expected, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("password: 解析 hash: %w", err)
 	}
 	got := pbkdf2(password, salt, iter, 32)
 	return subtle.ConstantTimeCompare(got, expected) == 1, nil
+}
+
+// NeedsUpgrade 判断已编码的 iter 是否需要升级到 MinIterations。
+func NeedsUpgrade(encoded string) bool {
+	parts := strings.SplitN(encoded, ":", 3)
+	if len(parts) != 3 {
+		return true
+	}
+	iter, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return true
+	}
+	return iter < MinIterations
 }
 
 // pbkdf2 实现 PBKDF2-HMAC-SHA256。
