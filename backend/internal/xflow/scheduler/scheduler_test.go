@@ -65,7 +65,8 @@ func TestPanicRecover(t *testing.T) {
 	defer s.Stop()
 	s.Once("p", 10*time.Millisecond, func(ctx context.Context) { panic("boom") })
 	time.Sleep(100 * time.Millisecond)
-	v, ok := captured.Load().(string); _ = v
+	v, ok := captured.Load().(string)
+	_ = v
 	if !ok {
 		t.Fatal("panic 未被捕获")
 	}

@@ -50,7 +50,7 @@ type Manager struct {
 	deadline time.Duration
 
 	// 结果收集
-	errs  []error
+	errs    []error
 	elapsed atomic.Int64 // 纳秒
 
 	onHookErr func(name string, err error)

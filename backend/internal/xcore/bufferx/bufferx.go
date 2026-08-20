@@ -150,7 +150,7 @@ func (b *Buffer) WriteString(s string) (int, error) {
 
 // 断言接口实现。
 var (
-	_ io.Writer      = (*Buffer)(nil)
-	_ io.ByteWriter  = (*Buffer)(nil)
+	_ io.Writer       = (*Buffer)(nil)
+	_ io.ByteWriter   = (*Buffer)(nil)
 	_ io.StringWriter = (*Buffer)(nil)
 )

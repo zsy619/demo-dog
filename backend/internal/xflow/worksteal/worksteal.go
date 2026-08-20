@@ -30,8 +30,8 @@ type Scheduler struct {
 }
 
 type deque struct {
-	mu    sync.Mutex
-	tasks [][]Job
+	mu        sync.Mutex
+	tasks     [][]Job
 	hasPoison atomic.Bool
 }
 

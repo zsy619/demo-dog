@@ -115,7 +115,7 @@ func TestNilTask(t *testing.T) {
 func TestWaitIdempotent(t *testing.T) {
 	p := New(2, 4)
 	p.Wait()
-	p.Wait() // 幂等
+	p.Wait()  // 幂等
 	p.Close() // 幂等
 }
 

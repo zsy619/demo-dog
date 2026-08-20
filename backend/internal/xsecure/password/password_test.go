@@ -94,4 +94,3 @@ func TestVerifyOldHashRejected(t *testing.T) {
 		t.Fatal("低 iter 应 false")
 	}
 }
-

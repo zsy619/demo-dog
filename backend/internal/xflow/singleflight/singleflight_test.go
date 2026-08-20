@@ -68,7 +68,10 @@ func TestPanic(t *testing.T) {
 func TestPanicShared(t *testing.T) {
 	g := New[string, int]()
 	var n atomic.Int32
-	type result struct{ v int; err error }
+	type result struct {
+		v   int
+		err error
+	}
 	res := make(chan result, 2)
 	start := make(chan struct{})
 	go func() {

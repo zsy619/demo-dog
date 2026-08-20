@@ -68,8 +68,8 @@ func (h *taskHeap) Pop() any {
 // New 创建一个 Scheduler。
 func New() *Scheduler {
 	return &Scheduler{
-		stop: make(chan struct{}),
-		wake: make(chan struct{}, 1),
+		stop:    make(chan struct{}),
+		wake:    make(chan struct{}, 1),
 		onPanic: func(string, error) {},
 		onError: func(string, error) {},
 	}
