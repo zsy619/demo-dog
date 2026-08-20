@@ -89,7 +89,7 @@ func NewPool(opts Options) *Pool {
 	return p
 }
 
-// Submit enqueues a job. Returns false if the queue is full (backpressure).
+// Submit 将任务入队。若队列已满则返回 false（背压）。
 func (p *Pool) Submit(j Job) bool {
 	select {
 	case p.queue <- j:
@@ -129,7 +129,7 @@ func (p *Pool) Stats() Stats {
 	}
 }
 
-// worker consumes jobs from the queue and runs them with retry semantics.
+// worker 从队列消费任务并按重试语义运行它们。
 func (p *Pool) worker() {
 	defer p.wg.Done()
 	for j := range p.queue {
@@ -137,7 +137,7 @@ func (p *Pool) worker() {
 	}
 }
 
-// processWithRetry runs the job, applying exponential backoff with jitter on errors.
+// processWithRetry 运行任务，出错时应用带抖动的指数退避。
 func (p *Pool) processWithRetry(j Job) {
 	var err error
 	for attempt := 0; attempt <= p.retryMax; attempt++ {
@@ -171,7 +171,7 @@ func (p *Pool) processWithRetry(j Job) {
 	}
 }
 
-// jitterInt returns a uniform random integer in [0, max).
+// jitterInt 返回 [0, max) 范围内的均匀随机整数。
 func (p *Pool) jitterInt(max int) int {
 	p.mu.Lock()
 	defer p.mu.Unlock()

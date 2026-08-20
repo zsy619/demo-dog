@@ -38,7 +38,7 @@ type SLO struct {
 	BadCounter   string
 }
 
-// Validate reports an error if the SLO is unusable.
+// Validate 在 SLO 不可用时报告错误。
 func (s *SLO) Validate() error {
 	if s.Name == "" {
 		return errors.New("name required")

@@ -232,7 +232,7 @@ func (m *Manager) Sweep(rows []Row, dropper func(Row) error, mover func(Row, str
 	return res, nil
 }
 
-// Row is a generic log row that the sweeper acts on.
+// Row 是清理器操作的通用日志行。
 type Row struct {
 	ID        string
 	Tenant    string

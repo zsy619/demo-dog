@@ -45,7 +45,7 @@ func New(d time.Duration) *Manager {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试的时间源。
 func (m *Manager) WithTime(now func() time.Time) *Manager {
 	m.now = now
 	return m

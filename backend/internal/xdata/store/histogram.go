@@ -7,7 +7,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// histogramAgg aggregates histogram data points for a single (service, name)
+// histogramAgg 聚合单个 (service, name) 的直方图数据点
 // series. It tracks:
 //   * the latest explicit bucket boundaries + per-bucket counts (OTel format)
 //   * a t-digest of raw scalar observations (Round 30) so quantile
@@ -25,13 +25,13 @@ type histogramAgg struct {
 	max     float64
 	hasData bool
 
-	// td is the streaming quantile estimator. Updated by ObserveRaw()
+	// td 是流式分位数估计器。由 ObserveRaw() 更新
 	// (callers feeding scalar metric points) and by add() when the
 	// exporter provided a sum/n for an explicit-bucket histogram.
 	td *TDigest
 }
 
-// newHistogramAgg builds a histogramAgg from a single OTel-style data
+// newHistogramAgg 从单个 OTel 风格的数据
 // point. The bucket bounds are taken from the point (assumed ascending,
 // last entry is +Inf marker). bucket counts from the same point seed
 // the aggregate; subsequent points with the same bounds add into the
@@ -61,7 +61,7 @@ func newHistogramAgg(p model.MetricPoint) *histogramAgg {
 	return h
 }
 
-// add merges another OTel histogram data point into the aggregate.
+// add 将另一个 OTel 直方图数据点合并到聚合中。
 func (h *histogramAgg) add(p model.MetricPoint) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -138,7 +138,7 @@ func (h *histogramAgg) QuantileStreaming(q float64) float64 {
 	return h.td.Quantile(q)
 }
 
-// snapshot returns a copy of the current aggregate state for safe
+// snapshot 返回当前聚合状态的副本，以便安全地
 // external consumption. Returns nil if no data has been added.
 func (h *histogramAgg) snapshot() *model.HistogramView {
 	h.mu.Lock()
@@ -158,7 +158,7 @@ func (h *histogramAgg) snapshot() *model.HistogramView {
 	}
 }
 
-// quantile returns the q-th percentile (0..1) using the OTel
+// quantile 使用 OTel 方式返回第 q 百分位（0..1）
 // histogram bucket boundaries. We treat each bucket as [lower, upper)
 // with linear interpolation inside the bucket for finer granularity.
 // Returns 0 if there is no data. q is clamped to [0,1].
@@ -197,7 +197,7 @@ func (h *histogramAgg) quantile(q float64) float64 {
 	return h.max
 }
 
-// sameBounds compares two slices for bucket-bound equivalence. We
+// sameBounds 比较两个切片是否桶边界等价。我们
 // require length match + element equality. Exporters that use a
 // different number of buckets will trigger a reset, which is the
 // safest behavior.
@@ -213,7 +213,7 @@ func sameBounds(a, b []float64) bool {
 	return true
 }
 
-// sortBucketBounds returns a copy of bounds with the +Inf (math.MaxFloat64)
+// sortBucketBounds 返回 bounds 的副本，并将 +Inf（math.MaxFloat64）
 // marker moved to the end if it is not already there. Some exporters put
 // the overflow first; this normalizes so downstream code is uniform.
 func sortBucketBounds(b []float64) []float64 {

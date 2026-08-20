@@ -38,7 +38,7 @@ func NewBus() *Bus {
 // topic nobody has registered.
 var ErrUnknownTopic = errors.New("unknown topic")
 
-// Subscribe registers a subscriber for a topic.
+// Subscribe 为一个主题注册订阅者。
 func (b *Bus) Subscribe(topic string, bufferSize int) *Subscriber {
 	if bufferSize <= 0 {
 		bufferSize = 16

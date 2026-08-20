@@ -17,14 +17,14 @@ func New() *Clock {
 	return &Clock{entry: make(map[string]uint64)}
 }
 
-// Set replaces the counter for node.
+// Set 替换节点的计数器。
 func (c *Clock) Set(node string, v uint64) {
 	c.mu.Lock()
 	c.entry[node] = v
 	c.mu.Unlock()
 }
 
-// Tick increments the counter for self and returns the new
+// Tick 将 self 的计数器递增并返回新
 // value.
 func (c *Clock) Tick(self string) uint64 {
 	c.mu.Lock()

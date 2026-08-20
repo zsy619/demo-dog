@@ -176,7 +176,7 @@ func (m *Manager) Bool(name, tenant string) (bool, bool) {
 	return b, ok
 }
 
-// String returns the string value for the tenant.
+// String 返回租户的字符串值。
 func (m *Manager) String(name, tenant string) (string, bool) {
 	v, ok := m.Evaluate(name, tenant)
 	if !ok {

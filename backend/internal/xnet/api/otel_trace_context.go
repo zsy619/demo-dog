@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
-// W3C Trace Context (https://www.w3.org/TR/trace-context/) parser.
+// W3C Trace Context（https://www.w3.org/TR/trace-context/）解析器。
 //
-// A `traceparent` header has the form:
+// `traceparent` 头部格式如下：
 //
 //   version-traceid-spanid-flags
 //
-// where version is two hex chars, traceid is 32 hex chars, spanid is
-// 16 hex chars, flags is two hex chars (bit 0 = sampled).
+// 其中 version 是两个十六进制字符，traceid 是 32 个十六进制字符，
+// spanid 是 16 个十六进制字符，flags 是两个十六进制字符（位 0 = 已采样）。
 //
-// Example:
+// 示例：
 //
 //   traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 //
-// `tracestate` is a comma-separated list of vendor-specific
-// key=value pairs that augment the trace. We accept and re-emit it
-// verbatim.
+// `tracestate` 是一个以逗号分隔的厂商特定
+// key=value 对列表，用于补充 trace。我们按原样接受
+// 并重新发出。
 
 type TraceContext struct {
 	Version    string
@@ -37,9 +37,9 @@ var (
 	invalidHex  = regexp.MustCompile(`^0+$`)
 )
 
-// ParseTraceContext extracts the W3C trace context from request
-// headers. Returns nil if absent or invalid; callers can fall back to
-// generating a fresh context.
+// ParseTraceContext 从请求头中提取 W3C trace context。
+// 如果缺失或无效则返回 nil，调用方可以
+// 回退到生成一个新的 context。
 func ParseTraceContext(r *http.Request) *TraceContext {
 	tp := strings.TrimSpace(r.Header.Get("traceparent"))
 	if tp == "" {
@@ -51,17 +51,17 @@ func ParseTraceContext(r *http.Request) *TraceContext {
 	}
 	traceID := strings.ToLower(m[2])
 	spanID := strings.ToLower(m[3])
-	// All-zero trace_id or span_id is invalid per spec.
+	// 全零的 trace_id 或 span_id 依规范无效。
 	if invalidHex.MatchString(traceID) || invalidHex.MatchString(spanID) {
 		return nil
 	}
 	flags := m[4]
 	sampled := false
-	// Bit 0 of the first nibble is the sampled flag.
+	// 第一个半字节的位 0 是已采样标志。
 	if len(flags) >= 1 {
-		// The flags byte is encoded as two hex chars: flags[0] is the
-		// high nibble and flags[1] is the low nibble. The sampled flag
-		// is bit 0 of the byte.
+		// flags 字节编码为两个十六进制字符：flags[0] 是高位半字节，
+		// flags[1] 是低位半字节。已采样标志是字节的位 0。
+		// 
 		hi := hexNibble(flags[0])
 		lo := hexNibble(flags[1])
 		if hi >= 0 && lo >= 0 && ((hi<<4 | lo) & 1) == 1 {
@@ -78,9 +78,9 @@ func ParseTraceContext(r *http.Request) *TraceContext {
 	}
 }
 
-// InjectTraceContext writes the W3C trace context into the response
-// headers so callers downstream can stitch their spans to the same
-// trace.
+// InjectTraceContext 将 W3C trace context 写入响应头，
+// 以便下游调用方将其 span 拼接到同一 trace。
+// 
 func InjectTraceContext(rw http.ResponseWriter, tc *TraceContext) {
 	if tc == nil {
 		return
@@ -92,9 +92,9 @@ func InjectTraceContext(rw http.ResponseWriter, tc *TraceContext) {
 	}
 }
 
-// GenerateTraceContext returns a fresh trace + span id pair. Used
-// when a request has no incoming context and we still want to
-// attach one to the response.
+// GenerateTraceContext 返回一对新的 trace + span id。
+// 用于请求未携带传入 context、但仍希望
+// 将其附加到响应上的情况。
 func GenerateTraceContext() *TraceContext {
 	return &TraceContext{
 		Version: "00",
@@ -105,17 +105,17 @@ func GenerateTraceContext() *TraceContext {
 	}
 }
 
-// childSpanID generates a fresh 16-hex span id; the helper exists so
-// trace propagation code is read top-down.
+// childSpanID 生成一个新的 16 字符十六进制的 span id；
+// 抽出此辅助函数以便 trace 传播代码可自顶向下阅读。
 func childSpanID() string { return randomHex(16) }
 
-// randomHex produces n hex characters from crypto/rand via stdlib.
-// We import here so trace context generation stays in this file.
+// randomHex 通过 stdlib 的 crypto/rand 生成 n 个十六进制字符。
+// 这里 import 是为了使 trace context 生成代码集中在此文件。
 func randomHex(n int) string {
 	const hex = "0123456789abcdef"
 	b := make([]byte, n)
-	// Use crypto/rand via the stdlib. Inline-importing avoids creating
-	// an import cycle with the api package.
+	// 通过 stdlib 使用 crypto/rand。内联导入避免
+	// 与 api 包产生导入循环。
 	r := cryptoRandBytes((n + 1) / 2)
 	for i := range b {
 		if i%2 == 0 {
@@ -127,7 +127,7 @@ func randomHex(n int) string {
 	return string(b)
 }
 
-// hexNibble returns 0..15 for a hex character, or -1 if not a hex char.
+// hexNibble 返回十六进制字符对应的 0..15，若不是十六进制字符则返回 -1。
 func hexNibble(c byte) int {
 	switch {
 	case c >= '0' && c <= '9':

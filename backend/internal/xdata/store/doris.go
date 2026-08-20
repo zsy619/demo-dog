@@ -77,7 +77,7 @@ func (c Config) Validate() error {
 type Doris struct {
 	cfg Config
 
-	// wal is the optional write-ahead log. When set, every insert
+	// wal 是可选的预写日志。设置后，每次插入
 	// appends a record so a crash + restart can replay the last few
 	// seconds of writes without losing them.
 	walMu sync.Mutex
@@ -104,7 +104,7 @@ type Doris struct {
 	hotSpans  map[string][]model.SpanRecord // key=trace_id
 	coldSpans []model.SpanRecord
 
-	// 1m & 5m materialized views for metrics, keyed by service|name.
+	// 为指标预计算 1m 和 5m 物化视图，按 service|name 索引。
 	muMV         sync.RWMutex
 	mvMinute     map[string][]model.MVBucket
 	mvFiveMinute map[string][]model.MVBucket
@@ -288,7 +288,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 	return accepted
 }
 
-// bucketContainsLabelSet returns true if any point in bucket has the
+// bucketContainsLabelSet 若桶内任意点具有
 // same label map as `want`. The check is O(N) but N is bounded by
 // HotMetricCap (default 4096), and label maps are usually small.
 func bucketContainsLabelSet(bucket []model.MetricPoint, want map[string]string) bool {
@@ -372,7 +372,7 @@ func (d *Doris) SetWAL(w *WAL) {
 	d.wal = w
 }
 
-// appendWAL records a batch to the WAL. Safe with nil WAL.
+// appendWAL 将一批记录写入 WAL。对 nil WAL 安全。
 func (d *Doris) appendWAL(op uint32, payload any) {
 	d.walMu.Lock()
 	w := d.wal
@@ -404,7 +404,7 @@ func (d *Doris) ReplayInto(w *WAL) error {
 	}
 	return nil
 }
-// touchServices increments per-service counters for Logs.
+// touchServices 增加 Logs 的每服务计数器。
 func (d *Doris) touchServices(rows []model.LogRecord) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
@@ -415,7 +415,7 @@ func (d *Doris) touchServices(rows []model.LogRecord) {
 	}
 }
 
-// touchServicesByMetrics increments per-service counters for Metrics.
+// touchServicesByMetrics 增加 Metrics 的每服务计数器。
 func (d *Doris) touchServicesByMetrics(rows []model.MetricPoint) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
@@ -426,7 +426,7 @@ func (d *Doris) touchServicesByMetrics(rows []model.MetricPoint) {
 	}
 }
 
-// touchServicesBySpans increments per-service counters for Spans.
+// touchServicesBySpans 增加 Spans 的每服务计数器。
 func (d *Doris) touchServicesBySpans(rows []model.SpanRecord) {
 	d.muSum.Lock()
 	defer d.muSum.Unlock()
@@ -437,7 +437,7 @@ func (d *Doris) touchServicesBySpans(rows []model.SpanRecord) {
 	}
 }
 
-// ensure returns a service summary, creating it on demand.
+// ensure 返回一个服务摘要，按需创建。
 // Requires d.muSum to be held.
 func (d *Doris) ensure(name string) *model.ServiceSummary {
 	s, ok := d.sum[name]
@@ -448,7 +448,7 @@ func (d *Doris) ensure(name string) *model.ServiceSummary {
 	return s
 }
 
-// ensureFor is like ensure but additionally records the tenant. We key
+// ensureFor 与 ensure 类似，但额外记录租户。我们按
 // service summaries by (tenant||service) so two tenants with the same
 // service name do not collide in the summary map.
 func (d *Doris) ensureFor(tenant, name string) *model.ServiceSummary {
@@ -461,7 +461,7 @@ func (d *Doris) ensureFor(tenant, name string) *model.ServiceSummary {
 	return s
 }
 
-// tenantKey composes a stable map key from tenant + service. The
+// tenantKey 由 tenant + service 组成稳定的 map key。该
 // separator is a control byte unlikely to appear in service names.
 func tenantKey(tenant, name string) string {
 	if tenant == "" {
@@ -512,7 +512,7 @@ func (d *Doris) GetService(tenant, name string) (model.ServiceSummary, bool) {
 	return s2, true
 }
 
-// recentLabelKeys returns the unique label keys seen in this service's hot logs.
+// recentLabelKeys 返回该服务热日志中出现的唯一 label key。
 func (d *Doris) recentLabelKeys(service string) []string {
 	d.muLogs.RLock()
 	defer d.muLogs.RUnlock()
@@ -534,7 +534,7 @@ func (d *Doris) recentLabelKeys(service string) []string {
 	return out
 }
 
-// computeErrorRate scans logs in the hot tier to derive a service error rate.
+// computeErrorRate 扫描热层日志以推导服务错误率。
 // Locks are reentrant on the same goroutine; we use RLock here.
 func (d *Doris) computeErrorRate(service string) float64 {
 	d.muLogs.RLock()
@@ -555,7 +555,7 @@ func (d *Doris) computeErrorRate(service string) float64 {
 	return float64(errs) / float64(total)
 }
 
-// computeP99 estimates p99 latency from spans in the hot tier.
+// computeP99 从热层 span 估算 p99 延迟。
 func (d *Doris) computeP99(service string) float64 {
 	d.muSpans.RLock()
 	defer d.muSpans.RUnlock()
@@ -578,7 +578,7 @@ func (d *Doris) computeP99(service string) float64 {
 	return float64(samples[idx])
 }
 
-// computeQPS computes QPS over the last 60s of hot metric points for the service.
+// computeQPS 对该服务最近 60s 的热指标点计算 QPS。
 func (d *Doris) computeQPS(service string) float64 {
 	d.muMetrics.RLock()
 	defer d.muMetrics.RUnlock()
@@ -597,7 +597,7 @@ func (d *Doris) computeQPS(service string) float64 {
 	return float64(recent) / 60.0
 }
 
-// updateMetricMV maintains simplified 1m and 5m rollups in MV buckets.
+// updateMetricMV 在 MV 桶中维护简化的 1m 和 5m 滚动聚合。
 // The key is service|name, the value is a downsampled series of
 // MVBucket (sum/count/min/max) which is converted to mean values when
 // the MV is read out. This replaces the previous running-average hack
@@ -617,7 +617,7 @@ func (d *Doris) updateMetricMV(in []model.MetricPoint) {
 	}
 }
 
-// appendMVBucket inserts value into the bucket matching ts. Out-of-order
+// appendMVBucket 将 value 插入匹配 ts 的桶。乱序
 // arrivals are handled by linear search; pathological resort only happens
 // when an older ts slips in after a newer one (rare in practice).
 func appendMVBucket(series []model.MVBucket, value float64, ts int64) []model.MVBucket {
@@ -662,7 +662,7 @@ func appendMVBucket(series []model.MVBucket, value float64, ts int64) []model.MV
 	return append(series, model.MVBucket{Ts: ts, Sum: value, Count: 1, Min: value, Max: value})
 }
 
-// mvToSeries converts MV buckets to a SeriesPoint series (mean values).
+// mvToSeries 将 MV 桶转换为 SeriesPoint 序列（均值）。
 func mvToSeries(buckets []model.MVBucket) []model.SeriesPoint {
 	out := make([]model.SeriesPoint, len(buckets))
 	for i, b := range buckets {
@@ -851,7 +851,7 @@ func (d *Doris) QueryTraces(traceID, service string, limit int) model.QueryResul
 	}
 }
 
-// SuccessCounts returns the number of ok and error spans for the
+// SuccessCounts 返回的 ok 和 error span 数。
 // given service with start_time >= sinceMillis. Used by the alerts
 // engine to compute burn rates without exposing the full span set.
 func (d *Doris) SuccessCounts(service string, sinceMillis int64) (ok int, errs int) {

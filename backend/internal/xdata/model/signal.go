@@ -26,7 +26,7 @@ const (
 	SeverityFatal Severity = "FATAL"
 )
 
-// SeverityRank returns 0..5 for TRACE..FATAL. Unknown severities rank below TRACE.
+// SeverityRank 对 TRACE..FATAL 返回 0..5。未知严重级排在 TRACE 之下。
 func (s Severity) Rank() int {
 	switch s {
 	case SeverityTrace:
@@ -192,7 +192,7 @@ type QueryResult struct {
 	Stats  QueryStats     `json:"stats"`
 }
 
-// Row is a generic columnar row rendered by the frontend.
+// Row 是前端渲染的通用列式行。
 type Row map[string]any
 
 // QueryStats 报告查询引擎统计。

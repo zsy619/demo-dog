@@ -1,4 +1,8 @@
-// Package cron 定时任务：解析 5 段 cron 表达式并周期触发任务。
+// Package cron 定时任务:解析 5 段 cron 表达式并周期触发任务。
+//
+// 本包按类型拆分到多个文件:
+//   - schedule.go  Schedule 表达式 + 解析/匹配
+//   - scheduler.go Task + Scheduler 主体
 package cron
 
 import (
@@ -6,12 +10,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 // Schedule 是 5 段的 cron 表达式。
-// 字段顺序：minute hour dom month dow（分钟 小时 日 月 星期）
+// 字段顺序:minute hour dom month dow(分钟 小时 日 月 星期)
 type Schedule struct {
 	Minute map[int]bool
 	Hour   map[int]bool
@@ -20,7 +23,9 @@ type Schedule struct {
 	DOW    map[int]bool
 }
 
-// Parse 解析一个 5 段 cron 表达式。支持 *、N、N-M、*/N 以及逗号列表。
+// Parse 解析一个 5 段 cron 表达式。
+//
+// 支持 *, N, N-M, */N 以及逗号列表。
 func Parse(expr string) (*Schedule, error) {
 	fields := strings.Fields(expr)
 	if len(fields) != 5 {
@@ -51,6 +56,7 @@ func Parse(expr string) (*Schedule, error) {
 	return s, nil
 }
 
+// parseField 按逗号拆分成多个 part 依次解析。
 func parseField(field string, lo, hi int, dst *map[int]bool) error {
 	for _, part := range strings.Split(field, ",") {
 		if err := parsePart(part, lo, hi, dst); err != nil {
@@ -60,6 +66,9 @@ func parseField(field string, lo, hi int, dst *map[int]bool) error {
 	return nil
 }
 
+// parsePart 解析单个 cron 表达式片段。
+//
+// 支持 *, N, N-M, */N;*/N 仅允许 * 作为基础。
 func parsePart(part string, lo, hi int, dst *map[int]bool) error {
 	step := 1
 	if i := strings.Index(part, "/"); i >= 0 {
@@ -105,6 +114,8 @@ func parsePart(part string, lo, hi int, dst *map[int]bool) error {
 }
 
 // Match 在 t 满足 schedule 时返回 true。
+//
+// 注意:DOM 与 DOW 是 OR 关系(传统 Vixie cron 语义)。
 func (s *Schedule) Match(t time.Time) bool {
 	if !s.Minute[t.Minute()] {
 		return false
@@ -121,7 +132,9 @@ func (s *Schedule) Match(t time.Time) bool {
 	return true
 }
 
-// Next 返回 schedule 匹配的下一次时间，严格在 t 之后。
+// Next 返回 schedule 匹配的下一次时间,严格在 t 之后。
+//
+// 一年内未找到则返回 time.Time{}。
 func (s *Schedule) Next(t time.Time) time.Time {
 	cur := t.Add(time.Minute)
 	cur = time.Date(cur.Year(), cur.Month(), cur.Day(), cur.Hour(), cur.Minute(), 0, 0, cur.Location())
@@ -132,72 +145,4 @@ func (s *Schedule) Next(t time.Time) time.Time {
 		cur = cur.Add(time.Minute)
 	}
 	return time.Time{}
-}
-
-// Task 表示一个具名定时任务。
-type Task struct {
-	Name string
-	Expr string
-	sched *Schedule
-	lastRun time.Time
-	run func(time.Time)
-}
-
-// Scheduler 持有定时任务集合。
-type Scheduler struct {
-	mu    sync.Mutex
-	tasks []*Task
-	now   func() time.Time
-}
-
-// New 构造一个空的 Scheduler。
-func New() *Scheduler {
-	return &Scheduler{now: time.Now}
-}
-
-// WithTime 覆盖时间源（用于测试）。
-func (s *Scheduler) WithTime(now func() time.Time) *Scheduler {
-	s.now = now
-	return s
-}
-
-// Add 注册一个新任务。
-func (s *Scheduler) Add(name, expr string, run func(time.Time)) error {
-	sched, err := Parse(expr)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.tasks = append(s.tasks, &Task{Name: name, Expr: expr, sched: sched, run: run})
-	s.mu.Unlock()
-	return nil
-}
-
-// Tick 评估每个任务并触发到期任务，返回触发的任务数量。
-func (s *Scheduler) Tick() int {
-	s.mu.Lock()
-	tasks := make([]*Task, len(s.tasks))
-	copy(tasks, s.tasks)
-	s.mu.Unlock()
-	now := s.now()
-	n := 0
-	for _, t := range tasks {
-		if t.sched.Match(now) && !t.lastRun.Equal(now) {
-			t.run(now)
-			t.lastRun = now
-			n++
-		}
-	}
-	return n
-}
-
-// List 返回所有任务的名称。
-func (s *Scheduler) List() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, 0, len(s.tasks))
-	for _, t := range s.tasks {
-		out = append(out, t.Name)
-	}
-	return out
 }

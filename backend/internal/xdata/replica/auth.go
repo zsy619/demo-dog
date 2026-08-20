@@ -80,7 +80,7 @@ func (a *Auth) Authenticate(r *http.Request) string {
 	return id
 }
 
-// hashToken hashes the token so a memory dump does not leak them.
+// hashToken 对 token 进行哈希，使内存转储不会泄漏它们。
 func hashToken(t string) string {
 	h := sha256.Sum256([]byte(t))
 	return hex.EncodeToString(h[:])

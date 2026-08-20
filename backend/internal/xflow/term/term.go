@@ -46,7 +46,7 @@ func New(self string, peers []string, heartTTL time.Duration) *Clock {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试的时间源。
 func (c *Clock) WithTime(now func() time.Time) *Clock {
 	c.now = now
 	return c
@@ -113,7 +113,7 @@ func (c *Clock) Snapshot() State {
 	return s
 }
 
-// StepDown demotes self if currently leader.
+// StepDown 在当前为 leader 时主动降级。
 func (c *Clock) StepDown() {
 	c.mu.Lock()
 	if c.state.IsLeader {

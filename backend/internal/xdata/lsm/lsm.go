@@ -192,7 +192,7 @@ func (s *StringTable) MemLen() int {
 	return s.mem.Len()
 }
 
-// RunCount returns the number of sorted runs.
+// RunCount 返回有序 run 的数量。
 func (s *StringTable) RunCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

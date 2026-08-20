@@ -25,7 +25,7 @@ func New[T any](name string, stages ...Stage[T]) *Pipeline[T] {
 	return &Pipeline[T]{name: name, stages: stages}
 }
 
-// Run executes stages sequentially.
+// Run 按顺序执行阶段。
 func (p *Pipeline[T]) Run(ctx context.Context, in T) (T, error) {
 	var zero T
 	if len(p.stages) == 0 {

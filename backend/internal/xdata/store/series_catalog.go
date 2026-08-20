@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// SeriesEntry is one unique label-set observed for a metric.
+// SeriesEntry 是某指标观察到的一个唯一标签集。
 type SeriesEntry struct {
 	Service string            `json:"service"`
 	Name    string            `json:"name"`

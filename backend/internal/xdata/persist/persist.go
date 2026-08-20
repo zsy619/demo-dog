@@ -76,7 +76,7 @@ func (d *DB) Put(k string, v []byte) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.m[k] = v
-	// append
+	// 追加
 	kb := []byte(k)
 	buf := make([]byte, 4+4+len(kb)+4+len(v))
 	binary.BigEndian.PutUint32(buf[0:4], uint32(4+len(kb)+4+len(v)))

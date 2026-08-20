@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// mTLSConfig configures mutual-TLS for the /replica endpoint.
+// mTLSConfig 为 /replica 端点配置双向 TLS。
 //
 // Both sides authenticate: the client (follower) presents a cert
 // the primary verifies against a CA bundle, and the primary
@@ -34,7 +34,7 @@ type mTLSConfig struct {
 	MinVersion uint16
 }
 
-// ServerTLSConfig returns a *tls.Config for the primary listener.
+// ServerTLSConfig 返回 primary listener 使用的 *tls.Config。
 func (m *mTLSConfig) ServerTLSConfig() (*tls.Config, error) {
 	if len(m.Cert) == 0 || len(m.Key) == 0 {
 		return nil, errors.New("server cert/key required")

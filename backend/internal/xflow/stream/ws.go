@@ -58,7 +58,7 @@ func Upgrade(w http.ResponseWriter, r *http.Request, allowedOrigins []string) (n
 	return conn, &Conn{rwc: conn, bufrw: bufrw}, nil
 }
 
-// originAllowed returns true if `origin` is one of the allowedOrigins,
+// originAllowed 当 `origin` 是 allowedOrigins 之一时返回 true，
 // or if allowedOrigins is empty (dev default). A wildcard entry "*"
 // also matches any origin.
 func originAllowed(origin string, allowedOrigins []string) bool {
@@ -123,7 +123,7 @@ func (c *Conn) ReadFrame() ([]byte, error) {
 		}
 	}
 	if opcode == 0x8 {
-		// close frame
+		// close 帧
 		return nil, io.EOF
 	}
 	_ = fin
@@ -180,7 +180,7 @@ func (c *Conn) Close() error {
 		return nil
 	}
 	c.closed = true
-	// close frame: 0x88 0x00
+	// close 帧：0x88 0x00
 	_, _ = c.rwc.Write([]byte{0x88, 0x00})
 	if f, ok := c.bufrw.(interface{ Flush() error }); ok {
 		_ = f.Flush()

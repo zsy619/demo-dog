@@ -33,7 +33,7 @@ var ErrNotFound = errors.New("route not found")
 // ErrBadPattern 在模式格式错误时返回。
 var ErrBadPattern = errors.New("bad pattern")
 
-// Router is a templated routing trie with method matching.
+// Router 是带方法匹配的模板化路由 trie。
 type Router struct {
 	mu   sync.RWMutex
 	root *node
@@ -88,7 +88,7 @@ func (r *Router) Register(method Method, pattern string, h Handler) error {
 			child = newNode(s)
 			cur.children[s] = child
 			if i == 0 {
-				// unused; just initialize
+				// 未使用；仅做初始化
 			}
 		}
 		cur = child

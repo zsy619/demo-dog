@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// Tracer is the minimal interface replica needs to forward W3C
+// Tracer 是 replica 转发 W3C 所需的最小接口
 // trace context. The api package implements it; replica depends
 // only on this contract.
 type Tracer interface {

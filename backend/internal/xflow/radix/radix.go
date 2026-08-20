@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Tree is a radix tree for string keys.
+// Tree 是字符串 key 的基数树。
 type Tree struct {
 	mu   sync.RWMutex
 	root *node
@@ -50,7 +50,7 @@ func insert(n *node, key string, value any) {
 			n.value = value
 			return
 		case common == n.prefix:
-			// n.prefix fully matched, descend.
+			// n.prefix 完全匹配，下降。
 			key = key[len(common):]
 			first := string(key[0])
 			child, ok := n.children[first]
@@ -115,7 +115,7 @@ func (t *Tree) Lookup(key string) any {
 // ErrBadPattern 在通配符模式非法时返回。
 var ErrBadPattern = errors.New("bad pattern")
 
-// MatchPattern looks up a pattern that may end with a "*"
+// MatchPattern 查找可能以 * 结尾的模式
 // wildcard. Returns the value and whether the prefix matched.
 func (t *Tree) MatchPattern(pattern string) (any, bool) {
 	star := strings.Index(pattern, "*")

@@ -74,7 +74,7 @@ func (h *Hub) Publish(e Event) {
 		select {
 		case ch <- e:
 		default:
-			// drop slow consumer
+			// 丢弃慢消费者
 		}
 	}
 }

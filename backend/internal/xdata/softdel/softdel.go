@@ -38,7 +38,7 @@ func New(ttl time.Duration) *Store {
 	return &Store{records: make(map[string]*Record), ttl: ttl, now: time.Now}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试的时间源。
 func (s *Store) WithTime(now func() time.Time) *Store {
 	s.now = now
 	return s

@@ -31,7 +31,7 @@ type QueryFilter struct {
 	Window   string            // "1m" / "5m" for metrics MV selection
 }
 
-// matchesLabelFilter reports whether attrs contains every (k, v) pair in want.
+// matchesLabelFilter 报告 attrs 是否包含 want 中的每个 (k, v) 对。
 func matchesLabelFilter(attrs, want map[string]string) bool {
 	for k, v := range want {
 		if attrs == nil {
@@ -430,7 +430,7 @@ func (d *Doris) PercentileLatencies(service string) (p50, p95, p99 float64) {
 	return percentile(samples, 0.50), percentile(samples, 0.95), percentile(samples, 0.99)
 }
 
-// percentile returns the q-th percentile (0..1) of `samples` using
+// percentile 使用以下方式返回 samples 的第 q 百分位（0..1）
 // linear interpolation between order statistics (the "C=1" / numpy
 // default). With only one sample we return it; with zero samples we
 // return 0. Without interpolation the previous implementation picked
@@ -570,12 +570,12 @@ func (d *Doris) HistogramCounts(service string, bins int) []int {
 			counts[len(counts)-1]++
 		}
 	}
-	// Downsample/upsample to the requested `bins` count by simple bin
+	// 通过简单的桶降采样/上采样到所请求的 bins 数。
 	// coalescing. Caller requests <= ~10 buckets anyway.
 	return resampleBuckets(counts, bins)
 }
 
-// resampleBuckets collapses `src` into exactly `dst` bins using
+// resampleBuckets 使用以下方式将 src 折叠为恰好 dst 个桶
 // greedy coalescing. If dst >= len(src) we pad with zeros (and
 // interleave) so the shape stays comparable; if dst < len(src) we
 // merge adjacent buckets.
@@ -613,7 +613,7 @@ func resampleBuckets(src []int, dst int) []int {
 	return out
 }
 
-// SeverityCounts returns how many log records exist per severity for a service.
+// SeverityCounts 返回某服务每个严重级的日志记录数。
 func (d *Doris) SeverityCounts(service string) map[string]int {
 	d.muLogs.RLock()
 	defer d.muLogs.RUnlock()
@@ -659,7 +659,7 @@ func (d *Doris) QPSByService(window time.Duration) map[string][]model.SeriesPoin
 	return out
 }
 
-// Snapshot returns a copy of the latest samples for live-tail UI rendering.
+// Snapshot 返回最新样本的副本，用于实时 tail UI 渲染。
 func (d *Doris) Snapshot() (logs []model.LogRecord, metrics []model.MetricPoint, spans []model.SpanRecord) {
 	d.muLogs.RLock()
 	logs = append([]model.LogRecord(nil), d.hotLogs...)
@@ -694,7 +694,7 @@ func (d *Doris) MetricsAccepted() int64 { return d.metricsAccepted.Load() }
 func (d *Doris) SpansAccepted() int64   { return d.spansAccepted.Load() }
 func (d *Doris) QueriesServed() int64   { return d.queriesServed.Load() }
 
-// ServiceDetail returns a rich drill-down payload for a single service:
+// ServiceDetail 返回单个服务的丰富下钻负载：
 //   - the standard ServiceSummary (with p50/p95/p99 + last_labels),
 //   - top span-name endpoints (ranked by call count) with p99 latency and
 //     error count, derived from the hot-spans table,
@@ -781,7 +781,7 @@ func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	d.muMetrics.RLock()
 	for key, pts := range d.hotMetrics {
 		if len(pts) == 0 { continue }
-		// key is "<tenant>\x00<service>|<name>". Pull out the service and name.
+		// key 为 "<tenant>\x00<service>|<name>"。取出 service 和 name。
 		nulIdx := strings.IndexByte(key, 0)
 		if nulIdx < 0 { continue }
 		barIdx := strings.IndexByte(key[nulIdx:], '|')

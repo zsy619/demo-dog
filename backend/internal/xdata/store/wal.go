@@ -252,7 +252,7 @@ func decodeGob(b []byte, v any) error {
 	return dec.Decode(v)
 }
 
-// SnapshotThenWAL is the orchestration helper for the persist loop.
+// SnapshotThenWAL 是持久化循环的编排辅助函数。
 // Save a snapshot, then rotate the WAL so the next replay only
 // contains records added since this snapshot.
 func SnapshotThenWAL(d *Doris, snapPath string, w *WAL) error {

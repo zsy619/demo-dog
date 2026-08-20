@@ -10,28 +10,28 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// handleOTLPHTTP implements the OTLP/HTTP transport (1.0) for all
-// three signals. The protocol is documented at:
+// handleOTLPHTTP 为所有三种信号实现 OTLP/HTTP（1.0）传输。
+// 协议文档：
 // https://opentelemetry.io/docs/specs/otlp/#otlphttp-default-ports
 //
-// Endpoints:
+// 端点：
 //   POST /v1/logs
 //   POST /v1/metrics
 //   POST /v1/traces
 //
-// All three use the same JSON envelope shape (`ExportLogsServiceRequest`,
-// `ExportMetricsServiceRequest`, `ExportTracesServiceRequest`). We
-// only care about the resource attributes and the per-signal
-// records, which is exactly what our simplified ingest contract
-// already understands.
+// 三者使用相同的 JSON 信封形状（`ExportLogsServiceRequest`、
+// `ExportMetricsServiceRequest`、`ExportTracesServiceRequest`）。
+// 我们只关心资源属性和每个信号的
+// 记录，这正是我们简化的 ingest 契约
+// 已经理解的部分。
 //
-// The service accepts the OTLP canonical JSON form and converts
-// it to our internal model. Conversion is best-effort: extra
-// fields are ignored, missing fields are defaulted. The wire is
-// lossless round-trip.
+// 该服务接受 OTLP 标准 JSON 形式并将其
+// 转换到我们的内部模型。转换是尽力而为：
+// 额外字段被忽略，缺失字段使用默认值。线路是无损往返。
+// 
 //
-// Auth: same as the rest of the ingest API — admin / writer /
-// reader roles enforced by the role gate.
+// 认证：与其余 ingest API 一致 —— 角色网关强制
+// admin / writer / reader 角色。
 
 func (s *Server) handleOTLPHTTPLogs(rw http.ResponseWriter, r *http.Request) {
 	s.otlpHTTP(rw, r, "logs")
@@ -45,9 +45,9 @@ func (s *Server) handleOTLPHTTPTraces(rw http.ResponseWriter, r *http.Request) {
 	s.otlpHTTP(rw, r, "traces")
 }
 
-// otlpHTTP is the shared dispatcher. It accepts an arbitrary OTLP
-// service request and routes the contents to the right internal
-// ingest path.
+// otlpHTTP 是共享的分发器。它接受任意 OTLP
+// 服务请求，并将内容路由到正确的内部
+// ingest 路径。
 func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string) {
 	if r.Method != http.MethodPost {
 		writeError(rw, http.StatusMethodNotAllowed, errors.New("POST only"))
@@ -62,28 +62,28 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 
 	tenant := resolveTenant(r)
 
-	// We parse a permissive shape. Anything richer (e.g. exemplars,
-	// aggregation temporality, scope spans) is preserved through the
-	// attributes map.
+	// 我们按一种宽容的形态解析。任何更丰富的内容（例如 exemplars、
+	// aggregation temporality、scope spans）会通过
+	// attributes 映射保留下来。
 	var doc otlpDoc
 	if err := json.Unmarshal(body, &doc); err != nil {
 		writeError(rw, http.StatusBadRequest, err)
 		return
 	}
 
-	// Build the simplified OTLPRequest.
+	// 构造简化的 OTLPRequest。
 	req := model.OTLPRequest{TenantID: tenant}
 	if doc.Resource != nil {
 		req.ResourceAttrs = otlpAttrsToMap(doc.Resource.Attributes)
 	} else {
 		req.ResourceAttrs = map[string]string{}
 	}
-	// If the body explicitly sets tenant_id it wins over the
-	// auth-bound one for admin keys (non-admin keys cannot escape).
+	// 如果请求体显式设置了 tenant_id，则对管理员密钥而言
+	// 它优先于 auth 绑定的值（非管理员密钥无法绕过）。
 	if doc.TenantID != "" {
 		req.TenantID = doc.TenantID
 	}
-	// Translate per-signal records.
+	// 转换每个信号的记录。
 	now := time.Now()
 	for _, sl := range doc.ScopeLogs {
 		for _, lr := range sl.LogRecords {
@@ -111,9 +111,9 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 		}
 	}
 
-	// Round-trip into our own pipeline. SubmitSync is acceptable
-	// because the OTLP path is intended for low-throughput agent
-	// traffic; bulk exports go through the simpler /api/ingest/otlp.
+	// 往返到我们自己的流水线。SubmitSync 可接受，
+	// 因为 OTLP 路径针对低吞吐的 agent 流量；
+	// 批量导出走更简单的 /api/ingest/otlp。
 	s.ingest.SubmitSync(req)
 
 	rw.Header().Set("Content-Type", "application/json")
@@ -123,9 +123,9 @@ func (s *Server) otlpHTTP(rw http.ResponseWriter, r *http.Request, signal string
 	))
 }
 
-// otlpDoc is the union of the three service-request shapes. We
-// decode into the same struct regardless of signal because the
-// fields we care about are namespaced (`resource_logs` etc.).
+// otlpDoc 是三个 service-request 形状的并集。
+// 无论信号如何，我们都解码到相同的结构，
+// 因为我们关心的字段都已按命名空间组织（如 `resource_logs`）。
 type otlpDoc struct {
 	TenantID      string         `json:"tenant_id,omitempty"`
 	Resource      *otlpResource  `json:"resource,omitempty"`
@@ -250,7 +250,7 @@ func itoa(n int64) string {
 }
 
 func ftoa(f float64) string {
-	// simple %.6g
+	// 简化的 %.6g
 	return floatToString(f, 6)
 }
 
@@ -322,7 +322,7 @@ func metricPoints(m otlpMetric, service, tenant string) []model.MetricPoint {
 	if m.Histogram != nil {
 		for _, dp := range m.Histogram.DataPoints {
 			if dp.Count == 0 { continue }
-			// Approximate: emit one summary point per histogram bucket.
+			// 近似处理：为直方图的每个桶发出一个摘要点。
 			avg := dp.Sum / float64(dp.Count)
 			out = append(out, model.MetricPoint{
 				Timestamp: time.Unix(0, int64(dp.TimeUnixNano)),

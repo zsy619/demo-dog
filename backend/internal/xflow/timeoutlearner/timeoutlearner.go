@@ -81,7 +81,7 @@ func (l *Learner) Observe(host string, dur time.Duration) {
 	st.last = time.Now()
 }
 
-// Timeout returns the recommended timeout for host.
+// Timeout 返回 host 的推荐超时。
 func (l *Learner) Timeout(host string) time.Duration {
 	l.mu.Lock()
 	st, ok := l.hosts[host]

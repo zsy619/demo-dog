@@ -161,7 +161,7 @@ func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 	return out
 }
 
-// Submit enqueues a payload for asynchronous write. Returns false if the
+// Submit 将负载入队以异步写入。若则返回 false
 // ingestor queue is full (backpressure).
 func (in *Ingestor) Submit(req model.OTLPRequest) bool {
 	in.recentMu.Lock()
@@ -188,7 +188,7 @@ func (in *Ingestor) Submit(req model.OTLPRequest) bool {
 	})
 }
 
-// SubmitSync performs a write synchronously (good for tests / admin APIs).
+// SubmitSync 同步执行写入（适合测试 / 管理 API）。
 func (in *Ingestor) SubmitSync(req model.OTLPRequest) model.OTLPResponse {
 	in.store.InsertLogs(req.Logs)
 	in.store.InsertMetrics(req.Metrics)

@@ -44,13 +44,13 @@ func New(ttl time.Duration, maxItems int) *Store {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 覆盖测试的时间源。
 func (s *Store) WithTime(now func() time.Time) *Store {
 	s.now = now
 	return s
 }
 
-// Save persists the response for a key.
+// Save 为一个 key 持久化响应。
 func (s *Store) Save(key string, status int, body []byte, hdr http.Header) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -324,7 +324,7 @@ func (r *RetryChannel) Send(ctx context.Context, opts NotifyOpts) error {
 	return fmt.Errorf("after %d attempts: %w", r.Attempts, lastErr)
 }
 
-// SeverityColor returns a hex color suitable for Slack attachments
+// SeverityColor 返回适合 Slack 附件的十六进制颜色
 // or PagerDuty custom details. Maps severity strings to traffic
 // light colors.
 func SeverityColor(severity string) string {

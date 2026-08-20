@@ -11,7 +11,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// otlpJSONEnvelope mirrors the standard OTLP/HTTP JSON wire format.
+// otlpJSONEnvelope 对应标准 OTLP/HTTP JSON 线上格式。
 // See: https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding
 //
 // We accept any subset of the three signals; missing arrays are simply empty.
@@ -94,7 +94,7 @@ type otlpJSONEnvelope struct {
 	} `json:"resourceLogs"`
 }
 
-// otlpAttr matches the AnyValueField JSON shape: {key, value:{stringValue|intValue|...}}
+// otlpAttr 匹配 AnyValueField 的 JSON 形态：{key, value:{stringValue|intValue|...}}
 type otlpAttr struct {
 	Key   string         `json:"key"`
 	Value map[string]any `json:"value"`
@@ -289,7 +289,7 @@ func DecodeOTLPJSON(body []byte) (model.OTLPRequest, error) {
 	return out, nil
 }
 
-// attrListToMap flattens an OTLP attribute list into a string map.
+// attrListToMap 将 OTLP 属性列表拍平为字符串 map。
 func attrListToMap(attrs []otlpAttr) map[string]string {
 	if len(attrs) == 0 {
 		return nil
@@ -301,7 +301,7 @@ func attrListToMap(attrs []otlpAttr) map[string]string {
 	return out
 }
 
-// anyValToString turns any of the OTLP AnyValue variants into a flat string.
+// anyValToString 将 OTLP AnyValue 的任何变体转换为扁平字符串。
 func anyValToString(v otlpAnyVal) string {
 	if v == nil {
 		return ""
@@ -312,7 +312,7 @@ func anyValToString(v otlpAnyVal) string {
 		}
 	}
 	if arr, ok := v["arrayValue"].(map[string]any); ok {
-		// flatten arrays as comma-joined strings
+		// 将数组拍平为逗号连接的字符串
 		if vals, ok := arr["values"].([]any); ok {
 			parts := make([]string, 0, len(vals))
 			for _, x := range vals {
@@ -342,7 +342,7 @@ func anyValToString(v otlpAnyVal) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// nsToTime parses an OTLP nanosecond timestamp string.
+// nsToTime 解析 OTLP 纳秒时间戳字符串。
 func nsToTime(s string) time.Time {
 	if s == "" {
 		return time.Time{}
@@ -354,7 +354,7 @@ func nsToTime(s string) time.Time {
 	return time.Unix(0, n)
 }
 
-// trimHex strips any whitespace/prefix the JSON encoder may have left in
+// trimHex 去除 JSON 编码器可能留下的空白/前缀
 // a hex-encoded trace/span id.
 func trimHex(s string) string {
 	s = strings.TrimSpace(s)
@@ -369,7 +369,7 @@ func trimHex(s string) string {
 	return s
 }
 
-// otlpSeverityToDog maps OTLP severity (numeric or text) to our model.Severity.
+// otlpSeverityToDog 将 OTLP 严重级（数字或文本）映射到我们的 model.Severity。
 func otlpSeverityToDog(num int, text string) model.Severity {
 	switch strings.ToUpper(text) {
 	case "TRACE":
@@ -402,7 +402,7 @@ func otlpSeverityToDog(num int, text string) model.Severity {
 	return model.SeverityInfo
 }
 
-// numberDPValue prefers the int representation (count-like metrics) over double.
+// numberDPValue 优先选择 int 表示（类似计数的指标），而非 double。
 func numberDPValue(dp otlpNumberDP) float64 {
 	if dp.AsInt != "" {
 		if n, err := strconv.ParseInt(dp.AsInt, 10, 64); err == nil {
@@ -412,7 +412,7 @@ func numberDPValue(dp otlpNumberDP) float64 {
 	return dp.AsDouble
 }
 
-// parseFloat best-effort float parse from a JSON string-encoded number.
+// parseFloat 尽力从 JSON 字符串编码的数字解析 float。
 func parseFloat(s string) float64 {
 	if s == "" {
 		return 0
@@ -423,7 +423,7 @@ func parseFloat(s string) float64 {
 	return 0
 }
 
-// mergeAttrs copies non-empty entries from src into dst.
+// mergeAttrs 将 src 中的非空条目复制到 dst。
 func mergeAttrs(dst, src map[string]string) {
 	for k, v := range src {
 		if _, ok := dst[k]; !ok && v != "" {
@@ -432,7 +432,7 @@ func mergeAttrs(dst, src map[string]string) {
 	}
 }
 
-// pickService returns the first service.name value found in either map.
+// pickService 返回在任一 map 中找到的首个 service.name 值。
 func pickService(attrs, resource map[string]string) string {
 	if s := attrs["service.name"]; s != "" {
 		return s

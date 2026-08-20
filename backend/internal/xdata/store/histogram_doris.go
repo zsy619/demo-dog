@@ -2,7 +2,7 @@ package store
 
 import "github.com/zsy619/demo-dog/backend/internal/xdata/model"
 
-// updateHistograms routes histogram-type metric points into the
+// updateHistograms 将直方图类型指标点路由到
 // (service, name) -> histogramAgg map. Non-histogram points are ignored.
 func (d *Doris) updateHistograms(in []model.MetricPoint) {
 	var any bool

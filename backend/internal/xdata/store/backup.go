@@ -414,7 +414,7 @@ func (r *sliceReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// readWALFile reads the WAL file in dataDir (if it exists).
+// readWALFile 读取 dataDir 中的 WAL 文件（若存在）。
 func readWALFile(dataDir string) ([]byte, error) {
 	path := filepath.Join(dataDir, "demo-dog.wal")
 	f, err := os.Open(path)

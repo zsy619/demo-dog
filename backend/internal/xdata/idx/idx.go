@@ -142,7 +142,7 @@ func (i *Index) Size() int {
 	return len(i.docs)
 }
 
-// tokenize lower-cases + splits on Unicode whitespace.
+// tokenize 转为小写并按 Unicode 空白字符切分。
 func tokenize(s string) []string {
 	f := func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsPunct(r)

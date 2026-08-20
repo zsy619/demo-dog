@@ -84,7 +84,7 @@ func (p *Pool) Start() {
 	}
 }
 
-// Stop signals workers to exit and waits for them.
+// Stop 通知 worker 退出并等待它们。
 // Cancels the context so in-flight jobs see Done.
 func (p *Pool) Stop() {
 	if !p.runOn.Load() {
