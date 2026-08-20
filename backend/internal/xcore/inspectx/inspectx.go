@@ -3,6 +3,7 @@ package inspectx
 
 import (
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,8 @@ type Info struct {
 	AllocBytes uint64    `json:"alloc_bytes"`
 	SysBytes   uint64    `json:"sys_bytes"`
 	NumGC      uint32    `json:"num_gc"`
+	GoVersion  string    `json:"go_version"`
+	BuildInfo  string    `json:"build_info"`
 }
 
 // Probe 是一个探针：
@@ -37,6 +40,11 @@ func NewProbe() *Probe {
 func (p *Probe) Refresh() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+	bi, _ := debug.ReadBuildInfo()
+	build := ""
+	if bi != nil {
+		build = bi.GoVersion + " " + bi.Path
+	}
 	info := &Info{
 		Now:        time.Now(),
 		GOMAXPROCS: runtime.GOMAXPROCS(0),
@@ -45,6 +53,8 @@ func (p *Probe) Refresh() {
 		AllocBytes: m.Alloc,
 		SysBytes:   m.Sys,
 		NumGC:      m.NumGC,
+		GoVersion:  runtime.Version(),
+		BuildInfo:  build,
 	}
 	p.latest.Store(info)
 }
@@ -62,6 +72,11 @@ func (p *Probe) Snapshot() Info {
 func Capture() Info {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+	bi, _ := debug.ReadBuildInfo()
+	build := ""
+	if bi != nil {
+		build = bi.GoVersion + " " + bi.Path
+	}
 	return Info{
 		Now:        time.Now(),
 		GOMAXPROCS: runtime.GOMAXPROCS(0),
@@ -70,5 +85,50 @@ func Capture() Info {
 		AllocBytes: m.Alloc,
 		SysBytes:   m.Sys,
 		NumGC:      m.NumGC,
+		GoVersion:  runtime.Version(),
+		BuildInfo:  build,
 	}
+}
+
+// SetMaxProcs 设置 GOMAXPROCS（运行时并行度）。
+func SetMaxProcs(n int) {
+	if n < 1 {
+		return
+	}
+	runtime.GOMAXPROCS(n)
+}
+
+// NumGoroutine 返回当前 goroutine 数。
+func NumGoroutine() int { return runtime.NumGoroutine() }
+
+// Parallel 把 items 均分到 GOMAXPROCS 个 goroutine 上并行执行。
+func Parallel(items int, fn func(start, end int)) {
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 1 {
+		workers = 1
+	}
+	if items < workers {
+		workers = items
+	}
+	if workers < 1 {
+		return
+	}
+	chunk := items / workers
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		start := i * chunk
+		end := start + chunk
+		if i == workers-1 {
+			end = items
+		}
+		if start >= end {
+			continue
+		}
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			fn(s, e)
+		}(start, end)
+	}
+	wg.Wait()
 }
