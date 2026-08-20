@@ -25,11 +25,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zsy619/demo-dog/backend/internal/api"
-	"github.com/zsy619/demo-dog/backend/internal/ingest"
-	"github.com/zsy619/demo-dog/backend/internal/store"
-	"github.com/zsy619/demo-dog/backend/internal/tenants"
-	"github.com/zsy619/demo-dog/backend/internal/stream"
+	"github.com/zsy619/demo-dog/backend/internal/xnet/api"
+	"github.com/zsy619/demo-dog/backend/internal/xdata/ingest"
+	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
+	"github.com/zsy619/demo-dog/backend/internal/xdata/tenants"
+	"github.com/zsy619/demo-dog/backend/internal/xflow/stream"
 )
 
 // banner is printed once at startup. It foreshadoows every endpoint and gives

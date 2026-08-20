@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zsy619/demo-dog/backend/internal/openapi"
+	"github.com/zsy619/demo-dog/backend/internal/xnet/openapi"
 )
 
 func main() {
