@@ -1,3 +1,11 @@
+// Package alerts 告警规则引擎:评估规则并触发告警事件。
+//
+// 本文件包含 recording rule 子模块:
+//
+//   - recording.go 包文档 + 录制规则类型 + RecordingEngine
+//   - view.go     RecordingStateView 与 Format
+//   - internal.go errString 私有辅助
+//
 // 录制规则引擎。
 //
 // A recording rule is a named, precomputed query. It runs against
@@ -10,51 +18,50 @@
 //
 // Recording rules live alongside alert rules in /api/v1/rules and
 // appear under data.groups[].rules[] with type=recording.
-// Package alerts 告警规则引擎：评估规则并触发告警事件。
 package alerts
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 )
 
 // RecordingResult 是一次录制规则评估。
 type RecordingResult struct {
-	Metric string
-	Labels map[string]string
-	Value  float64
-	At     time.Time
-	Took   time.Duration
-	Err    error
+	Metric string            // 新指标名
+	Labels map[string]string // 标签
+	Value  float64           // 当前值
+	At     time.Time         // 评估时间
+	Took   time.Duration     // 耗时
+	Err    error             // 评估错误
 }
 
 // RecordingRule 定义一条录制规则。
 type RecordingRule struct {
-	Name        string
-	NewMetric   string
-	Description string
-	Interval    time.Duration
-	Labels      map[string]string
-	Evaluate    func(ctx context.Context) (float64, error)
+	Name        string                                  // 规则名
+	NewMetric   string                                  // 输出指标名
+	Description string                                  // 描述
+	Interval    time.Duration                           // 评估周期
+	Labels      map[string]string                       // 输出标签
+	Evaluate    func(ctx context.Context) (float64, error) // 评估函数
 }
 
-// RecordingEngine 在共享 goroutine 上运行录制规则。
+// RecordingEngine 在共享协程上运行录制规则。
 type RecordingEngine struct {
-	mu     sync.RWMutex
-	rules  map[string]*recordingState
-	Persist func(ctx context.Context, r RecordingResult)
-	stopCh chan struct{}
+	mu     sync.RWMutex                          // 保护 rules
+	rules  map[string]*recordingState             // name → 状态
+	Persist func(ctx context.Context, r RecordingResult) // 结果回调
+	stopCh chan struct{}                         // 停止信号
 }
 
+// recordingState 是 RecordingEngine 私有状态。
 type recordingState struct {
-	rule    RecordingRule
-	lastErr error
-	lastAt  time.Time
-	lastVal float64
-	runs    int64
-	fails   int64
+	rule    RecordingRule // 规则副本
+	lastErr error         // 最近一次错误
+	lastAt  time.Time     // 最近一次评估时间
+	lastVal float64       // 最近一次评估值
+	runs    int64         // 累计运行次数
+	fails   int64         // 累计失败次数
 }
 
 // NewRecordingEngine 返回无规则的引擎。
@@ -89,12 +96,12 @@ func (e *RecordingEngine) Remove(name string) bool {
 	return ok
 }
 
-// Start 为每条规则启动一个 goroutine。
+// Start 为每条规则启动一个协程。
 func (e *RecordingEngine) Start(ctx context.Context) {
 	go e.loop(ctx)
 }
 
-// Stop 关闭所有规则 goroutine。
+// Stop 关闭所有规则协程。
 func (e *RecordingEngine) Stop() {
 	select {
 	case <-e.stopCh:
@@ -103,6 +110,7 @@ func (e *RecordingEngine) Stop() {
 	}
 }
 
+// loop 定期同步 ticker 与规则列表。
 func (e *RecordingEngine) loop(ctx context.Context) {
 	tickers := map[string]*time.Ticker{}
 	cancels := map[string]chan struct{}{}
@@ -136,6 +144,7 @@ func (e *RecordingEngine) loop(ctx context.Context) {
 	}
 }
 
+// runRule 单条规则的 ticker 循环。
 func (e *RecordingEngine) runRule(ctx context.Context, st *recordingState, tick <-chan time.Time, cancel chan struct{}) {
 	for {
 		select {
@@ -188,41 +197,4 @@ func (e *RecordingEngine) Snapshot() []RecordingStateView {
 		})
 	}
 	return out
-}
-
-// RecordingStateView 是单条规则状态的 JSON 稳定形式。
-type RecordingStateView struct {
-	Name        string            `json:"name"`
-	NewMetric   string            `json:"new_metric"`
-	Description string            `json:"description,omitempty"`
-	Interval    time.Duration     `json:"interval_ns"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	LastValue   float64           `json:"last_value"`
-	LastAt      time.Time         `json:"last_at,omitempty"`
-	LastError   string            `json:"last_error,omitempty"`
-	Runs        int64             `json:"runs"`
-	Fails       int64             `json:"fails"`
-}
-
-func errString(e error) string {
-	if e == nil {
-		return ""
-	}
-	return e.Error()
-}
-
-// Format 返回 Prometheus 兼容的规则条目。
-func (v RecordingStateView) Format() map[string]any {
-	return map[string]any{
-		"name":       v.Name,
-		"query":      fmt.Sprintf("recording_rule(%s)", v.NewMetric),
-		"type":       "recording",
-		"labels":     v.Labels,
-		"value":      v.LastValue,
-		"interval":   v.Interval.String(),
-		"runs":       v.Runs,
-		"fails":      v.Fails,
-		"last_eval":  v.LastAt,
-		"last_error": v.LastError,
-	}
 }
