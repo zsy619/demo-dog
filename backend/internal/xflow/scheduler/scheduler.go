@@ -1,7 +1,12 @@
-// Package scheduler 提供一个简单的任务调度器：
-// 支持延时一次性任务（Once）和周期任务（Every）。
+// Package scheduler 提供一个简单的任务调度器:
+// 支持延时一次性任务(Once)和周期任务(Every)。
 //
-// 用法：
+// 文件职责拆分:
+//   - scheduler.go Scheduler 主体 + 任务管理
+//   - heap.go      任务堆实现
+//   - loop.go      调度循环与任务执行
+//
+// 用法:
 //
 //	s := scheduler.New()
 //	s.Start()
@@ -13,56 +18,27 @@ package scheduler
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"sync"
 	"time"
 )
 
 // Task 描述一个调度任务。
 type Task struct {
-	Name     string
-	NextRun  time.Time
-	Interval time.Duration // 0 表示一次性任务
-	Fn       func(ctx context.Context)
+	Name     string           // 任务名
+	NextRun  time.Time        // 下次执行时间
+	Interval time.Duration    // 0 表示一次性任务
+	Fn       func(ctx context.Context) // 任务函数
 }
 
 // Scheduler 管理一组 Task。
 type Scheduler struct {
-	mu      sync.Mutex
-	heap    taskHeap
-	stop    chan struct{}
-	wake    chan struct{}
-	run     bool
-	onPanic func(name string, err error)
-	onError func(name string, err error)
-}
-
-type taskItem struct {
-	task *Task
-	idx  int
-}
-
-type taskHeap []*taskItem
-
-func (h taskHeap) Len() int           { return len(h) }
-func (h taskHeap) Less(i, j int) bool { return h[i].task.NextRun.Before(h[j].task.NextRun) }
-func (h taskHeap) Swap(i, j int) {
-	h[i], h[j] = h[j], h[i]
-	h[i].idx = i
-	h[j].idx = j
-}
-func (h *taskHeap) Push(x any) {
-	t := x.(*taskItem)
-	t.idx = len(*h)
-	*h = append(*h, t)
-}
-func (h *taskHeap) Pop() any {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	old[n-1] = nil
-	*h = old[:n-1]
-	return x
+	mu      sync.Mutex                  // 保护 heap / 回调
+	heap    taskHeap                    // 任务堆
+	stop    chan struct{}               // 停止信号
+	wake    chan struct{}               // 唤醒信号
+	run     bool                        // 是否运行中
+	onPanic func(name string, err error) // panic 回调
+	onError func(name string, err error) // 错误回调
 }
 
 // New 创建一个 Scheduler。
@@ -75,7 +51,7 @@ func New() *Scheduler {
 	}
 }
 
-// OnPanic 注册 panic 处理器（默认忽略）。
+// OnPanic 注册 panic 处理器(默认忽略)。
 func (s *Scheduler) OnPanic(fn func(name string, err error)) {
 	s.mu.Lock()
 	s.onPanic = fn
@@ -101,7 +77,7 @@ func (s *Scheduler) Start() {
 	go s.loop()
 }
 
-// Stop 停止调度循环；未执行的任务将不再执行。
+// Stop 停止调度循环;未执行的任务将不再执行。
 func (s *Scheduler) Stop() {
 	s.mu.Lock()
 	if !s.run {
@@ -113,7 +89,7 @@ func (s *Scheduler) Stop() {
 	close(s.stop)
 }
 
-// Every 注册周期任务（间隔 interval 反复执行）。
+// Every 注册周期任务(间隔 interval 反复执行)。
 func (s *Scheduler) Every(name string, interval time.Duration, fn func(ctx context.Context)) {
 	if interval <= 0 {
 		interval = time.Second
@@ -126,7 +102,7 @@ func (s *Scheduler) Once(name string, delay time.Duration, fn func(ctx context.C
 	s.add(&Task{Name: name, Interval: 0, NextRun: time.Now().Add(delay), Fn: fn})
 }
 
-// Cancel 移除一个已注册的任务。返回 true 表示找到并移除。
+// Cancel 移除一个已注册的任务;返回 true 表示找到并移除。
 func (s *Scheduler) Cancel(name string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,6 +122,7 @@ func (s *Scheduler) Len() int {
 	return s.heap.Len()
 }
 
+// add 将一个 Task 加入堆并唤醒调度循环。
 func (s *Scheduler) add(t *Task) {
 	s.mu.Lock()
 	heap.Push(&s.heap, &taskItem{task: t})
@@ -153,89 +130,10 @@ func (s *Scheduler) add(t *Task) {
 	s.notify()
 }
 
+// notify 非阻塞地唤醒调度循环(已有唤醒信号则忽略)。
 func (s *Scheduler) notify() {
 	select {
 	case s.wake <- struct{}{}:
 	default:
 	}
-}
-
-func (s *Scheduler) loop() {
-	var timer *time.Timer
-	for {
-		s.mu.Lock()
-		if s.heap.Len() == 0 {
-			s.mu.Unlock()
-			select {
-			case <-s.stop:
-				return
-			case <-s.wake:
-				continue
-			}
-		}
-		top := s.heap[0]
-		next := top.task.NextRun
-		onPanic := s.onPanic
-		onError := s.onError
-		s.mu.Unlock()
-
-		delay := time.Until(next)
-		if timer == nil {
-			timer = time.NewTimer(delay)
-		} else {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(delay)
-		}
-
-		select {
-		case <-s.stop:
-			timer.Stop()
-			return
-		case <-timer.C:
-		case <-s.wake:
-			continue
-		}
-
-		s.mu.Lock()
-		if s.heap.Len() == 0 {
-			s.mu.Unlock()
-			continue
-		}
-		top = heap.Pop(&s.heap).(*taskItem)
-		interval := top.task.Interval
-		name := top.task.Name
-		fn := top.task.Fn
-		s.mu.Unlock()
-
-		s.runTask(name, fn, onPanic, onError)
-
-		if interval > 0 {
-			top.task.NextRun = time.Now().Add(interval)
-			s.mu.Lock()
-			heap.Push(&s.heap, top)
-			s.mu.Unlock()
-			s.notify()
-		}
-	}
-}
-
-// runTask 安全地执行任务 fn：捕获 panic，不影响调度循环。
-func (s *Scheduler) runTask(name string, fn func(ctx context.Context), onPanic, onError func(name string, err error)) {
-	if fn == nil {
-		return
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			if onPanic != nil {
-				onPanic(name, fmt.Errorf("scheduler task %q panic: %v", name, r))
-			}
-		}
-	}()
-	fn(context.Background())
-	_ = onError
 }
