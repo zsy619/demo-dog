@@ -116,7 +116,7 @@ func (t *Tree) Lookup(key string) any {
 var ErrBadPattern = errors.New("bad pattern")
 
 // MatchPattern 查找可能以 * 结尾的模式
-// wildcard. Returns the value and whether the prefix matched.
+// wildcard. 返回 value and whether the prefix matched.
 func (t *Tree) MatchPattern(pattern string) (any, bool) {
 	star := strings.Index(pattern, "*")
 	if star < 0 {

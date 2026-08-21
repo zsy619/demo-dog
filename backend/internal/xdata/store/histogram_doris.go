@@ -32,7 +32,7 @@ func (d *Doris) updateHistograms(in []model.MetricPoint) {
 }
 
 // HistogramSnapshot 返回单个 (service,
-// name) pair, or nil if no histogram data has been received.
+// name) pair, or nil if no 直方图 data has been received.
 func (d *Doris) HistogramSnapshot(service, name string) *model.HistogramView {
 	d.muHistograms.RLock()
 	defer d.muHistograms.RUnlock()
@@ -44,7 +44,7 @@ func (d *Doris) HistogramSnapshot(service, name string) *model.HistogramView {
 }
 
 // HistogramQuantile 返回命名直方图的第 q 百分位
-// (0..1). Returns 0 if the series has no data. The result is computed
+// (0..1). 返回 0 if the 序列 has no data. The result is computed
 // from the explicit OTel bucket boundaries so it is accurate even for
 // sparse streams.
 func (d *Doris) HistogramQuantile(service, name string, q float64) float64 {

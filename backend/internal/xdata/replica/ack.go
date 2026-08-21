@@ -105,7 +105,7 @@ func (p *PrimaryState) Snapshot() (offset int64, followers []FollowerState, drop
 		followers = append(followers, *f)
 	}
 	// 跟踪高水位标记，以便调用方看到最新偏移
-	// even after retention has been GC'd.
+	// even after 保留 has been GC'd.
 	if len(p.retained) > 0 {
 		offset = p.retained[len(p.retained)-1].Offset
 	} else if p.retainedStartOffset > 0 {

@@ -23,7 +23,7 @@ type WAL struct {
 var ErrBadRecord = errors.New("bad record")
 
 // New 创建一个双写 WAL。primary 是必需的；mirror
-// may be nil.
+// 可为 nil.
 func New(primary, mirror io.Writer) *WAL {
 	return &WAL{primary: primary, mirror: mirror}
 }
@@ -98,7 +98,7 @@ func (r *Reader) Next() ([]byte, error) {
 }
 
 // Verify 从 r 读取所有记录并确认校验和。
-// Returns the count verified.
+// 返回 count verified.
 func (r *Reader) Verify() (int, error) {
 	n := 0
 	for {

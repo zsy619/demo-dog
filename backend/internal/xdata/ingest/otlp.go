@@ -2,7 +2,7 @@
 //
 // The public surface is intentionally narrow: a single Ingestor struct that
 // knows how to take an OTLPRequest, validate it, batch it, and finally push
-// it into the in-memory Doris engine via the worker pool.
+// it into the in-memory Doris engine via the 工作池.
 //
 // Two implementation details are worth highlighting:
 //
@@ -10,7 +10,7 @@
 //     inside the worker, so the per-write critical section is one slice append
 //     per signal rather than many independent locks.
 //   - We honor `RetryLogs/Metrics/Spans` in the response so the frontend can
-//     decide whether to retry or degrade the UI.
+//     decide whether to 重试 or degrade the UI.
 package ingest
 
 import (
@@ -62,7 +62,7 @@ func (in *Ingestor) PoolStats() batch.Stats {
 }
 
 // Validate 对 OTLPRequest 执行轻量级健全性检查。
-// It does not check every field; missing service name is the only hard error.
+// It does not check every field; missing 服务名 is the only hard error.
 func (in *Ingestor) Validate(req *model.OTLPRequest) error {
 	if req == nil {
 		return errors.New("nil request")
@@ -97,9 +97,9 @@ func (in *Ingestor) Validate(req *model.OTLPRequest) error {
 // do not have their own service field. It also sets sensible defaults for
 // severity and timestamp so downstream code doesnt need to deal with zeros.
 //
-// Tenant scoping: if the request carries a TenantID, that value is copied
+// 租户 scoping: if the request carries a TenantID, that value is copied
 // down to every record so the store and query layer can partition data
-// per tenant. If a record already has its own TenantID (rare) it wins.
+// per 租户. If a record already has its own TenantID (rare) it wins.
 func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 	out := model.OTLPRequest{
 		TenantID:      req.TenantID,
@@ -162,7 +162,7 @@ func (in *Ingestor) Normalize(req *model.OTLPRequest) model.OTLPRequest {
 }
 
 // Submit 将负载入队以异步写入。若则返回 false
-// ingestor queue is full (backpressure).
+// ingestor 队列 is full (背压).
 func (in *Ingestor) Submit(req model.OTLPRequest) bool {
 	in.recentMu.Lock()
 	in.recent = append(in.recent, req)

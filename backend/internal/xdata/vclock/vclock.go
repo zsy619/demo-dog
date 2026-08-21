@@ -41,7 +41,7 @@ func (c *Clock) Get(node string) uint64 {
 }
 
 // Update 将 other 合并到 c：取逐元素最大值。
-// Returns the resulting "score" for ordering.
+// 返回 resulting "score" for ordering.
 func (c *Clock) Update(other *Clock) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

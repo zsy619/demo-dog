@@ -34,7 +34,7 @@ import (
 //     repeated TimeSeries timeseries = 1;
 //   }
 //   message TimeSeries {
-//     repeated Label labels  = 1;
+//     repeated Label 标签  = 1;
 //     repeated Sample samples = 2;
 //   }
 //   message Label  { string name  = 1; string value = 2; }

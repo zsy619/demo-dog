@@ -158,7 +158,7 @@ func (d *Dispatcher) Subscribers() []*Subscriber {
 }
 
 // Dispatch 将一个 event 投递到每一个接受它的 subscriber。该函数返回投递列表。
-// it. The function returns the list of deliveries.
+// it. The function 返回 list of deliveries.
 func (d *Dispatcher) Dispatch(ev Event) []Delivery {
 	if ev.Timestamp.IsZero() {
 		ev.Timestamp = d.now()()

@@ -45,7 +45,7 @@ func (c *Coordinator) OnRollback(fn func(o Outcome)) {
 }
 
 // Run 执行 saga。如果某一步失败，前面的步骤
-// are compensated and the outcome records Rollback=true.
+// are compensated and the outcome 记录 Rollback=true.
 func (c *Coordinator) Run(ctx context.Context, steps []Step) Outcome {
 	out := Outcome{Executed: make([]string, 0, len(steps))}
 	for i, s := range steps {

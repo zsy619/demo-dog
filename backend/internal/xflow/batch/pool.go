@@ -3,12 +3,12 @@
 // The Collector-style feature set the demo targets needs three things from the
 // write side:
 //
-//  1. Throughput: many small writes must be coalesced into fewer larger ones.
-//  2. Backpressure: when the engine is hot, ingest must shed load, not block.
+//  1. Throughput: many small 写入 must be coalesced into fewer larger ones.
+//  2. 背压: when the engine is hot, ingest must shed load, not block.
 //  3. Retries: transient failures (e.g. a bucket full) must be retried with
-//     exponential backoff before giving up.
+//     exponential 退避 before giving up.
 //
-// Pool provides a small generic worker pool that satisfies all three.
+// Pool provides a small generic 工作池 that satisfies all three.
 package batch
 
 import (

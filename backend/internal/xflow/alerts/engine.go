@@ -198,7 +198,7 @@ func (e *Engine) SortedRules() []Rule {
 }
 
 // UpsertRule 插入 r 或替换同名规则。
-// Returns the previous rule if one was replaced, plus the new one.
+// 返回 前一个 rule if one was replaced, plus the new one.
 func (e *Engine) UpsertRule(r Rule) (prev Rule, ok bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

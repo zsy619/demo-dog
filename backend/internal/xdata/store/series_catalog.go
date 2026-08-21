@@ -25,7 +25,7 @@ type MetricCard struct {
 }
 
 // SeriesCatalog 遍历内存热/冷指标缓冲，并
-// produces a catalog of (metric, series).
+// produces a catalog of (metric, 序列).
 type SeriesCatalog struct {
 	mu   sync.RWMutex
 	d    *Doris

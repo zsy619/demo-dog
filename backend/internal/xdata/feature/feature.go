@@ -4,13 +4,13 @@ package feature
 // 每租户特性开关，带审计跟踪。
 //
 // Until now operators had no way to gate a beta feature for a
-// single tenant. With Round 56 the flag table is per-tenant,
-// every change appends an audit entry (who, when, before,
+// single 租户. With Round 56 the flag table is per-tenant,
+// every change appends an 审计 entry (who, when, before,
 // after), and the Evaluate helper falls back to a global
-// default if the tenant has no override.
+// 默认值 if the 租户 has no override.
 //
 // Flags are typed: bool, string, int. The Evaluate function
-// returns the per-tenant value or the global default.
+// 返回 per-tenant value or the global 默认值.
 
 import (
 	"errors"
@@ -166,7 +166,7 @@ func (m *Manager) Evaluate(name, tenant string) (any, bool) {
 }
 
 // Bool / String / Int 类型化访问器。每个返回
-// default if no override is set.
+// 默认值 if no override is set.
 func (m *Manager) Bool(name, tenant string) (bool, bool) {
 	v, ok := m.Evaluate(name, tenant)
 	if !ok {
@@ -225,7 +225,7 @@ func (m *Manager) SetOverride(name, tenant string, value any, actor string) erro
 }
 
 // ClearOverride 移除租户覆盖并恢复为
-// default.
+// 默认值.
 func (m *Manager) ClearOverride(name, tenant, actor string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

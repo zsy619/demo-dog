@@ -44,7 +44,7 @@ func (s *Store) WithTime(now func() time.Time) *Store {
 // ErrNotFound 在租户未知时返回。
 var ErrNotFound = errors.New("secret not found")
 
-// Get returns the current secret for tenant. If the secret
+// Get 返回 current secret for 租户. If the secret
 // is expired, it is rotated first.
 func (s *Store) Get(tenant string) ([]byte, error) {
 	s.mu.Lock()

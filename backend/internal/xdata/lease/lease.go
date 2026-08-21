@@ -55,7 +55,7 @@ func (m *Manager) WithTime(now func() time.Time) *Manager {
 var ErrHeld = errors.New("lease held by another holder")
 
 // Acquire 为指定持有者获取租约。如果租约
-// is free or expired, returns a new lease; otherwise returns
+// is free or expired, 返回 新的 租约; otherwise 返回
 // ErrHeld.
 func (m *Manager) Acquire(name, holder string) (*Lease, error) {
 	m.mu.Lock()
@@ -75,7 +75,7 @@ func (m *Manager) Acquire(name, holder string) (*Lease, error) {
 }
 
 // Renew 将租约延长指定时长。
-// Returns ErrHeld if the lease is not owned by holder.
+// 返回 ErrHeld if the 租约 is not owned by holder.
 func (m *Manager) Renew(name, holder string) (*Lease, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

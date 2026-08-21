@@ -2,7 +2,7 @@ package api
 
 // 第 53 轮 admin 接口。本文件是一个轻薄的适配层，
 // 通过 HTTP 暴露深层模块（quota、breaker、rate limit、webhooks、
-// retention、admin keys、replica、OIDC、SLO、backends），
+// 保留、admin keys、副本、OIDC、SLO、backends），
 // 便于前端和运维工具在不重建
 // 内部类型的情况下管理它们。
 // 

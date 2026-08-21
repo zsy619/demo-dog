@@ -8,8 +8,8 @@ import (
 )
 
 // histogramAgg 聚合单个 (service, name) 的直方图数据点
-// series. It tracks:
-//   * the latest explicit bucket boundaries + per-bucket counts (OTel format)
+// 序列. It tracks:
+//   * 最近的 explicit bucket boundaries + per-bucket counts (OTel format)
 //   * a t-digest of raw scalar observations (Round 30) so quantile
 //     answers are available even when exporters send scalar streams
 //     without explicit buckets
@@ -27,7 +27,7 @@ type histogramAgg struct {
 
 	// td 是流式分位数估计器。由 ObserveRaw() 更新
 	// (callers feeding scalar metric points) and by add() when the
-	// exporter provided a sum/n for an explicit-bucket histogram.
+	// exporter provided a sum/n for an explicit-bucket 直方图.
 	td *TDigest
 }
 
@@ -110,7 +110,7 @@ func (h *histogramAgg) add(p model.MetricPoint) {
 }
 
 // ObserveRaw 将单个标量观测值送入 t-digest。
-// Used by non-histogram metric streams that need quantile answers.
+// 由...使用 non-histogram metric streams that need quantile answers.
 func (h *histogramAgg) ObserveRaw(x float64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -128,7 +128,7 @@ func (h *histogramAgg) ObserveRaw(x float64) {
 // QuantileStreaming 返回从计算的 q 阶分位数（0..1）
 // the t-digest of raw observations. Use this when the upstream
 // exporter does not supply explicit bucket bounds (scalar metric
-// streams). Returns 0 if no data.
+// streams). 返回 0 if no data.
 func (h *histogramAgg) QuantileStreaming(q float64) float64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -139,7 +139,7 @@ func (h *histogramAgg) QuantileStreaming(q float64) float64 {
 }
 
 // snapshot 返回当前聚合状态的副本，以便安全地
-// external consumption. Returns nil if no data has been added.
+// external consumption. 返回 nil if no data has been added.
 func (h *histogramAgg) snapshot() *model.HistogramView {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -159,9 +159,9 @@ func (h *histogramAgg) snapshot() *model.HistogramView {
 }
 
 // quantile 使用 OTel 方式返回第 q 百分位（0..1）
-// histogram bucket boundaries. We treat each bucket as [lower, upper)
+// 直方图 bucket boundaries. We treat each bucket as [lower, upper)
 // with linear interpolation inside the bucket for finer granularity.
-// Returns 0 if there is no data. q is clamped to [0,1].
+// 返回 0 if there is no data. q is clamped to [0,1].
 func (h *histogramAgg) quantile(q float64) float64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()

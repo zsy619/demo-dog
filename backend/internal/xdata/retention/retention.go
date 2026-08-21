@@ -3,7 +3,7 @@ package retention
 
 // 每租户保留策略 + 冷存储淘汰。
 //
-// Different tenants pay for different retention tiers. A
+// Different tenants pay for different 保留 tiers. A
 // free tier keeps 1 day of hot logs and 7 days of cold.
 // A pro tier keeps 7 days hot + 30 days cold. An enterprise
 // tier is unlimited. The Policy table is read by the Doris
@@ -15,7 +15,7 @@ package retention
 // cold TTL.
 //
 // The interface for the sweeper is small: it asks the store
-// "give me one tenant row at a time" and "drop these log
+// "give me one 租户 row at a time" and "drop these log
 // rows" or "move them here".
 
 import (
@@ -263,7 +263,7 @@ func (m *Manager) Stats() Stats {
 }
 
 // RetentionReport 描述一次扫描会发生什么
-// without modifying anything. Used by /debug/retention.
+// without modifying anything. 由...使用 /debug/保留.
 type RetentionReport struct {
 	Tenant  string
 	Tier    Tier

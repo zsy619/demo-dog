@@ -7,7 +7,7 @@ import (
 
 // ReplicaServer 组合 primary 端的 HTTP handler 与认证
 // and the cluster state. Operators mount ServeReplica on their main
-// mux or run a dedicated listener for /replica/*.
+// 多路复用器 or run a dedicated listener for /副本/*.
 type ReplicaServer struct {
 	Auth    *Auth
 	Primary *PrimaryState

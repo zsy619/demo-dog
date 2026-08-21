@@ -118,7 +118,7 @@ func (r *SortedRun) Get(key string) ([]byte, bool, bool) {
 }
 
 // StringTable 是 LSM 结构：memtable + 有序 run。
-// Reads go newest-to-oldest.
+// 读取 go newest-to-oldest.
 type StringTable struct {
 	mu      sync.RWMutex
 	mem     *Memtable
@@ -173,7 +173,7 @@ func (s *StringTable) Get(key string) ([]byte, bool) {
 }
 
 // Flush 将 memtable 移入新的有序 run 并清空
-// the memtable. Returns the run seq.
+// the memtable. 返回 run seq.
 func (s *StringTable) Flush() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

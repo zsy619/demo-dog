@@ -8,7 +8,7 @@
 //	for _, item := range items {
 //		item := item
 //		g.Go(func(ctx context.Context) error {
-//			return process(ctx, item)
+//			return process(上下文, item)
 //		})
 //	}
 //	if err := g.Wait(); err != nil { return err }

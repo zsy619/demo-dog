@@ -77,7 +77,7 @@ func (c *Clock) Heartbeat(from string, term uint64) error {
 
 // MaybeElect 在当前 leader 未
 // sent a heartbeat within heartTTL. The caller becomes
-// leader for a new term.
+// leader for 新的 term.
 func (c *Clock) MaybeElect() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

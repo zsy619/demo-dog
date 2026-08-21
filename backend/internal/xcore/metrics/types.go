@@ -174,7 +174,7 @@ func (g *GaugeSeries) Inc() { g.Add(1) }
 // Dec 减去 1。
 func (g *GaugeSeries) Dec() { g.Add(-1) }
 
-// Value returns the current value.
+// Value 返回 current value.
 func (g *GaugeSeries) Value() float64 {
 	return math.Float64frombits(g.bits.Load())
 }

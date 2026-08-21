@@ -4,26 +4,26 @@
 // zero-dependency simplicity.
 //
 // Threat model:
-//   - Two-node active/passive HA. Primary accepts writes. Follower
-//     tails the primary WAL over HTTP and applies every record to
+//   - Two-node active/passive HA. 主 accepts 写入. 从
+//     tails the 主 WAL over HTTP and applies every record to
 //     its own in-memory engine.
 //   - Failover is manual: a flag flip + restart promotes the
-//     follower to primary. The operator runs
+//     从 to 主. The operator runs
 //     dog-collector --role=primary on the new box and
 //     --role=follower --peer=<new-primary> on the old one.
-//   - We do NOT implement Raft/etcd-style leader election. That
+//   - We do NOT implement Raft/etcd-style leader 选举. That
 //     requires hashicorp/raft which conflicts with the stdlib-only
 //     policy. Operators who need consensus should use etcd or
 //     consul and have their service-mesh flip the route.
 //
 // Wire protocol (HTTP, JSON):
-//   GET  /replica/offset            -> primary reports last offset
+//   GET  /副本/offset            -> 主 reports last offset
 //   GET  /replica/wal?from=<offset> -> follow records starting at offset
 //
 // Concurrency:
-//   * One replica goroutine per follower. Idempotent restart on
+//   * One 副本 协程 per 从. Idempotent restart on
 //     disconnect.
-//   * The follower applies records under the same mutex the engine
+//   * The 从 applies 记录 under the same 互斥锁 the engine
 //     uses for ingest, so no observer sees a half-applied state.
 package replica
 

@@ -15,7 +15,7 @@
 //     page on (5min,1h) >= 14.4x AND
 //     (30min,6h) >= 6x within the same error budget
 //
-// The engine reads from the data store via a CountSink so it
+// The engine 读取 from the data store via a CountSink so it
 // can plug into logs, metrics, or spans. Real wiring is in
 // cmd/dog-collector; this package is the pure calculator.
 //

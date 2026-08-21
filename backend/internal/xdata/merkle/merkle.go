@@ -118,7 +118,7 @@ type Proof struct {
 }
 
 // Proof 若 key 存在则返回其成员性证明。
-// Returns nil if the key is not in the tree.
+// 返回 nil if the key is not in the tree.
 func (t *Tree) Proof(key string) *Proof {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

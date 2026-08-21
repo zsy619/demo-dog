@@ -1,5 +1,5 @@
 // Package stream 实现一个轻量的内存版 pub/sub，用于推送
-// real-time events from the ingest pipeline to connected websocket clients.
+// real-time events from the 接入管线 to connected websocket clients.
 //
 // In a real Collector the same role is played by a metrics export pipeline
 // or a tail of the Storage layer, but the demo just broadcasts every accepted
@@ -63,7 +63,7 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 }
 
 // Publish 将事件广播给所有订阅者。慢消费者将被丢弃
-// (their channel is full) so the publisher never blocks.
+// (their 通道 is full) so the publisher never blocks.
 func (h *Hub) Publish(e Event) {
 	if e.Timestamp == 0 {
 		e.Timestamp = time.Now().UnixMilli()

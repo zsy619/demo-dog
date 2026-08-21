@@ -42,7 +42,7 @@ func (s *Store) WithTime(now func() time.Time) *Store {
 }
 
 // Check 在 (tenant, nonce, ts) 在 TTL 窗口内已被见过时
-// seen before within the TTL window. Otherwise it records
+// seen before within the TTL window. Otherwise it 记录
 // 返回 ErrReplay。否则它记录该 nonce 并返回 nil。
 func (s *Store) Check(tenant, nonce string, ts time.Time) error {
 	if nonce == "" {
@@ -72,7 +72,7 @@ func (s *Store) Forget(tenant, nonce string) {
 	s.mu.Unlock()
 }
 
-// Cleanup removes expired entries. Returns the number of
+// Cleanup 移除 expired entries. 返回 number of
 // entries removed.
 func (s *Store) Cleanup() int {
 	s.mu.Lock()

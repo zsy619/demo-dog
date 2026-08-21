@@ -79,7 +79,7 @@ func (p *Pool) MarkDown(name string) {
 	}
 }
 
-// Backends returns a snapshot of backends with their alive
+// Backends 返回 a 快照 of backends with their alive
 // state.
 func (p *Pool) Backends() []BackendView {
 	p.mu.RLock()

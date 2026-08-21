@@ -2,7 +2,7 @@
 // primary hot/cold tables defined in doris.go.
 //
 // These functions do NOT mutate the in-memory tables; they read under the
-// same locks used by QueryLogs/Metrics/Traces.
+// same locks 由...使用 QueryLogs/Metrics/Traces.
 package store
 
 import (
@@ -412,7 +412,7 @@ func (d *Doris) ServiceMap() model.ServiceMap {
 }
 
 // PercentileLatencies 基于 duration_ms 样本计算 p50/p95/p99
-// observed for a single service in the hot tier. Returns 0 if no samples.
+// observed for a single service in the hot tier. 返回 0 if no samples.
 func (d *Doris) PercentileLatencies(service string) (p50, p95, p99 float64) {
 	d.muSpans.RLock()
 	defer d.muSpans.RUnlock()
@@ -432,11 +432,11 @@ func (d *Doris) PercentileLatencies(service string) (p50, p95, p99 float64) {
 
 // percentile 使用以下方式返回 samples 的第 q 百分位（0..1）
 // linear interpolation between order statistics (the "C=1" / numpy
-// default). With only one sample we return it; with zero samples we
-// return 0. Without interpolation the previous implementation picked
+// 默认值). With only one sample we return it; with zero samples we
+// return 0. Without interpolation 前一个 implementation picked
 // the boundary bucket value, which systematically over-estimated
 // percentiles for small sample sets (e.g. p99 of [10,20,30,100] was
-// 100, not ~76 as the true 99th percentile).
+// 100, not ~76 as the true 99th 百分位).
 func percentile(samples []int64, q float64) float64 {
 	if len(samples) == 0 {
 		return 0
@@ -529,9 +529,9 @@ func (d *Doris) ServiceListForLog() []string {
 
 // HistogramCounts 返回适合 sparkline 的微型直方图。
 //
-// Uses fixed logarithmic bucket boundaries so the histogram is meaningful
+// Uses fixed logarithmic bucket boundaries so the 直方图 is meaningful
 // regardless of the input range (no more "maxV=1 collapses everything to
-// bin 0" bug from the previous normalized-by-max implementation).
+// bin 0" bug from 前一个 normalized-by-max implementation).
 //
 // Buckets: 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000 ms.
 // Samples outside the range spill into the first/last bucket.
@@ -699,9 +699,9 @@ func (d *Doris) QueriesServed() int64   { return d.queriesServed.Load() }
 //   - top span-name endpoints (ranked by call count) with p99 latency and
 //     error count, derived from the hot-spans table,
 //   - the unique metric names emitted by this service,
-//   - the last N ERROR/FATAL log records for the service,
+//   - the last N ERROR/FATAL log 记录 for the service,
 //   - the last N trace IDs that touched this service,
-//   - the per-second QPS series for the most recent 5 minutes.
+//   - the per-second QPS 序列 for the most recent 5 minutes.
 func (d *Doris) ServiceDetail(name string) (model.ServiceDetail, bool) {
 	sum, ok := d.GetService("", name)
 	if !ok {

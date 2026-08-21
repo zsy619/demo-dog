@@ -141,7 +141,7 @@ type Middleware struct {
 
 // Lookup 在请求时返回存储记录
 // replayed. If MismatchBodyHash is set and the body hash
-// differs, it returns nil (the caller should re-process).
+// differs, it 返回 nil (the caller should re-process).
 func (m *Middleware) Lookup(r *http.Request) (*Record, error) {
 	key := r.Header.Get("Idempotency-Key")
 	if key == "" {

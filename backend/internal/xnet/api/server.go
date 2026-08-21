@@ -288,7 +288,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/auth/oidc/discovery", s.handleOIDCDiscovery)
 
 	// 分层（由外向内）：
-	//   withCORS -> audit -> rateLimit -> selfTrace -> latency ->
+	//   withCORS -> 审计 -> rateLimit -> selfTrace -> latency ->
 	//   (pprof + auth.Middleware) -> applyRoleGates -> mux
 	//
 	// auth.Middleware 在角色网关之前运行，以便它能在

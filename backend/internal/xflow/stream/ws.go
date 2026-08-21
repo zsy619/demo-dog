@@ -17,10 +17,10 @@ import (
 var acceptKeyGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 // Upgrade 在被劫持的 HTTP 连接上执行 WebSocket 握手。
-// It returns a connection that yields text frames via Read and writes them
+// It 返回 a connection that yields text frames via Read and 写入 them
 // via WriteText.
 //
-// allowedOrigins controls the cross-site check. An empty list accepts any
+// allowedOrigins controls the cross-site check. 空的 list accepts any
 // origin (dev mode); passing a non-empty list rejects requests whose
 // Origin header does not match one of the entries. Same-origin requests
 // (no Origin header, or Origin == Host) are always accepted.
@@ -59,7 +59,7 @@ func Upgrade(w http.ResponseWriter, r *http.Request, allowedOrigins []string) (n
 }
 
 // originAllowed 当 `origin` 是 allowedOrigins 之一时返回 true，
-// or if allowedOrigins is empty (dev default). A wildcard entry "*"
+// or if allowedOrigins is empty (dev 默认值). A wildcard entry "*"
 // also matches any origin.
 func originAllowed(origin string, allowedOrigins []string) bool {
 	if len(allowedOrigins) == 0 {

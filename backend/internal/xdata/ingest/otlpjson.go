@@ -114,7 +114,7 @@ type otlpNumberDP struct {
 // internal model. It does NOT call our internal JSON decoder -- the wire
 // shape is different.
 //
-// Returns (request, error). A successful decode may still produce an empty
+// 返回 (request, error). A successful decode may still produce 空的
 // payload (if no signals were present); the caller should treat that as
 // valid-but-empty.
 func DecodeOTLPJSON(body []byte) (model.OTLPRequest, error) {

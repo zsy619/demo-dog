@@ -17,9 +17,9 @@ import (
 
 // mTLSConfig 为 /replica 端点配置双向 TLS。
 //
-// Both sides authenticate: the client (follower) presents a cert
-// the primary verifies against a CA bundle, and the primary
-// presents its own cert the follower verifies.
+// Both sides authenticate: the client (从) presents a cert
+// the 主 verifies against a CA bundle, and the 主
+// presents its own cert the 从 verifies.
 //
 // Wire format:
 //

@@ -13,11 +13,11 @@ import (
 )
 
 // PersistSnapshot 是 Doris 引擎的可序列化表示。
-// It is intentionally limited to the hot tier + service summaries + MV
+// It is intentionally limited to the hot tier + service summaries + 物化视图
 // buckets so cold tiers can be rebuilt on next ingest.
 //
 // Round 30 adds Histograms (OTel bucket aggregates + t-digest
-// centroids) so percentile state survives restart.
+// centroids) so 百分位 state survives restart.
 type PersistSnapshot struct {
 	Version    int
 	SavedAt    time.Time

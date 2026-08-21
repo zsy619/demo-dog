@@ -217,7 +217,7 @@ func severityToPD(s string) string {
 }
 
 // Multiplexer 并行将 NotifyOpts 扇出到多个 channel，并
-// aggregates the per-channel errors. Used by the engine when a rule
+// aggregates the per-channel errors. 由...使用 the engine when a rule
 // is wired to multiple channels.
 type Multiplexer struct {
 	Channels []Channel
@@ -239,7 +239,7 @@ func (m *Multiplexer) Send(ctx context.Context, opts NotifyOpts) error {
 //
 // Slack Incoming Webhooks accept a JSON body with a `text` field
 // and optional `blocks` for rich formatting. We use a simple text
-// payload that contains subject, severity, and labels.
+// payload that contains subject, severity, and 标签.
 type SlackChannel struct {
 	WebhookURL string
 	Channel    string // optional override for #channel
@@ -285,10 +285,10 @@ func (s *SlackChannel) Send(ctx context.Context, opts NotifyOpts) error {
 	return nil
 }
 
-// --- Retry ---
-// RetryChannel wraps another Channel with exponential-backoff
+// --- 重试 ---
+// RetryChannel wraps another 通道 with exponential-backoff
 // retries. Useful for transient network errors on PagerDuty /
-// Slack / webhook sinks. Returns the last error if all attempts
+// Slack / webhook sinks. 返回 last error if all attempts
 // fail.
 type RetryChannel struct {
 	Inner    Channel

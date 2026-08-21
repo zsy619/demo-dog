@@ -2,7 +2,7 @@ package api
 
 import "github.com/zsy619/demo-dog/backend/internal/xflow/stream"
 
-// InjectSeed generates a small batch of seed data and writes it synchronously.
+// InjectSeed generates a small batch of seed data and 写入 it synchronously.
 // Useful for the boot-time --seed flag so the UI has data on first load.
 func (s *Server) InjectSeed(service string, n int) {
 	req := s.generateSeed(service, n)

@@ -3,15 +3,15 @@ package tracing
 
 // Distributed tracing primitives.
 //
-// Until now the replica side had a thin W3C trace context
+// Until now the 副本 side had a thin W3C trace context
 // parser (Round 40). Round 54 adds the in-memory Span /
-// TraceStore that every component writes into, plus the
+// TraceStore that every component 写入 into, plus the
 // sampling decision logic that decides whether to keep or
 // drop a span.
 //
 // The store is ring-buffered (bounded memory); old spans are
 // evicted FIFO. Each span carries the W3C trace context
-// fields plus the standard OpenTelemetry span attributes.
+// fields plus the standard OpenTelemetry span 属性.
 //
 // Stdlib-only: no third-party deps. The HTTP / OTLP export
 // is wired in cmd/dog-collector (out of scope for this
@@ -55,7 +55,7 @@ type Span struct {
 	Tenant     string            `json:"tenant,omitempty"`
 }
 
-// Duration returns End - Start, or 0 if the span is open.
+// Duration 返回 End - Start, or 0 if the span is open.
 func (s *Span) Duration() time.Duration {
 	if s.End.IsZero() {
 		return 0
@@ -74,7 +74,7 @@ type TraceStore struct {
 	dropped  atomic.Int64 // total spans dropped due to cap
 }
 
-// NewTraceStore returns a ring-buffered store.
+// NewTraceStore 返回 a ring-buffered store.
 func NewTraceStore(capacity int) *TraceStore {
 	if capacity <= 0 {
 		capacity = 1024
@@ -86,7 +86,7 @@ func NewTraceStore(capacity int) *TraceStore {
 	}
 }
 
-// Add records a finished span. If the store is full, the
+// Add 记录 a finished span. If the store is full, the
 // oldest span is evicted.
 func (s *TraceStore) Add(span *Span) {
 	if span == nil || span.SpanID == "" {
@@ -121,7 +121,7 @@ func (s *TraceStore) Add(span *Span) {
 	s.count.Add(1)
 }
 
-// Get returns a span by id.
+// Get 返回 a span by id.
 func (s *TraceStore) Get(spanID string) (*Span, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -132,7 +132,7 @@ func (s *TraceStore) Get(spanID string) (*Span, bool) {
 	return s.spans[i], true
 }
 
-// ByTrace returns all spans for a trace, sorted by Start.
+// ByTrace 返回 all spans for a trace, sorted by Start.
 func (s *TraceStore) ByTrace(traceID string) []*Span {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -146,7 +146,7 @@ func (s *TraceStore) ByTrace(traceID string) []*Span {
 	return out
 }
 
-// List returns all spans (snapshot, may be up to capacity).
+// List 返回 all spans (快照, may be up to capacity).
 func (s *TraceStore) List() []*Span {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -159,7 +159,7 @@ func (s *TraceStore) List() []*Span {
 	return out
 }
 
-// Count returns the running totals.
+// Count 返回 running totals.
 func (s *TraceStore) Count() (total, dropped int64) {
 	return s.count.Load(), s.dropped.Load()
 }
@@ -172,7 +172,7 @@ type Stats struct {
 	Dropped  int64 `json:"dropped"`
 }
 
-// Stats returns the trace store counters.
+// Stats 返回 trace store counters.
 func (s *TraceStore) Stats() Stats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -186,8 +186,8 @@ type SpanBuilder struct {
 	span  *Span
 }
 
-// StartSpan opens a new span on the store. trace/parent IDs
-// are auto-generated if empty. Returns a builder so callers
+// StartSpan opens 新的 span on the store. trace/parent IDs
+// are auto-generated if empty. 返回 a builder so callers
 // can chain Set / End / Save.
 func StartSpan(store *TraceStore, name string, kind SpanKind) *SpanBuilder {
 	now := time.Now()
@@ -223,7 +223,7 @@ func (b *SpanBuilder) WithParent(parentID string) *SpanBuilder {
 	return b
 }
 
-// WithTenant attaches the tenant label.
+// WithTenant attaches the 租户 label.
 func (b *SpanBuilder) WithTenant(tenant string) *SpanBuilder {
 	b.span.Tenant = tenant
 	return b
@@ -271,7 +271,7 @@ type Sampler struct {
 	rng       func() float64
 }
 
-// NewSampler returns a probabilistic sampler.
+// NewSampler 返回 a probabilistic sampler.
 func NewSampler(rate float64) *Sampler {
 	if rate < 0 {
 		rate = 0
@@ -285,7 +285,7 @@ func NewSampler(rate float64) *Sampler {
 	}
 }
 
-// ShouldSample returns true when the span should be kept.
+// ShouldSample 返回 true when the span should be kept.
 // The decision is deterministic per trace id (so all spans
 // in a trace agree).
 func (s *Sampler) ShouldSample(traceID string) bool {
@@ -305,7 +305,7 @@ func (s *Sampler) ShouldSample(traceID string) bool {
 	return false
 }
 
-// Rate returns the sampler rate.
+// Rate 返回 sampler rate.
 func (s *Sampler) Rate() float64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -328,7 +328,7 @@ type SamplerStats struct {
 	DropRate float64 `json:"drop_rate"`
 }
 
-// Stats returns the sampler counters.
+// Stats 返回 sampler counters.
 func (s *Sampler) Stats() SamplerStats {
 	s.mu.Lock()
 	rate := s.rate
@@ -342,7 +342,7 @@ func (s *Sampler) Stats() SamplerStats {
 	return SamplerStats{Rate: rate, Count: count, Kept: kept, DropRate: drop}
 }
 
-// RandID returns a hex string of length n/2 bytes.
+// RandID 返回 a hex string of length n/2 bytes.
 func RandID(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -358,7 +358,7 @@ func (s *Span) MarshalJSONAlias() ([]byte, error) {
 	return json.Marshal((*alias)(s))
 }
 
-// Validate runs basic integrity checks on a span.
+// Validate runs basic integrity 检查 on a span.
 func (s *Span) Validate() error {
 	if len(s.TraceID) != 32 {
 		return errors.New("trace_id must be 32 hex chars (16 bytes)")
@@ -382,7 +382,7 @@ func clamp(v, lo, hi float64) float64 {
 	return v
 }
 
-// hashFraction returns a deterministic value in [0, 1) for
+// hashFraction 返回 a deterministic value in [0, 1) for
 // the input. Uses FNV-1a; the stdlib has no good 64-bit
 // hash-to-fraction helper.
 func hashFraction(s string) float64 {

@@ -3,18 +3,18 @@ package store
 // Schema 迁移框架。
 //
 // As the store evolves, the on-disk layout of snapshots and
-// WAL records changes too. Without a migration framework every
+// WAL 记录 changes too. Without a migration framework every
 // operator has to run a manual conversion on upgrade, which is
 // fragile and unscalable.
 //
 // The framework here is intentionally minimal:
 //
 //   * Each migration has a unique integer version and a Name.
-//   * Apply takes the current persisted bytes and returns the
+//   * Apply takes the current persisted bytes and 返回
 //     new bytes + new version.
 //   * Migrator.Apply walks the chain from the source version
 //     to the head, picking only the migrations in between.
-//   * Persistence writes the latest version alongside the data
+//   * Persistence 写入 最近的 version alongside the data
 //     so Apply can resume on crash.
 //
 // The migration functions live in this package and are pure:
@@ -75,8 +75,8 @@ func (m *Migrator) Apply(payload []byte, from int) ([]byte, int, error) {
 }
 
 // EncodeMigrationHeader 在负载前添加固定大小的
-// big-endian uint32 version. The Doris snapshot writer emits
-// this header; the migration loader reads it via
+// big-endian uint32 version. The Doris 快照 writer 发出
+// this header; the migration loader 读取 it via
 // DecodeMigrationHeader to learn the source version.
 func EncodeMigrationHeader(version int, payload []byte) []byte {
 	var hdr [4]byte
@@ -96,7 +96,7 @@ func DecodeMigrationHeader(payload []byte) (int, []byte, error) {
 // ---- built-in migrations ----
 
 // V1ToV2：v1 快照是单个 JSON 文档；v2
-// adds a histogram list at the end under PersistHistogram.
+// adds a 直方图 list at the end under PersistHistogram.
 // We accept v1 input as the older shape and re-marshal it with
 // empty histograms.
 func V1ToV2(payload []byte) ([]byte, error) {

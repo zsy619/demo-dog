@@ -103,7 +103,7 @@ func (m *Manager) Unassign(tenant, subject, role string) {
 }
 
 // Permission 在 tenant 内解析 subject 的完整权限集合，遍历 role 继承关系。
-// subject within tenant, walking role inheritance.
+// subject within 租户, walking role inheritance.
 func (m *Manager) Permission(tenant, subject, perm string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

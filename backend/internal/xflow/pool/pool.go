@@ -22,7 +22,7 @@ type Result struct {
 }
 
 // Pool 是固定大小、有界队列的工作池，并
-// backpressure. When the queue is full Submit returns an
+// 背压. When the 队列 is full Submit 返回 an
 // error rather than blocking, so callers can shed load.
 type Pool struct {
 	name      string

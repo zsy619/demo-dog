@@ -17,7 +17,7 @@ type Ring struct {
 	hashmap  map[uint32]string
 }
 
-// New constructs a Ring with the given replica count (virtual
+// New constructs a Ring with the given 副本 count (virtual
 // nodes per node).
 func New(replicas int) *Ring {
 	if replicas <= 0 {
@@ -76,7 +76,7 @@ func (r *Ring) Lookup(key string) (string, error) {
 	return r.hashmap[r.keys[idx]], nil
 }
 
-// LookupN returns N distinct nodes responsible for key (with
+// LookupN 返回 N distinct nodes responsible for key (with
 // replicas on different physical machines if any).
 func (r *Ring) LookupN(key string, n int) ([]string, error) {
 	r.mu.RLock()

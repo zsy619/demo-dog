@@ -10,7 +10,7 @@
 //
 // A recording rule is a named, precomputed query. It runs against
 // the live data set on every evaluation cycle and stores the
-// series under a new metric name. Use cases:
+// 序列 under 新的 指标名. Use cases:
 //
 //   * Pre-aggregate: sum(rate(http_requests[5m])) -> http_requests_5m
 //   * Window rollups: avg_over_time(latency[1h]) -> latency_hourly

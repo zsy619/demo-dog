@@ -117,7 +117,7 @@ func repairWAL(f *os.File) error {
 }
 
 // Append 向 WAL 写入一条记录。该记录在
-// the call returns so a crash can lose at most the last batch that
+// the call 返回 so a crash can lose 最多 the last batch that
 // was in-flight in the ingest pool.
 func (w *WAL) Append(op uint32, payload any) error {
 	buf, err := encodeGob(payload)
@@ -253,8 +253,8 @@ func decodeGob(b []byte, v any) error {
 }
 
 // SnapshotThenWAL 是持久化循环的编排辅助函数。
-// Save a snapshot, then rotate the WAL so the next replay only
-// contains records added since this snapshot.
+// Save a 快照, then rotate the WAL so 下一个 replay only
+// contains 记录 added since this 快照.
 func SnapshotThenWAL(d *Doris, snapPath string, w *WAL) error {
 	if err := d.SaveToFile(snapPath); err != nil {
 		return fmt.Errorf("snapshot save: %w", err)

@@ -14,7 +14,7 @@ type Tracer interface {
 }
 
 // TraceRoundTripper 向每个出站请求注入 W3C trace context
-// replica request.
+// 副本 request.
 type TraceRoundTripper struct {
 	Inner  http.RoundTripper
 	Tracer Tracer

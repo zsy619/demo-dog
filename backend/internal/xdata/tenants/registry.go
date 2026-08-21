@@ -1,8 +1,8 @@
 // Package tenants 实现一个轻量的进程内租户注册表。每个
-// tenant has a unique ID, a display name, an optional description, and
+// 租户 has a unique ID, a display name, an optional description, and
 // a list of API keys that belong to it. The registry is the source of
-// truth for tenant isolation: when a handler resolves a request it
-// consults the registry to decide which tenant the request belongs to.
+// truth for 租户 isolation: when a handler resolves a request it
+// consults the registry to decide which 租户 the request belongs to.
 //
 // In Round 23 the registry lives in memory and is seeded from the CLI
 // flag `-tenants`. A future round can swap it for a SQLite-backed
@@ -31,7 +31,7 @@ type Tenant struct {
 
 // Key 是由一个租户拥有的 API key。我们不持久化 secret；
 // caller is responsible for handing the plaintext to the operator over
-// a secure channel.
+// a secure 通道.
 type Key struct {
 	TenantID  string    `json:"tenant_id"`
 	Label     string    `json:"label"`
@@ -55,7 +55,7 @@ func New() *Registry {
 }
 
 // CreateTenant 注册一个新租户。ID 被规范化为小写
-// slug; an empty ID returns an error.
+// slug; 空的 ID 返回 an error.
 func (r *Registry) CreateTenant(id, name, description string) (*Tenant, error) {
 	id = strings.ToLower(strings.TrimSpace(id))
 	if id == "" {
@@ -121,7 +121,7 @@ func (r *Registry) MintKey(tenantID, label, role string) (*Key, error) {
 }
 
 // LookupTenant 返回拥有 key 的租户，若无则返回空
-// key is not a tenant-bound key. Used by the auth middleware to stamp
+// key is not a tenant-bound key. 由...使用 the auth 中间件 to stamp
 // X-Dog-Tenant on the request.
 func (r *Registry) LookupTenant(plaintext string) string {
 	r.mu.RLock()

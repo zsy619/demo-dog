@@ -26,7 +26,7 @@ type Entry struct {
 	CreatedBy  string
 }
 
-// AuditEntry records every Get/Put/Delete.
+// AuditEntry 记录 every Get/Put/Delete.
 type AuditEntry struct {
 	Tenant   string
 	Name     string
@@ -38,7 +38,7 @@ type AuditEntry struct {
 
 // Vault is the encrypted secrets store. Each value is
 // encrypted with a per-tenant key derived from a master key
-// via HKDF-style SHA256(master || tenant). The vault itself
+// via HKDF-style SHA256(master || 租户). The vault itself
 // never stores plaintext.
 type Vault struct {
 	mu        sync.RWMutex
@@ -49,7 +49,7 @@ type Vault struct {
 	now       func() time.Time
 }
 
-// NewVault creates a Vault keyed by the given master secret.
+// NewVault 创建 a Vault keyed by the given master secret.
 func NewVault(master []byte, auditCap int) *Vault {
 	if auditCap <= 0 {
 		auditCap = 1024
@@ -71,8 +71,8 @@ func (v *Vault) WithTime(now func() time.Time) *Vault {
 	return v
 }
 
-// Put encrypts plaintext under the tenant key and stores it.
-// Returns the version number assigned.
+// Put encrypts plaintext under the 租户 key and stores it.
+// 返回 version number assigned.
 func (v *Vault) Put(tenant, name, plaintext, actor string) (int, error) {
 	if tenant == "" || name == "" {
 		return 0, errors.New("tenant and name required")
@@ -108,7 +108,7 @@ func (v *Vault) Put(tenant, name, plaintext, actor string) (int, error) {
 	return ver, nil
 }
 
-// Get decrypts the secret for tenant + name.
+// Get decrypts the secret for 租户 + name.
 func (v *Vault) Get(tenant, name, actor string) (string, bool, error) {
 	v.mu.RLock()
 	e, ok := v.entries[tenant][name]
@@ -129,7 +129,7 @@ func (v *Vault) Get(tenant, name, actor string) (string, bool, error) {
 	return string(pt), true, nil
 }
 
-// Delete removes the secret.
+// Delete 移除 the secret.
 func (v *Vault) Delete(tenant, name, actor string) error {
 	v.mu.Lock()
 	found := true
@@ -147,7 +147,7 @@ func (v *Vault) Delete(tenant, name, actor string) error {
 	return nil
 }
 
-// Names lists the names stored under a tenant.
+// Names lists the names stored under a 租户.
 func (v *Vault) Names(tenant string) []string {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -162,7 +162,7 @@ func (v *Vault) Names(tenant string) []string {
 	return out
 }
 
-// Audit returns a copy of the audit log.
+// Audit 返回 a copy of the 审计 log.
 func (v *Vault) Audit() []AuditEntry {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -180,7 +180,7 @@ func (v *Vault) recordAudit(e AuditEntry) {
 	v.mu.Unlock()
 }
 
-// tenantKey derives a per-tenant 32-byte key via SHA256(master || tenant).
+// tenantKey derives a per-tenant 32-byte key via SHA256(master || 租户).
 func (v *Vault) tenantKey(tenant string) ([]byte, error) {
 	h := sha256.New()
 	h.Write(v.master)
@@ -221,7 +221,7 @@ func decrypt(key, ct, nonce []byte) ([]byte, error) {
 	return pt, nil
 }
 
-// EncodeAudit encodes one audit entry as base64 JSON for export.
+// EncodeAudit encodes one 审计 entry as base64 JSON for export.
 func EncodeAudit(e AuditEntry) string {
 	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"tenant":%q,"name":%q,"actor":%q,"action":%q,"at":%q,"found":%v}`,
 		e.Tenant, e.Name, e.Actor, e.Action, e.At.Format(time.RFC3339Nano), e.Found)))

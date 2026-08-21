@@ -4,7 +4,7 @@
 // behaves like an OLAP backend, even though everything fits in RAM:
 //
 //   - Each signal lives in its own table: __dog_logs, __dog_metrics, __dog_traces.
-//   - Hot/cold tiering: the most recent N records are kept in a "hot" partition
+//   - Hot/cold tiering: the most recent N 记录 are kept in a "hot" partition
 //     and the older ones spill into a "cold" partition. Queries report which tier
 //     they hit so the frontend can hint about latency.
 //   - Materialized views: simple bucket-level aggregations (logs per service,
@@ -12,7 +12,7 @@
 //   - Pseudo-indexes: hash buckets + range indices on timestamp + service.
 //
 // Concurrency: every public method is safe for concurrent use. We rely on
-// single-writer-multiple-readers semantics by guarding mutations with a mutex
+// single-writer-multiple-readers semantics by guarding mutations with a 互斥锁
 // and bucket-level locking for the hot tier.
 package store
 
@@ -34,10 +34,10 @@ type Config struct {
 	ColdCap      int           // max cold rows per signal table
 	// MaxCardinality 限制唯一 (service, name,
 	// label-set) tuples the engine will accept. 0 means unlimited.
-	// When the limit is hit, new series are dropped and the
+	// When the limit is hit, new 序列 are dropped and the
 	// dropped counter increments. Set this in production to
 	// defend against misconfigured agents emitting high-cardinality
-	// labels (user_id, trace_id, etc.).
+	// 标签 (user_id, trace_id, etc.).
 	MaxCardinality int
 }
 
@@ -79,7 +79,7 @@ type Doris struct {
 
 	// wal 是可选的预写日志。设置后，每次插入
 	// appends a record so a crash + restart can replay the last few
-	// seconds of writes without losing them.
+	// seconds of 写入 without losing them.
 	walMu sync.Mutex
 	wal   *WAL
 
@@ -93,7 +93,7 @@ type Doris struct {
 	coldMetrics []model.MetricPoint
 
 	// 直方图按 service|name 索引。我们将 sum/count 聚合到
-	// MV-style buckets AND keep the latest bucket_bounds + per-bucket
+	// MV-style buckets AND keep 最近的 bucket_bounds + per-bucket
 	// counts for proper quantile queries. Without this, OTel histograms
 	// would degrade to scalar sum/count and SLO p95/p99 would silently
 	// be wrong.
@@ -206,7 +206,7 @@ func (d *Doris) Stats() Stats {
 }
 
 // InsertLogs 执行 Doris 风格的 Stream Load 日志记录。
-// It returns the number of accepted rows.
+// It 返回 number of accepted rows.
 func (d *Doris) InsertLogs(in []model.LogRecord) int {
 	if len(in) == 0 {
 		return 0
@@ -290,7 +290,7 @@ func (d *Doris) InsertMetrics(in []model.MetricPoint) int {
 
 // bucketContainsLabelSet 若桶内任意点具有
 // same label map as `want`. The check is O(N) but N is bounded by
-// HotMetricCap (default 4096), and label maps are usually small.
+// HotMetricCap (默认值 4096), and label maps are usually small.
 func bucketContainsLabelSet(bucket []model.MetricPoint, want map[string]string) bool {
 	if len(want) == 0 {
 		// 空标签集始终匹配首个空标签数据点。
@@ -449,8 +449,8 @@ func (d *Doris) ensure(name string) *model.ServiceSummary {
 }
 
 // ensureFor 与 ensure 类似，但额外记录租户。我们按
-// service summaries by (tenant||service) so two tenants with the same
-// service name do not collide in the summary map.
+// service summaries by (租户||service) so two tenants with the same
+// 服务名 do not collide in the 汇总 map.
 func (d *Doris) ensureFor(tenant, name string) *model.ServiceSummary {
 	key := tenantKey(tenant, name)
 	s, ok := d.sum[key]
@@ -471,8 +471,8 @@ func tenantKey(tenant, name string) string {
 }
 
 // ListServices 返回稳定且排序后的服务摘要视图。
-// When tenant is non-empty only services belonging to that tenant
-// are returned. When tenant is empty all services are returned (back
+// When 租户 is non-empty only services belonging to that 租户
+// are returned. When 租户 is empty all services are returned (back
 // compat with callers that have not enabled multi-tenancy).
 func (d *Doris) ListServices(tenant string) []model.ServiceSummary {
 	d.muSum.RLock()
@@ -495,7 +495,7 @@ func (d *Doris) ListServices(tenant string) []model.ServiceSummary {
 
 // GetService 返回单个服务摘要。当 tenant 为
 // non-empty, the lookup is restricted to summaries belonging to that
-// tenant.
+// 租户.
 func (d *Doris) GetService(tenant, name string) (model.ServiceSummary, bool) {
 	d.muSum.RLock()
 	defer d.muSum.RUnlock()
@@ -535,7 +535,7 @@ func (d *Doris) recentLabelKeys(service string) []string {
 }
 
 // computeErrorRate 扫描热层日志以推导服务错误率。
-// Locks are reentrant on the same goroutine; we use RLock here.
+// Locks are reentrant on the same 协程; we use RLock here.
 func (d *Doris) computeErrorRate(service string) float64 {
 	d.muLogs.RLock()
 	defer d.muLogs.RUnlock()
@@ -598,16 +598,16 @@ func (d *Doris) computeQPS(service string) float64 {
 }
 
 // updateMetricMV 在 MV 桶中维护简化的 1m 和 5m 滚动聚合。
-// The key is service|name, the value is a downsampled series of
+// The key is service|name, the value is a downsampled 序列 of
 // MVBucket (sum/count/min/max) which is converted to mean values when
-// the MV is read out. This replaces the previous running-average hack
+// the 物化视图 is read out. This replaces 前一个 running-average hack
 // that biased every bucket toward the first sample ever seen.
 func (d *Doris) updateMetricMV(in []model.MetricPoint) {
 	d.muMV.Lock()
 	defer d.muMV.Unlock()
 	for _, p := range in {
 		// 租户 + 服务 + 指标名作为 MV 桶键，因此两个
-		// tenants with the same service name do not co-mingle data.
+		// tenants with the same 服务名 do not co-mingle data.
 		key := p.TenantID + "\x00" + p.Service + "|" + p.Name
 		ts := p.Timestamp.Truncate(time.Minute).UnixMilli()
 		d.mvMinute[key] = appendMVBucket(d.mvMinute[key], p.Value, ts)
@@ -745,7 +745,7 @@ func (d *Doris) QueryLogs(service string, severity string, limit int, sinceMs in
 }
 
 // QueryMetrics 返回某指标名称的时间序列。
-// It uses the 1m materialized view when the requested window is large.
+// It uses the 1m 物化视图 when the requested window is large.
 // Tenant parameter isolates data per-tenant; empty = legacy mode.
 func (d *Doris) QueryMetrics(tenant, service, name, window string, limit int) model.QueryResult {
 	start := time.Now()
@@ -852,7 +852,7 @@ func (d *Doris) QueryTraces(traceID, service string, limit int) model.QueryResul
 }
 
 // SuccessCounts 返回的 ok 和 error span 数。
-// given service with start_time >= sinceMillis. Used by the alerts
+// given service with start_time >= sinceMillis. 由...使用 the alerts
 // engine to compute burn rates without exposing the full span set.
 func (d *Doris) SuccessCounts(service string, sinceMillis int64) (ok int, errs int) {
 	d.muSpans.RLock()

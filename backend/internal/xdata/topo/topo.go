@@ -128,7 +128,7 @@ func (q *Queue) Complete(id string, err error) error {
 }
 
 // Next 返回下一个就绪任务 ID，阻塞直到存在
-// available or the queue is closed.
+// available or the 队列 is closed.
 func (q *Queue) Next() (string, bool) {
 	id, ok := <-q.ready
 	return id, ok

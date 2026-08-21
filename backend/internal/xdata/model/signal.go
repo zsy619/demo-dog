@@ -1,7 +1,7 @@
 // Package model 定义三大可观测性支柱的统一数据模型。
 //
 // All observability signals are stored in-memory as LogRecord / MetricPoint /
-// SpanRecord through the Store, which writes to an "In-Memory Doris" engine.
+// SpanRecord through the Store, which 写入 to an "In-Memory Doris" engine.
 // The naming follows Apache Doris / OTel conventions:
 //
 //   - logs: PK (service_name, ts_ms), hash bucketed
@@ -139,10 +139,10 @@ type SeriesPoint struct {
 
 // MVBucket 是单个时间桶聚合。每个桶代表
 // a 1- or 5-minute window and stores sum+count so we can compute a
-// proper mean when the bucket is read out (rather than the previous
+// proper mean when the bucket is read out (rather than 前一个
 // "running average" hack that biased toward the first sample).
 //
-// On rollover (older buckets evicted to keep MV bounded), callers can
+// On rollover (older buckets evicted to keep 物化视图 bounded), callers can
 // compute min/max in addition to the mean by reading the partially
 // populated fields.
 type MVBucket struct {
@@ -164,8 +164,8 @@ func (b MVBucket) Mean() float64 {
 // HistogramView 是聚合 OTel 直方图的读出。
 // Bounds slice is the upper bound of each bucket (exclusive) with the
 // last entry representing +Inf overflow. Counts are the per-bucket
-// counts since the series began. Total/Sum/Min/Max are running totals
-// across the lifetime of the series.
+// counts since the 序列 began. Total/Sum/Min/Max are running totals
+// across the lifetime of the 序列.
 type HistogramView struct {
 	Bounds []float64 `json:"bounds"`
 	Counts []int64   `json:"counts"`
@@ -202,7 +202,7 @@ type Row map[string]any
 //   - Returned: rows actually returned to the caller
 //   - TookMs:  query wall-clock latency
 //   - Tier:    storage tier that served the query (hot | cold)
-//   - MVUsed:  materialized view name if any
+//   - MVUsed:  物化视图 name if any
 type QueryStats struct {
 	Scanned  int64  `json:"scanned"`
 	Returned int64  `json:"returned"`
@@ -212,7 +212,7 @@ type QueryStats struct {
 }
 
 // LabelKeys 返回已观察到的属性 key 集合
-// across all stored records. Useful for building the "filter by label"
+// across all stored 记录. Useful for building the "filter by label"
 // dropdown in the frontend.
 type LabelKeysResponse struct {
 	Logs    []string `json:"logs"`
@@ -237,8 +237,8 @@ type ServiceMap struct {
 }
 
 // ServiceDetail 打包 /api/services/{name}/detail 的每服务下钻负载。
-// It surfaces top endpoints (span-name histogram), recent errors, recent trace IDs, and
-// the per-metric time series window so the frontend can render a complete service overview
+// It surfaces top endpoints (span-name 直方图), recent errors, recent trace IDs, and
+// the per-metric 时序 window so the frontend can render a complete service overview
 // page with a single round-trip.
 type ServiceDetail struct {
 	Summary      ServiceSummary  `json:"summary"`

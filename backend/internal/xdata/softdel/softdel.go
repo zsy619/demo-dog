@@ -101,7 +101,7 @@ func (s *Store) Restore(id string) error {
 }
 
 // Reclaim 删除早于 TTL 的软删除记录。
-// Returns the number reclaimed.
+// 返回 number reclaimed.
 func (s *Store) Reclaim() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

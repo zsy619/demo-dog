@@ -51,7 +51,7 @@ func (l *Loader) Load() error {
 }
 
 // Reload 重新读取文件并替换为新的 config。
-// Returns ErrUnchanged when the underlying files have not
+// 返回 ErrUnchanged when the underlying files have not
 // changed since the last load.
 func (l *Loader) Reload() error {
 	curMod, err := l.modTime()
