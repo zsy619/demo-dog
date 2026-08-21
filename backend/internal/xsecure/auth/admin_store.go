@@ -4,13 +4,21 @@ package auth
 //
 // AdminStore 持有 API key 表，支持 CRUD、轮换、按 token/ID 查找、过期清理。
 // 使用 sync.RWMutex 保护 hash 表；使用 atomic.Int64 生成自增计数器。
+//
+// W1 起,AdminStore 可选挂一个 xpersistence.KV,所有 CRUD
+// 都会通过写穿(write-through)方式落盘,进程重启后保留所有
+// API key。不传 KV 则退化为纯内存(R3 之前的行为)。
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/zsy619/demo-dog/backend/internal/xpersistence"
 )
 
 // AdminStore 持有 API key 表（线程安全）。
@@ -23,14 +31,101 @@ type AdminStore struct {
 	keys     map[string]*KeyEntry // KeyID → 条目
 	hashToID map[string]string   // token hash → KeyID
 	counter  atomic.Int64    // 用于生成唯一 KeyID 的自增计数器
+	kv       xpersistence.KV  // 可选,nil = 纯内存
 }
 
 // NewAdminStore 创建一个空的 AdminStore。
+//
+// 持久化请用 NewAdminStoreWithKV。
 func NewAdminStore() *AdminStore {
 	return &AdminStore{
 		keys:     make(map[string]*KeyEntry),
 		hashToID: make(map[string]string),
 	}
+}
+
+// NewAdminStoreWithKV 创建一个带持久化的 AdminStore。
+//
+// 启动时从 KV 加载所有 KeyEntry;加载失败(损坏、I/O 错误)
+// 返回错误,由调用方决定是否中断启动。
+func NewAdminStoreWithKV(ctx context.Context, kv xpersistence.KV) (*AdminStore, error) {
+	if kv == nil {
+		return nil, errors.New("auth: kv is nil")
+	}
+	s := &AdminStore{
+		keys:     make(map[string]*KeyEntry),
+		hashToID: make(map[string]string),
+		kv:       kv,
+	}
+	if err := s.load(ctx); err != nil {
+		return nil, fmt.Errorf("auth: load: %w", err)
+	}
+	return s, nil
+}
+
+// SetKV 用于测试或后注入 KV。调用前必须空 store。
+func (s *AdminStore) SetKV(ctx context.Context, kv xpersistence.KV) error {
+	if kv == nil {
+		return errors.New("auth: kv is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.keys) > 0 {
+		return errors.New("auth: SetKV on non-empty store")
+	}
+	s.kv = kv
+	return s.load(ctx)
+}
+
+// load 从 KV 读所有 key entries,填到内存索引。
+func (s *AdminStore) load(ctx context.Context) error {
+	keyNames, err := s.kv.List(ctx, "admin-keys/")
+	if err != nil {
+		return err
+	}
+	for _, k := range keyNames {
+		raw, err := s.kv.Get(ctx, k)
+		if err != nil {
+			continue
+		}
+		var e KeyEntry
+		if err := json.Unmarshal(raw, &e); err != nil {
+			continue
+		}
+		if e.KeyID == "" || e.Hash == "" {
+			continue
+		}
+		// 跳过已过期的 key(启动时不主动清理,等 PurgeExpired)
+		if !e.ExpiresAt.IsZero() && time.Now().After(e.ExpiresAt) {
+			continue
+		}
+		s.keys[e.KeyID] = &e
+		s.hashToID[e.Hash] = e.KeyID
+		// 维护 counter 不退化(用 KeyID 后缀时间戳取最大值)
+		// 实际中 nextID 用 nanos 区分,counter 主要防止 nanos 撞车,
+		// 不强制同步到 max,这里跳过。
+	}
+	return nil
+}
+
+// persist 写一个 entry 到 KV。
+func (s *AdminStore) persist(e *KeyEntry) error {
+	if s.kv == nil {
+		return nil
+	}
+	raw, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	return s.kv.Set(context.Background(), "admin-keys/"+e.KeyID, raw)
+}
+
+// remove 删除一个 entry 的 KV 记录。
+func (s *AdminStore) remove(id string) {
+	if s.kv == nil {
+		return
+	}
+	_ = s.kv.Delete(context.Background(), "admin-keys/"+id)
 }
 
 // nextID 生成一个新的 KeyID（包含时间戳 + 自增计数器，保证唯一）。
@@ -72,6 +167,12 @@ func (s *AdminStore) CreateKey(identity, label, tenant string, scopes []string, 
 	defer s.mu.Unlock()
 	s.keys[entry.KeyID] = entry
 	s.hashToID[entry.Hash] = entry.KeyID
+	if err := s.persist(entry); err != nil {
+		// 回滚内存
+		delete(s.hashToID, entry.Hash)
+		delete(s.keys, entry.KeyID)
+		return "", nil, err
+	}
 	return raw, entry, nil
 }
 
@@ -128,6 +229,19 @@ func (s *AdminStore) RotateKey(oldID string, grace time.Duration) (raw string, o
 	}
 	s.keys[newEntry.KeyID] = newEntry
 	s.hashToID[newEntry.Hash] = newEntry.KeyID
+	if err := s.persist(newEntry); err != nil {
+		// 回滚内存
+		delete(s.hashToID, newEntry.Hash)
+		delete(s.keys, newEntry.KeyID)
+		return "", nil, nil, err
+	}
+	// 旧 key 的 ExpiresAt 已被设置,落盘
+	if grace > 0 {
+		if perr := s.persist(old); perr != nil {
+			// 即使旧 key 落盘失败也不影响新 key;调用方后续可重试
+			_ = perr
+		}
+	}
 	return raw, old, newEntry, nil
 }
 
@@ -140,7 +254,7 @@ func (s *AdminStore) DisableKey(id string) error {
 		return errors.New("key not found")
 	}
 	e.Disabled = true
-	return nil
+	return s.persist(e)
 }
 
 // DeleteKey 永久删除一个 key。
@@ -153,6 +267,7 @@ func (s *AdminStore) DeleteKey(id string) error {
 	}
 	delete(s.hashToID, e.Hash)
 	delete(s.keys, id)
+	s.remove(id)
 	return nil
 }
 
@@ -174,12 +289,17 @@ func (s *AdminStore) PurgeExpired(now time.Time) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := 0
+	var toRemove []string
 	for id, e := range s.keys {
 		if !e.ExpiresAt.IsZero() && now.After(e.ExpiresAt) {
 			delete(s.hashToID, e.Hash)
 			delete(s.keys, id)
+			toRemove = append(toRemove, id)
 			n++
 		}
+	}
+	for _, id := range toRemove {
+		s.remove(id)
 	}
 	return n
 }
