@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -30,6 +31,8 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/tenants"
 	"github.com/zsy619/demo-dog/backend/internal/xflow/stream"
+	"github.com/zsy619/demo-dog/backend/internal/xpersistence"
+	"github.com/zsy619/demo-dog/backend/internal/xsecure/auth"
 )
 
 // banner is printed once at startup. It foreshadoows every endpoint and gives
@@ -70,6 +73,10 @@ func main() {
 	selfTrace := flag.Bool("self-trace", false, "Record the collectors own requests as OTLP spans and POST them back to /api/ingest/otlp. Useful for self-observability in production.")
 	alertsPath := flag.String("alerts-rules", "", "Optional path to a YAML/JSON file of SLO burn-rate rules. Empty disables alerting.")
 	tenantsFlag := flag.String("tenants", "", "Optional comma-separated list of <id>:<name> to seed on startup. Tenants registered here get a default admin key derived from -api-keys.")
+	// W1: data-dir 指向 tenant + admin key 等配置类状态的 KV
+	// 文件所在目录。空值则退化为纯内存模式(R3 之前的
+	// 行为,适合纯开发场景)。
+	dataDir := flag.String("data-dir", "", "Directory for persistent KV state (tenants, admin keys, etc). Empty = in-memory only. Recommended: ./data")
 	flag.Parse()
 
 	cfg := store.DefaultConfig()
@@ -149,25 +156,78 @@ func main() {
 			// "<key>:<role>:<label>:<tenant>".
 			apiServer.Auth().AddFromSpec(spec)
 		}
-		// Optional tenant registry. Each tenant starts empty; the
-		// admin can mint keys via /api/tenants/<id>/keys.
-		if *tenantsFlag != "" {
-			reg := tenants.New()
-			for _, t := range splitCSV(*tenantsFlag) {
-				parts := strings.SplitN(t, ":", 2)
-				name := parts[0]
-				if len(parts) == 2 {
-					name = parts[1]
-				}
-				if _, err := reg.CreateTenant(parts[0], name, ""); err == nil {
-					fmt.Printf("  Tenant            : %s (%s)\n", parts[0], name)
-				}
-			}
-			apiServer.SetTenants(reg)
-		}
 		fmt.Printf("  Auth mode         : api-key (%d key(s) loaded)\n", apiServer.Auth().Count())
 	} else {
 		fmt.Println("  Auth mode         : off (dev mode; do not expose to public networks)")
+	}
+	// Optional tenant registry. Each tenant starts empty; the
+	// admin can mint keys via /api/tenants/<id>/keys.
+	//
+	// W1: 当 -data-dir 设置时,registry + admin store 都挂上
+	// xpersistence.KV,所有 CRUD 都会落盘,进程重启后保留。
+	//
+	// 共享同一个 KV 文件;后续 W1.3~W1.4 也会用同一份
+	// KV 加新 namespace,不引入新的 IO 通道。
+	//
+	// 独立于 -api-keys:即使没有 auth,tenant + KV 也能工作,
+	// 这样 -tenants 'foo,bar' + -data-dir ./data 就是一个
+	// 合法组合。
+	//
+	// 如果同时设置 -data-dir + -tenants:创建/重建 tenant,
+	// 并把新数据写入 KV。
+	// 如果只设置 -data-dir (没有 -tenants):仅打开 KV 并
+	// 加载上次持久化的 tenant,不创建任何新租户。
+	var reg *tenants.Registry
+	var adminStore *auth.AdminStore
+	var kv xpersistence.KV
+	if *dataDir != "" {
+		if err := os.MkdirAll(*dataDir, 0o755); err != nil {
+			log.Printf("[DOG] data-dir mkdir failed: %v", err)
+			os.Exit(2)
+		}
+		kvPath := filepath.Join(*dataDir, "control.json")
+		var err error
+		kv, err = xpersistence.OpenFileJSON(kvPath)
+		if err != nil {
+			log.Printf("[DOG] KV open failed: %v", err)
+			os.Exit(2)
+		}
+		defer kv.Close()
+		if r2, err := tenants.NewWithKV(context.Background(), kv); err == nil {
+			reg = r2
+		} else {
+			log.Printf("[DOG] tenants load failed: %v", err)
+			os.Exit(2)
+		}
+		if s2, err := auth.NewAdminStoreWithKV(context.Background(), kv); err == nil {
+			adminStore = s2
+		} else {
+			log.Printf("[DOG] admin store load failed: %v", err)
+			os.Exit(2)
+		}
+		fmt.Printf("  Persistence        : %s (control KV active)\n", kvPath)
+	} else if *tenantsFlag != "" {
+		// 没有 -data-dir 但有 -tenants:回退纯内存
+		reg = tenants.New()
+		adminStore = auth.NewAdminStore()
+	}
+	if *tenantsFlag != "" {
+		for _, t := range splitCSV(*tenantsFlag) {
+			parts := strings.SplitN(t, ":", 2)
+			name := parts[0]
+			if len(parts) == 2 {
+				name = parts[1]
+			}
+			if _, err := reg.CreateTenant(parts[0], name, ""); err == nil {
+				fmt.Printf("  Tenant            : %s (%s)\n", parts[0], name)
+			}
+		}
+	}
+	if reg != nil {
+		apiServer.SetTenants(reg)
+	}
+	if adminStore != nil {
+		apiServer.SetAdminKeys(adminStore)
 	}
 
 	// If seed services are provided, drop a few records before serving so the

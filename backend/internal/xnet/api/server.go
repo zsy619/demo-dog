@@ -170,6 +170,16 @@ func (s *Server) Retention() *RetentionManager { return s.retention }
 // AdminKeys 返回管理 API 密钥存储。
 func (s *Server) AdminKeys() *auth.AdminStore { return s.adminKeys }
 
+// SetAdminKeys 替换 server 的 admin store(W1 起用于挂载
+// 持久化的 KV 后端)。必须在 apiServer.Handler() 之前调用,
+// 否则 /api/keys 路由会拿到旧的 in-memory store。
+func (s *Server) SetAdminKeys(store *auth.AdminStore) {
+	if store == nil {
+		return
+	}
+	s.adminKeys = store
+}
+
 // Replica 返回副本状态句柄。
 func (s *Server) Replica() *ReplicaStatus { return s.replica }
 
