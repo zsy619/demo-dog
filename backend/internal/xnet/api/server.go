@@ -560,20 +560,67 @@ func (s *Server) WrapWithSelfTrace(loopback string) {
 	selfTraceMu.Unlock()
 }
 
-// handleProbe 是一个合成的黑盒探针端点。它始终
-// 返回 200 OK 及包含引擎统计信息的小 JSON 体。
-// K8s readinessProbe 和外部的可用性监控会调用此端点。
-// 不要求认证，避免错误的 auth 配置
-// 导致采集器离线。
+// handleProbe 同时承担两种角色:
+//
+//   - K8s readinessProbe / 负载均衡器健康检查:
+//     不带 ?target= 查询参数,返回 200 OK 与引擎统计;
+//     不需要鉴权,以避免错误的 auth 配置导致采集器离线。
+//   - 一次性外部 HTTP 探测(前端 Probes 页):
+//     带 ?target=<url> 时,真正发起 HTTP 请求并返回
+//     {ok, duration_ns, status_code, target}。
+//     鉴权取决于角色门控(与查询端点相同)。
+//     探测超时 5s。
 func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
-	stats := s.store.Stats()
+	target := r.URL.Query().Get("target")
+	if target == "" {
+		stats := s.store.Stats()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":            "ok",
+			"uptime_seconds":    int(time.Since(s.started).Seconds()),
+			"logs_accepted":     stats.LogsAccepted,
+			"metrics_accepted":  stats.MetricsAccepted,
+			"spans_accepted":    stats.SpansAccepted,
+			"queries_served":    stats.QueriesServed,
+		})
+		return
+	}
+	probeExternal(w, target)
+}
+
+// probeExternal 真正发起一次外部 HTTP GET 探测。
+//
+// 返回 200 OK 及 {ok, duration_ns, status_code, target},
+// 与前端 ProbeResult 类型一一对应。
+func probeExternal(w http.ResponseWriter, target string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	start := time.Now()
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":           false,
+			"target":       target,
+			"status_code":  0,
+			"duration_ns":  int64(0),
+		})
+		return
+	}
+	resp, err := client.Do(req)
+	elapsed := time.Since(start)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":          false,
+			"target":      target,
+			"status_code": 0,
+			"duration_ns": int64(elapsed),
+		})
+		return
+	}
+	resp.Body.Close()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":            "ok",
-		"uptime_seconds":    int(time.Since(s.started).Seconds()),
-		"logs_accepted":     stats.LogsAccepted,
-		"metrics_accepted":  stats.MetricsAccepted,
-		"spans_accepted":    stats.SpansAccepted,
-		"queries_served":    stats.QueriesServed,
+		"ok":          resp.StatusCode >= 200 && resp.StatusCode < 400,
+		"target":      target,
+		"status_code": resp.StatusCode,
+		"duration_ns": int64(elapsed),
 	})
 }
 

@@ -88,6 +88,7 @@ func (s *Server) handleSLOs(w http.ResponseWriter, r *http.Request) {
 			"budget_left_percent": st.BudgetLeftPercent,
 			"healthy":             st.Healthy,
 			"as_of":               st.AsOf.Format(time.RFC3339Nano),
+			"score":               alerts.Score(st),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"slos": out})

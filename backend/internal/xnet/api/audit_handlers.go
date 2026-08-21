@@ -53,26 +53,89 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("until"); raw != "" {
 		if v, err := time.Parse(time.RFC3339, raw); err == nil { filter.Until = v }
 	}
+	// 同时兼容 ?n 与前端默认的 ?limit。
+	if raw := q.Get("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			n = v
+			if n > 10_000 {
+				n = 10_000
+			}
+		}
+	}
 	events := s.auditLog.Filter(n, filter)
+	// 将内部 AuditEvent 投影成前端表格的紧凑形态。
+	out := make([]map[string]any, 0, len(events))
+	for _, ev := range events {
+		out = append(out, auditEntryView(ev))
+	}
 	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(map[string]any{
-		"count":   len(events),
-		"filter":  filter,
-		"events":  events,
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"count":   len(out),
+		"entries": out,
 	})
 }
 
-// handleAuditStats 返回缓冲统计信息(capacity / buffered /
-// total)。调用开销很低,供仪表板使用。
+// auditEntryView 把 AuditEvent 投影为前端审计表所需视图。
+//
+// 字段:
+//   - ts      RFC3339Nano 时间戳
+//   - actor   调用方(优先 KeyLabel,其次 Role)
+//   - action  HTTP 方法 + 路径,如 "POST /api/ingest/otlp"
+//   - target  与 action 相同的路径,便于单独显示
+//   - ip      客户端 RemoteIP
+//   - ok      true = status 2xx,否则 false
+//   - error   失败时为 "status=<code>"
+func auditEntryView(ev AuditEvent) map[string]any {
+	ok := ev.Status >= 200 && ev.Status < 400
+	actor := ev.KeyLabel
+	if actor == "" {
+		actor = ev.Role
+	}
+	if actor == "" {
+		actor = "anonymous"
+	}
+	row := map[string]any{
+		"ts":     ev.Timestamp.Format(time.RFC3339Nano),
+		"actor":  actor,
+		"action": ev.Method + " " + ev.Path,
+		"target": ev.Path,
+		"ip":     ev.RemoteIP,
+		"ok":     ok,
+	}
+	if !ok {
+		row["error"] = "status=" + strconv.Itoa(ev.Status)
+	}
+	return row
+}
+
+// handleAuditStats 返回前端仪表盘所需的聚合统计。
+//
+// 仅遍历当前缓冲,N 由 auditLog.cap 限制,调用开销为 O(N)。
 func (s *Server) handleAuditStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	total, ok, failed, byAction := 0, 0, 0, map[string]int{}
+	s.auditLog.mu.RLock()
+	for _, ev := range s.auditLog.events {
+		total++
+		if ev.Status >= 200 && ev.Status < 400 {
+			ok++
+		} else {
+			failed++
+		}
+		action := ev.Method + " " + ev.Path
+		byAction[action]++
+	}
+	s.auditLog.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.auditLog.Stats())
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"total":     total,
+		"ok":        ok,
+		"failed":    failed,
+		"by_action": byAction,
+	})
 }
 
 // handleListKeys 返回已注册的 API keys(不包含原始
