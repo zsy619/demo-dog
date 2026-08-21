@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"sync"
@@ -66,6 +67,11 @@ func (p *storeProvider) SuccessRatio(service string, window time.Duration) (floa
 }
 
 func (s *Server) handleAlertsRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
+		return
+	}
 	if s.alerts == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"rules": []any{}})
 		return
@@ -76,6 +82,11 @@ func (s *Server) handleAlertsRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAlertsFires(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
+		return
+	}
 	if s.alerts == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"fires": []any{}})
 		return

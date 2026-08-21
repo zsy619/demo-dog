@@ -101,6 +101,46 @@ func (r *Registry) List() []Tenant {
 	return out
 }
 
+// UpdateTenant 用传入的 Tenant 覆盖现有记录(调用方负责取一份最新值然后修改)。
+//
+// ID 字段不可变 —— 我们用现有条目做幂等键。
+func (r *Registry) UpdateTenant(t *Tenant) error {
+	if t == nil || t.ID == "" {
+		return errors.New("tenant id is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tenants[t.ID]; !ok {
+		return ErrNotFound
+	}
+	t.Active = true
+	r.tenants[t.ID] = t
+	return nil
+}
+
+// DeleteTenant 移除一个 tenant 及其所有挂载的 key。
+//
+// plaintext -> tenantID 反向索引会一并清空,避免悬挂的
+// 明文 key 误指向已被删除的 tenant。
+func (r *Registry) DeleteTenant(id string) error {
+	id = strings.ToLower(strings.TrimSpace(id))
+	if id == "" {
+		return errors.New("tenant id is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tenants[id]; !ok {
+		return ErrNotFound
+	}
+	delete(r.tenants, id)
+	for pt, tid := range r.keys {
+		if tid == id {
+			delete(r.keys, pt)
+		}
+	}
+	return nil
+}
+
 // MintKey 为给定租户 + 角色生成新 API key。
 // plaintext is returned exactly once so the caller can hand it to the
 // human operator.

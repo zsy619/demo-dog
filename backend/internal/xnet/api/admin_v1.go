@@ -274,6 +274,11 @@ func (s *Server) handleCircuitItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("only /reset"))
 		return
 	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("POST only"))
+		return
+	}
 	if s.breaker == nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New("breaker registry not initialised"))
 		return
@@ -520,6 +525,11 @@ func (s *Server) handleRetention(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRetentionReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
+		return
+	}
 	tenant := strings.TrimPrefix(r.URL.Path, "/api/v1/retention/")
 	tenant = strings.TrimSuffix(tenant, "/report")
 	if tenant == "" {
@@ -731,6 +741,11 @@ func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBackupsVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("POST only"))
+		return
+	}
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		writeError(w, http.StatusBadRequest, errors.New("path required"))
@@ -745,6 +760,11 @@ func (s *Server) handleBackupsVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBackupsRestore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("POST only"))
+		return
+	}
 	var body struct {
 		Path   string `json:"path"`
 		Into   string `json:"into"`

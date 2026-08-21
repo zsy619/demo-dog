@@ -115,20 +115,15 @@ func resolveTenant(r *http.Request) string {
 var _ = subtle.ConstantTimeCompare
 var _ = tenants.ErrNotFound
 
-// handleTenantsRoute 将 /api/tenants/<id>/keys 分发到 minter。
-// /api/tenants/ 下的其他任何路径都返回 404。
-func (s *Server) handleTenantsRoute(w http.ResponseWriter, r *http.Request) {
-	suffix := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
-	if strings.HasSuffix(suffix, "/keys") {
-		s.handleTenantMintKey(w, r)
-		return
-	}
-	http.NotFound(w, r)
-}
-
-// handleTenantsDispatch 同时服务于 /api/tenants (列表 + 创建) 和
-// /api/tenants/<id>/keys (mint)。Go stdlib mux 不能在单个 HandleFunc 上
-// 模式匹配后缀，因此我们按 URL 形状分发。
+// handleTenantsDispatch 同时服务于:
+//   - /api/tenants                        (GET 列表 / POST 创建)
+//   - /api/tenants/<id>                   (GET 单个 / PATCH 改 / DELETE 删)
+//   - /api/tenants/<id>/keys              (GET 列出 / POST 签发)
+//   - /api/tenants/<id>/keys/<keyId>      (DELETE 撤销)
+//   - /api/tenants/<id>/keys/<keyId>/rotate (POST 轮换)
+//
+// Go stdlib mux 不能在单个 HandleFunc 上模式匹配后缀,
+// 因此我们按 URL 形状与查询字符串分发。
 func (s *Server) handleTenantsDispatch(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/api/tenants":
@@ -163,7 +158,96 @@ func (s *Server) handleTenantsDispatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	http.NotFound(w, r)
+	// /api/tenants/<id> 的元数据操作:GET / PATCH / DELETE。
+	//
+	// 注意:这里只代理到 tenants.Registry;挂在该 tenant 下的
+	// admin key 会在 DELETE 时一并清理,避免悬挂。
+	path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	if path == "" || strings.Contains(path, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		s.handleTenantGet(w, r)
+	case http.MethodPatch:
+		s.handleTenantUpdate(w, r)
+	case http.MethodDelete:
+		s.handleTenantDelete(w, r)
+	default:
+		w.Header().Set("Allow", "GET PATCH DELETE")
+		writeError(w, http.StatusMethodNotAllowed, fmt.Errorf("GET PATCH DELETE only"))
+	}
+}
+
+// handleTenantGet 返回单个 tenant 的元数据。
+func (s *Server) handleTenantGet(w http.ResponseWriter, r *http.Request) {
+	if s.tenants == nil {
+		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("tenants disabled"))
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	t, err := s.tenants.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// handleTenantUpdate 局部更新 name/description。
+func (s *Server) handleTenantUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.tenants == nil {
+		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("tenants disabled"))
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	t, err := s.tenants.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	var patch struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&patch); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if patch.Name != nil {
+		t.Name = *patch.Name
+	}
+	if patch.Description != nil {
+		t.Description = *patch.Description
+	}
+	if err := s.tenants.UpdateTenant(t); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// handleTenantDelete 移除一个 tenant(以及挂在它名下的所有 admin key)。
+func (s *Server) handleTenantDelete(w http.ResponseWriter, r *http.Request) {
+	if s.tenants == nil {
+		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("tenants disabled"))
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	if err := s.tenants.DeleteTenant(id); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	// 同时清理挂在该 tenant 下的 admin key,避免悬挂。
+	if s.adminKeys != nil {
+		for _, k := range s.adminKeys.ListKeys() {
+			if k.Tenant == id {
+				_ = s.adminKeys.DeleteKey(k.KeyID)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
 
 // handleTenantListKeys 返回属于指定 tenant 的 key 列表。

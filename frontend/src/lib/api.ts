@@ -202,7 +202,8 @@ export const apiService = {
 
   // Round 39 / 41 / 42 surfaces
   audit: (limit = 200) =>
-    apiFetch<{ entries: AuditEntry[] }>(`/audit?limit=${limit}`),
+    // 后端 handleAudit 读取 ?n= 而非 ?limit=,对齐参数名。
+    apiFetch<{ entries: AuditEntry[] }>(`/audit?n=${limit}`),
   auditStats: () => apiFetch<AuditStats>("/audit/stats"),
   probe: (target: string) =>
     apiFetch<ProbeResult>(

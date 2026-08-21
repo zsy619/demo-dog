@@ -122,3 +122,72 @@ func TestTenantKeysUnknownTenant(t *testing.T) {
 		t.Errorf("expected 404, got %d", w.Code)
 	}
 }
+
+// TestTenantUpdateDelete 验证 PATCH /<id> 和 DELETE /<id> 走通了 dispatcher。
+func TestTenantUpdateDelete(t *testing.T) {
+	s := newTenantsTestServer(t)
+	// 准备:create 一个 tenant + 挂一个 key。
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants",
+		strings.NewReader(`{"id":"acme","name":"ACME","description":"before"}`))
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d body=%s", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/tenants/acme/keys",
+		strings.NewReader(`{"label":"k","role":"writer"}`))
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("mint: %d body=%s", w.Code, w.Body.String())
+	}
+	// GET 单个 tenant。
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/tenants/acme", nil)
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get: %d", w.Code)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(),(&got))
+	if got["name"] != "ACME" {
+		t.Errorf("unexpected name: %v", got["name"])
+	}
+	// PATCH 局部更新。
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPatch, "/api/tenants/acme",
+		strings.NewReader(`{"name":"ACME Inc."}`))
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("patch: %d body=%s", w.Code, w.Body.String())
+	}
+	_ = json.Unmarshal(w.Body.Bytes(),(&got))
+	if got["name"] != "ACME Inc." {
+		t.Errorf("patch failed: %v", got)
+	}
+	// DELETE tenant —— 应当一并清理挂在它名下的 admin key。
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/tenants/acme", nil)
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete: %d body=%s", w.Code, w.Body.String())
+	}
+	// 再次 GET 应 404。
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/tenants/acme", nil)
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 after delete, got %d", w.Code)
+	}
+}
+
+// TestTenantMethodGate 验证 PUT/POST/GET/PATCH/DELETE 之外的 method 返回 405。
+func TestTenantMethodGate(t *testing.T) {
+	s := newTenantsTestServer(t)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/tenants/acme", nil)
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for PUT, got %d", w.Code)
+	}
+}
