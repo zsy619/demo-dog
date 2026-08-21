@@ -40,8 +40,9 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"quotas": []any{}})
 		return
 	}
+	scope := r.URL.Query().Get("scope")
 	if t := r.URL.Query().Get("tenant"); t != "" {
-		u, ok := s.quota.Usage(t)
+		u, ok := s.quota.UsageScoped(t, scope)
 		if !ok {
 			writeJSON(w, http.StatusOK, quotaPayload(t, QuotaUsage{}))
 			return
@@ -52,6 +53,9 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 	all := s.quota.Snapshot()
 	out := make([]map[string]any, 0, len(all))
 	for _, u := range all {
+		if scope != "" && u.Scope != scope {
+			continue
+		}
 		out = append(out, quotaPayload(u.TenantID, u))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"quotas": out})
@@ -60,6 +64,7 @@ func (s *Server) handleQuota(w http.ResponseWriter, r *http.Request) {
 func quotaPayload(tenant string, u QuotaUsage) map[string]any {
 	return map[string]any{
 		"tenant":       tenant,
+		"scope":        u.Scope,
 		"requests":     u.Requests,
 		"bytes":        u.Bytes,
 		"limited":      u.Limited,

@@ -169,7 +169,7 @@ func TestQuota_Prometheus_LimitedFlag(t *testing.T) {
 	q.Allow("t", 0) // exhausts
 	var buf bytes.Buffer
 	q.WritePrometheus(&buf)
-	if !strings.Contains(buf.String(), `dog_tenant_quota_limited{tenant="t"} 1`) {
+	if !strings.Contains(buf.String(), `dog_tenant_quota_limited{tenant="t",scope="default"} 1`) {
 		t.Fatalf("expected limited=1, got: %s", buf.String())
 	}
 }

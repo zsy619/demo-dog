@@ -146,6 +146,19 @@ func (r *RateLimiter) Stats() RateLimiterStats {
 // 处理器会返回 429，并附带根据实际补充速率
 // 计算得出的 Retry-After 头部。
 func (r *RateLimiter) KeyedMiddleware(resolveKey func(*http.Request) string) func(http.Handler) http.Handler {
+	return r.ScopedKeyedMiddleware(resolveKey, func(*http.Request) string { return "" })
+}
+
+// ScopedKeyedMiddleware 与 KeyedMiddleware 等价,但额外允许
+// caller 为每条请求指定一个 scope(空字符串 "" 表示全局默认桶)。
+// 桶 key 实际形式是 "<key>|<scope>",不同 scope 之间互不干扰。
+//
+// W1.6:不同端点类别(ingest / query / billing / admin)挂各自的
+// scope,即使同一客户端也不能用一个 endpoint 的配额去打另一个。
+func (r *RateLimiter) ScopedKeyedMiddleware(
+	resolveKey func(*http.Request) string,
+	resolveScope func(*http.Request) string,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			key := resolveKey(req)
@@ -153,19 +166,54 @@ func (r *RateLimiter) KeyedMiddleware(resolveKey func(*http.Request) string) fun
 				next.ServeHTTP(w, req)
 				return
 			}
-			allowed, remaining, retry := r.AllowByKey(key)
+			scope := resolveScope(req)
+			allowed, remaining, retry := r.AllowByKeyScoped(key, scope)
 			if !allowed {
 				secs := int(retry.Seconds())
 				if secs < 1 { secs = 1 }
 				w.Header().Set("Retry-After", strconvItoa(secs))
 				w.Header().Set("X-RateLimit-Remaining", "0")
+				w.Header().Set("X-RateLimit-Scope", scope)
 				writeError(w, http.StatusTooManyRequests, errRateLimited)
 				return
 			}
 			w.Header().Set("X-RateLimit-Remaining", strconvItoa(remaining))
+			w.Header().Set("X-RateLimit-Scope", scope)
 			next.ServeHTTP(w, req)
 		})
 	}
+}
+
+// AllowByKeyScoped 与 AllowByKey 等价,但 scope 把不同端点类别
+// 隔离开。scope="" 时行为与 AllowByKey 一致。
+func (r *RateLimiter) AllowByKeyScoped(key, scope string) (bool, int, time.Duration) {
+	if key == "" {
+		return true, 0, 0
+	}
+	bucketKey := key
+	if scope != "" {
+		bucketKey = key + "|" + scope
+	}
+	now := r.now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b, ok := r.bucket[bucketKey]
+	if !ok {
+		b = &bucket{tokens: r.burst, last: now}
+		r.bucket[bucketKey] = b
+	}
+	elapsed := now.Sub(b.last).Seconds()
+	b.tokens += elapsed * r.rate
+	if b.tokens > r.burst {
+		b.tokens = r.burst
+	}
+	b.last = now
+	if b.tokens >= 1 {
+		b.tokens -= 1
+		return true, int(b.tokens), 0
+	}
+	retry := time.Duration((1 - b.tokens) / r.rate * float64(time.Second))
+	return false, 0, retry
 }
 
 // strconvItoa 是一个本地的 Itoa 实现，避免将 strconv 拉入
