@@ -45,8 +45,24 @@ func (a *APIKeyAuth) Middleware(mode AuthMode, publicPaths ...string) func(http.
 			if label := a.LabelOf(key); label != "" {
 				r.Header.Set("X-Dog-Key-Label", label)
 			}
-			if tenant := a.TenantOf(key); tenant != "" {
-				r.Header.Set("X-Dog-Tenant", tenant)
+			// W2.1: API key 绑定 tenant 后,任何客户端声明的
+			// X-Tenant-Id / ?tenant= 都不能越权指向其他租户。
+			// 中间件强制以 key 的绑定 tenant 为准 (覆盖客户端声明)。
+			keyTenant := a.TenantOf(key)
+			keyRole, _ := a.RoleOf(key)
+			if keyTenant != "" && keyRole != RoleAdmin {
+				claimed := r.Header.Get("X-Tenant-Id")
+				if claimed == "" {
+					claimed = r.URL.Query().Get("tenant")
+				}
+				if claimed != "" && claimed != keyTenant {
+					writeError(w, http.StatusForbidden, ErrTenantMismatch)
+					return
+				}
+				r.Header.Set("X-Tenant-Id", keyTenant)
+			}
+			if keyTenant != "" {
+				r.Header.Set("X-Dog-Tenant", keyTenant)
 			}
 			next.ServeHTTP(w, r)
 		})

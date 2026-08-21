@@ -7,6 +7,7 @@ package api
 
 import (
 	"crypto/subtle"
+	"errors"
 	"strings"
 	"sync"
 )
@@ -249,4 +250,51 @@ func (a *APIKeyAuth) ScopesFor(key string) []string {
 	out := make([]string, len(e.Scopes))
 	copy(out, e.Scopes)
 	return out
+}
+
+// ErrTenantMismatch 表示某个 API key 试图访问其未被授权的租户。
+//
+// W2.1: 跨租户调用必须显式拒绝,以防某个租户的 key 通过 ?tenant=xxx
+// 或 X-Tenant-Id 头部越权读取其他租户的数据。
+var ErrTenantMismatch = errors.New("api key not authorized for tenant")
+
+// IsTenantMismatch 报告 err 是否来自 EnsureTenantAccess。
+func IsTenantMismatch(err error) bool { return errors.Is(err, ErrTenantMismatch) }
+
+// EnsureTenantAccess 校验 key 在请求 claimedTenant 上的访问权。
+//
+// 规则:
+//   - key 未注册 → ErrUnauthorized 语义(交给调用方包装,这里返回通用错误)。
+//   - key.TenantID == "" (平台管理员 key) → 任意 claimedTenant 都允许。
+//   - key.Role == RoleAdmin → 任意 claimedTenant 都允许(管理员运维场景)。
+//   - key.TenantID == claimedTenant → 允许。
+//   - 其他 → ErrTenantMismatch,调用方应返回 403。
+//
+// claimedTenant 为空时表示调用方未声明租户(典型场景:列出全部租户的
+// 管理端点),只有平台 / 管理员 key 可放行。
+func (a *APIKeyAuth) EnsureTenantAccess(key, claimedTenant string) error {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	e, ok := a.lookupLocked(key)
+	if !ok {
+		return errors.New("api key not found")
+	}
+	if e.TenantID == "" || e.Role == RoleAdmin {
+		return nil
+	}
+	if claimedTenant == "" {
+		return ErrTenantMismatch
+	}
+	if e.TenantID != claimedTenant {
+		return ErrTenantMismatch
+	}
+	return nil
+}
+
+// TenantOfLocked 假设 key 已 Verify/lookup 过,无锁地返回 TenantID。
+//
+// 调用方负责保证:已持锁 或 已通过 Verify 确认 key 存在。
+// 主要给中间件用——Verify 已锁过一次,直接走 map 读取更高效。
+func (a *APIKeyAuth) TenantOfLocked(key string) string {
+	return a.tenants[key]
 }
