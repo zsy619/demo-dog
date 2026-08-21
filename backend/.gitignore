@@ -26,3 +26,4 @@ coverage.html
 .env.local
 *.env
 !.env.example
+translate.py
