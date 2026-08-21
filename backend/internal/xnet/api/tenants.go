@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/zsy619/demo-dog/backend/internal/xdata/tenants"
 )
@@ -81,6 +83,14 @@ func (s *Server) handleTenantMintKey(w http.ResponseWriter, r *http.Request) {
 	}
 	// 在 auth 层中注册刚刚签发的密钥。
 	s.auth.AddForTenant(k.Plaintext, k.Label, tenantID, ParseRole(k.Role))
+	// 同时在 admin store 中留一份,使 listTenantKeys
+	// /rotateTenantKey/revokeTenantKey 能够工作。
+	if s.adminKeys != nil {
+		if _, entry, aerr := s.adminKeys.CreateKey(req.Role, tenantID, nil, 0); aerr == nil && entry != nil {
+			k.KeyID = entry.KeyID
+			k.CreatedAt = entry.CreatedAt
+		}
+	}
 	writeJSON(w, http.StatusCreated, k)
 }
 
@@ -130,10 +140,130 @@ func (s *Server) handleTenantsDispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasSuffix(r.URL.Path, "/keys") {
+		// GET /api/tenants/<id>/keys   -> 列出属于该 tenant 的 key
+		// POST /api/tenants/<id>/keys  -> 签发新 key
+		if r.Method == http.MethodGet {
+			s.handleTenantListKeys(w, r)
+			return
+		}
 		s.handleTenantMintKey(w, r)
 		return
 	}
+	if strings.Contains(r.URL.Path, "/keys/") {
+		path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+		parts := strings.Split(path, "/")
+		// POST /api/tenants/<id>/keys/<keyId>/rotate -> 轮换
+		// DELETE /api/tenants/<id>/keys/<keyId>     -> 撤销
+		if len(parts) >= 4 && parts[3] == "rotate" {
+			s.handleTenantRotateKey(w, r)
+			return
+		}
+		if len(parts) == 3 {
+			s.handleTenantRevokeKey(w, r)
+			return
+		}
+	}
 	http.NotFound(w, r)
+}
+
+// handleTenantListKeys 返回属于指定 tenant 的 key 列表。
+// 数据来源:adminKeys AdminStore,以 Tenant 字段过滤。
+func (s *Server) handleTenantListKeys(w http.ResponseWriter, r *http.Request) {
+	tenantID := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	tenantID = strings.TrimSuffix(tenantID, "/keys")
+	if tenantID == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("tenant id required"))
+		return
+	}
+	if s.tenants == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"keys": []any{}})
+		return
+	}
+	if _, err := s.tenants.Get(tenantID); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	out := []map[string]any{}
+	if s.adminKeys != nil {
+		for _, k := range s.adminKeys.ListKeys() {
+			if k.Tenant != tenantID {
+				continue
+			}
+			out = append(out, map[string]any{
+				"id":         k.KeyID,
+				"label":      k.Identity,
+				"role":       k.Identity,
+				"tenant":     k.Tenant,
+				"scopes":     k.Scopes,
+				"created_at": k.CreatedAt.Format(time.RFC3339Nano),
+				"expires_at": formatExpiresAtForTenant(k.ExpiresAt),
+				"disabled":   k.Disabled,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keys": out})
+}
+
+// handleTenantRevokeKey 永久删除一个 tenant 下的 key。
+func (s *Server) handleTenantRevokeKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", "DELETE")
+		writeError(w, http.StatusMethodNotAllowed, fmt.Errorf("DELETE only"))
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("key id required"))
+		return
+	}
+	keyID := parts[2]
+	if s.adminKeys == nil {
+		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("admin keys not initialised"))
+		return
+	}
+	if err := s.adminKeys.DeleteKey(keyID); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": keyID})
+}
+
+// handleTenantRotateKey 颁发一个新的 tenant key(替换指定 id 的旧 key)。
+func (s *Server) handleTenantRotateKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, fmt.Errorf("POST only"))
+		return
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/tenants/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 || parts[3] != "rotate" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("path must end with /rotate"))
+		return
+	}
+	keyID := parts[2]
+	graceNs, _ := strconv.ParseInt(r.URL.Query().Get("grace_ns"), 10, 64)
+	if s.adminKeys == nil {
+		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("admin keys not initialised"))
+		return
+	}
+	plaintext, _, newEntry, err := s.adminKeys.RotateKey(keyID, time.Duration(graceNs))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"key_id":    newEntry.KeyID,
+		"plaintext": plaintext,
+	})
+}
+
+func formatExpiresAtForTenant(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339Nano)
 }
 
 // handleTenantMintKey 中的 TrimPrefix 需要更新后的路径，因为

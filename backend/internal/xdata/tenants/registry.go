@@ -34,6 +34,7 @@ type Tenant struct {
 // a secure 通道.
 type Key struct {
 	TenantID  string    `json:"tenant_id"`
+	KeyID     string    `json:"key_id,omitempty"`
 	Label     string    `json:"label"`
 	Plaintext string    `json:"plaintext"`
 	Role      string    `json:"role"`

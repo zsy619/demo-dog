@@ -156,12 +156,12 @@ func (s *Server) handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		if body.Role == "" {
 			body.Role = body.Label
 		}
-		plaintext, _, err := s.adminKeys.CreateKey(body.Role, body.Tenant, body.Scopes, time.Duration(body.TTLNs))
+		plaintext, entry, err := s.adminKeys.CreateKey(body.Role, body.Tenant, body.Scopes, time.Duration(body.TTLNs))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"id": body.Label, "plaintext": plaintext})
+		writeJSON(w, http.StatusCreated, map[string]any{"id": entry.KeyID, "plaintext": plaintext})
 		return
 	}
 	w.Header().Set("Allow", "GET POST")
@@ -375,10 +375,49 @@ func (s *Server) handleWebhookItem(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodDelete && len(parts) == 1:
 		d.RemoveSubscriber(id)
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
+	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "test":
+		s.handleWebhookTest(w, r, d, id)
 	default:
-		w.Header().Set("Allow", "DELETE")
-		writeError(w, http.StatusMethodNotAllowed, errors.New("DELETE only"))
+		w.Header().Set("Allow", "DELETE POST /test")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("DELETE or POST /test"))
 	}
+}
+
+// handleWebhookTest 同步触发一次 webhook 投递,返回投递结果。
+//
+// 用于在前端管理页面验证订阅者的连通性。请求体:
+//   { type, payload, tenant? }
+// 响应:与 dlq 中元素相同的 Delivery 形态。
+func (s *Server) handleWebhookTest(w http.ResponseWriter, r *http.Request, d *webhook.Dispatcher, id string) {
+	var body struct {
+		Type    string            `json:"type"`
+		Payload map[string]string `json:"payload"`
+		Tenant  string            `json:"tenant"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.Type == "" {
+		body.Type = "test"
+	}
+	if body.Payload == nil {
+		body.Payload = map[string]string{"hello": "world"}
+	}
+	del, ok := d.Test(id, body.Type, body.Payload, body.Tenant)
+	if !ok {
+		writeError(w, http.StatusNotFound, errors.New("subscriber not found"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"event_id":      del.EventID,
+		"subscriber_id": del.SubscriberID,
+		"attempts":      del.Attempts,
+		"status":        del.Status,
+		"error":         del.Error,
+		"latency_ns":    int64(del.Latency),
+		"last_try":      del.LastTry.Format(time.RFC3339Nano),
+	})
 }
 
 func (s *Server) handleWebhookDLQ(w http.ResponseWriter, r *http.Request) {

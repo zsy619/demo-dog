@@ -182,6 +182,33 @@ func (d *Dispatcher) Dispatch(ev Event) []Delivery {
 	return out
 }
 
+// Test 同步触发一次向指定 subscriber 的投递,用于管理页面的连通性验证。
+//
+// 与 Dispatch 不同:Test 只向一个 subscriber 投递,不做 fan-out;返回该 subscriber 的
+// Delivery(成功或失败均可),subscribers 中找不到 id 时返回 (zero, false)。
+func (d *Dispatcher) Test(id, evType string, payload map[string]string, tenant string) (Delivery, bool) {
+	if payload == nil {
+		payload = map[string]string{}
+	}
+	if evType == "" {
+		evType = "test"
+	}
+	ev := Event{
+		ID:        fmt.Sprintf("test-%d", d.now()().UnixNano()),
+		Type:      evType,
+		Timestamp: d.now()(),
+		Tenant:    tenant,
+		Payload:   payload,
+	}
+	d.mu.RLock()
+	s, ok := d.subscribers[id]
+	d.mu.RUnlock()
+	if !ok {
+		return Delivery{}, false
+	}
+	return d.deliver(ev, s), true
+}
+
 func (d *Dispatcher) now() func() time.Time { return time.Now }
 
 func (d *Dispatcher) deliver(ev Event, s *Subscriber) Delivery {

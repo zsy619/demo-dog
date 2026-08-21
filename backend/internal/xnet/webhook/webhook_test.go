@@ -223,3 +223,63 @@ func TestBackoff_Cap(t *testing.T) {
 		t.Fatalf("backoff not capped: %v", d)
 	}
 }
+
+// TestDispatch_Test_Success 验证 Dispatcher.Test 对已知订阅者发起同步投递。
+func TestDispatch_Test_Success(t *testing.T) {
+	var got []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+	d := NewDispatcher(0)
+	d.AddSubscriber(&Subscriber{ID: "x", URL: srv.URL, Secret: "k"})
+	del, ok := d.Test("x", "ping", map[string]string{"hello": "world"}, "acme")
+	if !ok {
+		t.Fatal("Test returned ok=false for known subscriber")
+	}
+	if !del.Success() {
+		t.Fatalf("Test delivery failed: %s", del.Error)
+	}
+	if del.Status != 200 {
+		t.Fatalf("status: %d", del.Status)
+	}
+	var ev Event
+	if err := json.Unmarshal(got,(&ev)); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Type != "ping" || ev.Tenant != "acme" {
+		t.Fatalf("unexpected event: %+v", ev)
+	}
+	if ev.Payload["hello"] != "world" {
+		t.Fatalf("payload lost: %+v", ev.Payload)
+	}
+}
+
+// TestDispatch_Test_Unknown 验证 Test 对未知订阅者返回 ok=false。
+func TestDispatch_Test_Unknown(t *testing.T) {
+	d := NewDispatcher(0)
+	if _, ok := d.Test("ghost", "ping", nil, ""); ok {
+		t.Fatal("expected ok=false for unknown subscriber")
+	}
+}
+
+// TestDispatch_Test_RecordsDLQ 验证失败的 Test 也会写入 DLQ。
+func TestDispatch_Test_RecordsDLQ(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+	d := NewDispatcher(8)
+	d.AddSubscriber(&Subscriber{ID: "x", URL: srv.URL, Secret: "k", MaxRetries: 0})
+	del, ok := d.Test("x", "ping", nil, "acme")
+	if !ok {
+		t.Fatal("Test returned ok=false")
+	}
+	if del.Success() {
+		t.Fatalf("expected failure but got success: %+v", del)
+	}
+	if len(d.DeadLetters()) == 0 {
+		t.Fatal("DLQ should record failed test delivery")
+	}
+}

@@ -156,7 +156,10 @@ export const apiService = {
   alertsRule: (name: string) =>
     apiFetch<AlertRule>(`/v1/rules/${encodeURIComponent(name)}`),
   upsertAlertRule: (rule: AlertRule) =>
-    apiFetch<AlertRule>("/v1/rules", { method: "PUT", body: rule }),
+    apiFetch<AlertRule>(`/v1/rules/${encodeURIComponent(rule.name)}`, {
+      method: "PUT",
+      body: rule,
+    }),
   deleteAlertRule: (name: string) =>
     apiFetch<void>(`/v1/rules/${encodeURIComponent(name)}`, {
       method: "DELETE",

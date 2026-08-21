@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/zsy619/demo-dog/backend/internal/xflow/alerts"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/retention"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
+	"github.com/zsy619/demo-dog/backend/internal/xnet/webhook"
 )
 
 func newAdminTestServer(t *testing.T) *Server {
@@ -169,6 +171,60 @@ func TestHandleWebhooks(t *testing.T) {
 	s.handleWebhooks(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: %d", rr.Code)
+	}
+}
+
+// TestHandleWebhookItem_Test 验证 POST /api/v1/webhooks/{id}/test。
+//
+// 使用一个本地 httptest 服务器作为订阅目标,断言响应
+// 包含 status/latency_ns/event_id 等字段。
+func TestHandleWebhookItem_Test(t *testing.T) {
+	s := newAdminTestServer(t)
+	d := s.webhooks.Dispatcher()
+	if d == nil {
+		t.Skip("webhook dispatcher not initialised")
+	}
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer target.Close()
+	if err := d.AddSubscriber(&webhook.Subscriber{
+		ID: "probe", URL: target.URL, Secret: "k", EventTypes: []string{"*"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	defer d.RemoveSubscriber("probe")
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/probe/test",
+		strings.NewReader(`{"type":"manual","payload":{"k":"v"},"tenant":"acme"}`))
+	s.handleWebhookItem(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: %d body=%s", rr.Code, rr.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(),(&out)); err != nil {
+		t.Fatal(err)
+	}
+	if int(out["status"].(float64)) != 200 {
+		t.Errorf("status=%v", out["status"])
+	}
+	if out["subscriber_id"] != "probe" {
+		t.Errorf("subscriber_id=%v", out["subscriber_id"])
+	}
+	if _, ok := out["latency_ns"]; !ok {
+		t.Errorf("missing latency_ns: %v", out)
+	}
+}
+
+// TestHandleWebhookItem_Test_NotFound 验证不存在的订阅者返回 404。
+func TestHandleWebhookItem_Test_NotFound(t *testing.T) {
+	s := newAdminTestServer(t)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/ghost/test",
+		strings.NewReader(`{}`))
+	s.handleWebhookItem(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rr.Code)
 	}
 }
 

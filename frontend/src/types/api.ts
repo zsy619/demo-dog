@@ -217,36 +217,14 @@ export interface AlertRule {
   description?: string;
   service?: string;
   target: number;
-  // durations come over the wire as nanoseconds (Go time.Duration).
-  window: number;
-  fast_window: number;
-  fast_burn: number;
-  slow_burn: number;
-  severity: "info" | "warning" | "critical";
-  channels: string[];
-}
-
-export interface AlertFire {
-  rule: AlertRule;
-  severity: string;
-  timestamp: string;
-  window: "fast" | "slow";
-  burn_rate: number;
-  reason: string;
-}
-
-export interface AlertRule {
-  name: string;
-  description?: string;
-  service?: string;
-  target: number;
   // Durations arrive as nanoseconds (Go time.Duration).
   window: number;
   fast_window: number;
   fast_burn: number;
   slow_burn: number;
   severity: "info" | "warning" | "critical";
-  channels: string[];
+  // 后端 alerts.Rule 暂无 channels 字段;保留为可选以保持向前兼容。
+  channels?: string[];
 }
 
 export interface AlertFire {
@@ -284,7 +262,8 @@ export interface AuditStats {
   ok: number;
   failed: number;
   by_action: Record<string, number>;
-  by_actor: Record<string, number>;
+  // 后端当前未返回 by_actor;保留为可选以保持向后兼容。
+  by_actor?: Record<string, number>;
 }
 
 export interface SLOBudget {
