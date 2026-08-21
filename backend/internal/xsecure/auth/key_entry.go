@@ -22,10 +22,16 @@ import "time"
 //
 // 唯一标识符是 KeyID；Hash 用于根据原始 token 查找；
 // Identity 表示角色（role:admin / role:reader 等）。
+// Label 是给人看的备注,与 Role/Identity 解耦:
+//  - 前端 tenants/admin 页用 Label 区分同 Role 下的多把 key;
+//  - R3 之前 KeyEntry 只有 Identity,handleTenantListKeys / handleAdminKeys
+//    把同一字符串填进 label 和 role 字段,导致 UI 上两列永远相等。
+//    这里补上独立字段并允许通过 update 路径修改。
 type KeyEntry struct {
 	KeyID       string    // 唯一标识符
 	Hash        string    // raw token 的 sha256 hex
 	Identity    string    // 角色（如 role:admin / role:reader）
+	Label       string    // 给人看的备注(R3 新增)
 	Tenant      string    // 绑定的租户
 	Scopes      []string  // 授权范围
 	CreatedAt   time.Time // 创建时间

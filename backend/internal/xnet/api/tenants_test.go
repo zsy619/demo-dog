@@ -191,3 +191,50 @@ func TestTenantMethodGate(t *testing.T) {
 		t.Errorf("expected 405 for PUT, got %d", w.Code)
 	}
 }
+
+// TestTenantListKeys_LabelSeparateFromRole 验证 R3 修复:列出的 key
+// label 不再被硬塞成 role。
+func TestTenantListKeys_LabelSeparateFromRole(t *testing.T) {
+	s := newTenantsTestServer(t)
+	// create tenant
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants",
+		strings.NewReader(`{"id":"acme","name":"ACME"}`))
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d", w.Code)
+	}
+	// mint 一把 label=ci-runner, role=writer 的 key
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/tenants/acme/keys",
+		strings.NewReader(`{"label":"ci-runner","role":"writer"}`))
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("mint: %d", w.Code)
+	}
+	// list keys —— label 与 role 必须独立。
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/tenants/acme/keys", nil)
+	s.handleTenantsDispatch(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: %d", w.Code)
+	}
+	var resp struct {
+		Keys []map[string]any `json:"keys"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Keys) == 0 {
+		t.Fatalf("expected at least 1 key")
+	}
+	for _, k := range resp.Keys {
+		if k["label"] == k["role"] && k["label"] == "writer" {
+			// R3 之前的 bug:label 与 role 都是 writer。
+			t.Errorf("label still equals role (R3 regression): %v", k)
+		}
+		if k["label"] == "ci-runner" && k["role"] != "writer" {
+			t.Errorf("unexpected role for ci-runner: %v", k["role"])
+		}
+	}
+}

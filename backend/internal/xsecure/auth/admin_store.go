@@ -45,15 +45,22 @@ func (s *AdminStore) nextID() string {
 //
 // 返回原始 token（仅在创建时可见）与持久化的 KeyEntry。
 // ttl > 0 时设置过期时间；ttl == 0 表示永不过期。
-func (s *AdminStore) CreateKey(identity, tenant string, scopes []string, ttl time.Duration) (raw string, entry *KeyEntry, err error) {
+//
+// R3: 新增 label 参数——之前 label 总是被填成 role,导致
+// 前端 UI 上两列永远相等。label 为空时回退到 identity 兼容旧调用方。
+func (s *AdminStore) CreateKey(identity, label, tenant string, scopes []string, ttl time.Duration) (raw string, entry *KeyEntry, err error) {
 	raw, err = GenerateToken()
 	if err != nil {
 		return "", nil, err
+	}
+	if label == "" {
+		label = identity
 	}
 	entry = &KeyEntry{
 		KeyID:     s.nextID(),
 		Hash:      hashToken(raw),
 		Identity:  identity,
+		Label:     label,
 		Tenant:    tenant,
 		Scopes:    scopes,
 		CreatedAt: time.Now(),
@@ -110,6 +117,7 @@ func (s *AdminStore) RotateKey(oldID string, grace time.Duration) (raw string, o
 		KeyID:       s.nextID(),
 		Hash:        hashToken(raw),
 		Identity:    old.Identity,
+		Label:       old.Label,
 		Tenant:      old.Tenant,
 		Scopes:      old.Scopes,
 		CreatedAt:   time.Now(),

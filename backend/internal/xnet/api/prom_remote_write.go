@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -77,7 +78,12 @@ func (s *Server) handlePromRemoteWrite(rw http.ResponseWriter, r *http.Request) 
 
 	tenant := resolveTenant(r)
 	now := time.Now()
-	decoded, err := decodePromWriteRequest(raw)
+	// R3: 接受 Prometheus 文本协议 (text/plain),让前端 hook 可以
+	// 直接 POST 一行行 `metric{labels} value timestamp`。后端
+	// 仍然优先尝试 protobuf 解码,失败或显式声明 text/plain
+	// 时回退到文本解析器。
+	ct := r.Header.Get("Content-Type")
+	decoded, err := decodePromWriteRequestSmart(raw, ct)
 	if err != nil {
 		writeError(rw, http.StatusBadRequest, err)
 		return
@@ -460,4 +466,257 @@ func splitPromLabels(lbls []promLabel) (name, service string, attrs map[string]s
 func promWriteContentHash(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:8])
+}
+
+// decodePromWriteRequestSmart 根据 Content-Type 自动选择 decoder。
+//
+//   - 显式 text/plain 或 text/plain;version=0.0.4 -> 文本格式解析器
+//   - 默认走二进制 protobuf 解码器
+//
+// Prometheus 官方 agent 一直用 protobuf + snappy,但前端 hook
+// 加上人肉调试时更喜欢文本格式,这里把两条路径都支持。
+func decodePromWriteRequestSmart(raw []byte, contentType string) ([]promTimeSeries, error) {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if strings.HasPrefix(ct, "text/plain") {
+		return decodePromTextFormat(raw)
+	}
+	return decodePromWriteRequest(raw)
+}
+
+// decodePromTextFormat 解析 Prometheus 文本 exposition format:
+//
+//	metric_name{label="value",...} value [timestamp]
+//	metric_name value [timestamp]
+//
+//   - 行注释以 # 起头,跳过;
+//   - 时间戳缺省视为 now 的 unix 毫秒;
+//   - label 中 \" 转义为字面量 \";
+//   - 同名 + 同样 label 集合的样本合并到同一条 TimeSeries。
+func decodePromTextFormat(body []byte) ([]promTimeSeries, error) {
+	groups := map[string]*promTimeSeries{}
+	order := []string{}
+	nowMs := time.Now().UnixMilli()
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, labels, rest, err := splitTextLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("text line %q: %w", line, err)
+		}
+		valueStr := rest.value
+		tsMs := rest.timestamp
+		if tsMs == 0 {
+			tsMs = nowMs
+		}
+		v, err := strconvParseFloat(valueStr)
+		if err != nil {
+			return nil, fmt.Errorf("text line %q: parse value: %w", line, err)
+		}
+		// 用排序后的 label 列表作 key,保证同样 label 集合的样本
+		// 进入同一条 series。
+		key := name + "|" + canonicalLabelKey(labels)
+		ts, ok := groups[key]
+		if !ok {
+			ts = &promTimeSeries{}
+			// 第一个 label 总是 __name__ = metric,会单独处理,
+			// 真正写出去之前我们丢掉这个 label。
+			for _, l := range labels {
+				if l.Name == "__name__" {
+					continue
+				}
+				ts.Labels = append(ts.Labels, l)
+			}
+			groups[key] = ts
+			order = append(order, key)
+		}
+		ts.Samples = append(ts.Samples, promSample{Value: v, Timestamp: tsMs})
+	}
+	out := make([]promTimeSeries, 0, len(order))
+	for _, k := range order {
+		out = append(out, *groups[k])
+	}
+	return out, nil
+}
+
+// splitTextLine 返回 (name, labels, rest, err),其中 rest
+// 携带 value 与可选 timestamp。
+func splitTextLine(line string) (string, []promLabel, textRest, error) {
+	// 1. 拆出 metric_name + 剩余部分。
+	open := strings.IndexByte(line, '{')
+	var name string
+	var labelSrc string
+	if open < 0 {
+		// 找到第一个空白
+		idx := strings.IndexAny(line, " \t")
+		if idx < 0 {
+			return "", nil, textRest{}, fmt.Errorf("missing value")
+		}
+		name = strings.TrimSpace(line[:idx])
+		labelSrc = ""
+		rest := strings.TrimSpace(line[idx:])
+		v, ts, err := parseValueAndTs(rest)
+		if err != nil {
+			return "", nil, textRest{}, err
+		}
+		return name, nil, textRest{value: v, timestamp: ts}, nil
+	}
+	// 找匹配的 }
+	close := -1
+	inStr := false
+	escape := false
+	for i := open + 1; i < len(line); i++ {
+		c := line[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if c == '\\' {
+			escape = true
+			continue
+		}
+		if c == '"' {
+			inStr = !inStr
+			continue
+		}
+		if !inStr && c == '}' {
+			close = i
+			break
+		}
+	}
+	if close < 0 {
+		return "", nil, textRest{}, fmt.Errorf("unterminated labels")
+	}
+	name = strings.TrimSpace(line[:open])
+	labelSrc = line[open+1 : close]
+	rest := strings.TrimSpace(line[close+1:])
+	v, ts, err := parseValueAndTs(rest)
+	if err != nil {
+		return "", nil, textRest{}, err
+	}
+	labels, err := parseTextLabels(labelSrc)
+	if err != nil {
+		return "", nil, textRest{}, err
+	}
+	return name, labels, textRest{value: v, timestamp: ts}, nil
+}
+
+func parseTextLabels(src string) ([]promLabel, error) {
+	if strings.TrimSpace(src) == "" {
+		return nil, nil
+	}
+	var labels []promLabel
+	for _, part := range splitTopLevelCommas(src) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		eq := strings.IndexByte(part, '=')
+		if eq < 0 {
+			return nil, fmt.Errorf("bad label %q", part)
+		}
+		name := strings.TrimSpace(part[:eq])
+		value := strings.TrimSpace(part[eq+1:])
+		if len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
+			return nil, fmt.Errorf("label value not quoted: %q", value)
+		}
+		// 去掉外层 " 并反转义 \" 与 \\ 与 \n。
+		inner := value[1 : len(value)-1]
+		inner = strings.ReplaceAll(inner, `\\`, "\x00")
+		inner = strings.ReplaceAll(inner, `\"`, `"`)
+		inner = strings.ReplaceAll(inner, "\x00", "\\")
+		inner = strings.ReplaceAll(inner, `\n`, "\n")
+		labels = append(labels, promLabel{Name: name, Value: inner})
+	}
+	return labels, nil
+}
+
+// splitTopLevelCommas 按逗号拆分,但跳过 "..." 内的逗号。
+func splitTopLevelCommas(s string) []string {
+	var out []string
+	start := 0
+	inStr := false
+	escape := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if c == '\\' {
+			escape = true
+			continue
+		}
+		if c == '"' {
+			inStr = !inStr
+			continue
+		}
+		if c == ',' && !inStr {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	out = append(out, s[start:])
+	return out
+}
+
+func parseValueAndTs(s string) (string, int64, error) {
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return "", 0, fmt.Errorf("missing value")
+	}
+	v := parts[0]
+	var ts int64
+	if len(parts) >= 2 {
+		f, err := strconvParseFloat(parts[1])
+		if err != nil {
+			return "", 0, fmt.Errorf("parse timestamp: %w", err)
+		}
+		// Prometheus 时间戳是毫秒;但用户可能写浮点(带小数点),
+		// 统一转 int64。
+		ts = int64(f)
+	}
+	return v, ts, nil
+}
+
+// strconvParseFloat 在 wrapper 层加这层 thin 函数,是为了
+// 测试 stub 时只换实现,而不必 replace 全局函数。
+func strconvParseFloat(s string) (float64, error) {
+	// 等价于 strconv.ParseFloat,但拒绝 Inf/NaN —— Prometheus
+	// 文本协议不接受它们。
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	if f != f || f > 1e308 || f < -1e308 {
+		return 0, fmt.Errorf("non-finite float: %s", s)
+	}
+	return f, nil
+}
+
+func canonicalLabelKey(labels []promLabel) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	// label 顺序不稳定 -> 排序后拼接。
+	sorted := append([]promLabel(nil), labels...)
+	for i := 1; i < len(sorted); i++ {
+		for j := i; j > 0 && sorted[j-1].Name > sorted[j].Name; j-- {
+			sorted[j-1], sorted[j] = sorted[j], sorted[j-1]
+		}
+	}
+	var b strings.Builder
+	for _, l := range sorted {
+		b.WriteString(l.Name)
+		b.WriteByte('=')
+		b.WriteString(l.Value)
+		b.WriteByte(',')
+	}
+	return b.String()
+}
+
+type textRest struct {
+	value     string
+	timestamp int64
 }

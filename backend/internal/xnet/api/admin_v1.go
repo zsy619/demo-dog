@@ -129,7 +129,7 @@ func (s *Server) handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		for _, k := range keys {
 			out = append(out, map[string]any{
 				"id":         k.KeyID,
-				"label":      k.Identity,
+				"label":      adminKeyLabel(k),
 				"tenant":     k.Tenant,
 				"role":       k.Identity,
 				"scopes":     k.Scopes,
@@ -156,7 +156,7 @@ func (s *Server) handleAdminKeys(w http.ResponseWriter, r *http.Request) {
 		if body.Role == "" {
 			body.Role = body.Label
 		}
-		plaintext, entry, err := s.adminKeys.CreateKey(body.Role, body.Tenant, body.Scopes, time.Duration(body.TTLNs))
+		plaintext, entry, err := s.adminKeys.CreateKey(body.Role, body.Label, body.Tenant, body.Scopes, time.Duration(body.TTLNs))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -597,6 +597,11 @@ type OIDCBundle struct {
 	Scopes     []string `json:"scopes"`
 	Enabled    bool     `json:"enabled"`
 	EmailClaim string   `json:"email_claim"`
+	// GroupsClaim 是 ID token 中用于提取 group 列表的字段名;
+	// 留空时 OIDC consumer 回退到 "groups"。前端 OIDCProviderConfig
+	// 一直携带这个字段,R3 之前 OIDCBundle 没接住,PUT 时的覆盖
+	// 会被静默丢弃——这里补上。
+	GroupsClaim string `json:"groups_claim,omitempty"`
 }
 
 type OIDCRegistry struct {
@@ -640,6 +645,11 @@ func (s *Server) handleOIDC(w http.ResponseWriter, r *http.Request) {
 		ps := s.oidc.List()
 		out := make([]map[string]any, 0, len(ps))
 		for _, p := range ps {
+			groupsClaim := p.GroupsClaim
+			if groupsClaim == "" {
+				// 回退到旧默认,与历史客户端保持兼容。
+				groupsClaim = "groups"
+			}
 			out = append(out, map[string]any{
 				"issuer":       p.Issuer,
 				"client_id":    p.ClientID,
@@ -647,7 +657,7 @@ func (s *Server) handleOIDC(w http.ResponseWriter, r *http.Request) {
 				"scopes":       p.Scopes,
 				"enabled":      p.Enabled,
 				"email_claim":  p.EmailClaim,
-				"groups_claim": "groups",
+				"groups_claim": groupsClaim,
 			})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"providers": out})
@@ -657,6 +667,11 @@ func (s *Server) handleOIDC(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
+		// 缺省 groups_claim 回退到 "groups",使旧客户端 PUT 时
+		// 不会因为空字符串而清掉后端的默认值。
+		if b.GroupsClaim == "" {
+			b.GroupsClaim = "groups"
+		}
 		s.oidc.Upsert(b)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"issuer":       b.Issuer,
@@ -665,7 +680,7 @@ func (s *Server) handleOIDC(w http.ResponseWriter, r *http.Request) {
 			"scopes":       b.Scopes,
 			"enabled":      b.Enabled,
 			"email_claim":  b.EmailClaim,
-			"groups_claim": "groups",
+			"groups_claim": b.GroupsClaim,
 		})
 	case http.MethodDelete:
 		issuer := r.URL.Query().Get("issuer")
@@ -794,6 +809,21 @@ func (s *Server) handleBackupsRestore(w http.ResponseWriter, r *http.Request) {
 		"taken_at":       res.TakenAt.Format(time.RFC3339Nano),
 		"sha256":         res.SHA256,
 	})
+}
+
+// adminKeyLabel 返回给前端 label 列显示用的字符串。
+//
+// KeyEntry.Label 与 Identity 解耦后,空 Label 表示这条 key
+// 是 R3 之前以 Identity 当 Label 存的;为前端稳定性统一回退
+// 到 Identity,避免 UI 上出现空字符串。
+func adminKeyLabel(k *auth.KeyEntry) string {
+	if k == nil {
+		return ""
+	}
+	if k.Label != "" {
+		return k.Label
+	}
+	return k.Identity
 }
 
 // _ 用于保证 auth 包被使用（admin 密钥桥接）。

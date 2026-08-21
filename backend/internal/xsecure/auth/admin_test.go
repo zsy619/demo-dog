@@ -58,7 +58,7 @@ func TestKeyEntry_HasResourceScope(t *testing.T) {
 
 func TestAdminStore_CreateAndLookup(t *testing.T) {
 	s := NewAdminStore()
-	raw, entry, err := s.CreateKey("admin", "acme", []string{"rules:read"}, time.Hour)
+	raw, entry, err := s.CreateKey("admin", "admin-token", "acme", []string{"rules:read"}, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +71,28 @@ func TestAdminStore_CreateAndLookup(t *testing.T) {
 	if entry.Hash == "" {
 		t.Fatal("expected Hash")
 	}
+	if entry.Label != "admin-token" {
+		t.Fatalf("label not stored: %q", entry.Label)
+	}
 	got, ok := s.LookupByToken(raw)
 	if !ok {
 		t.Fatal("lookup failed")
 	}
 	if got.KeyID != entry.KeyID {
 		t.Fatalf("KeyID mismatch")
+	}
+}
+
+// TestAdminStore_CreateKey_LabelFallback 验证 label 为空时
+// 自动回退到 identity(R3 兼容性兜底)。
+func TestAdminStore_CreateKey_LabelFallback(t *testing.T) {
+	s := NewAdminStore()
+	_, e, err := s.CreateKey("admin", "", "acme", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Label != "admin" {
+		t.Fatalf("expected label=identity fallback, got %q", e.Label)
 	}
 }
 
@@ -89,7 +105,7 @@ func TestAdminStore_LookupByToken_Wrong(t *testing.T) {
 
 func TestAdminStore_LookupByID(t *testing.T) {
 	s := NewAdminStore()
-	_, e, _ := s.CreateKey("admin", "acme", nil, 0)
+	_, e, _ := s.CreateKey("admin", "", "acme", nil, 0)
 	got, ok := s.LookupByID(e.KeyID)
 	if !ok {
 		t.Fatal("lookup failed")
@@ -108,7 +124,7 @@ func TestAdminStore_LookupByID_Missing(t *testing.T) {
 
 func TestAdminStore_Rotate(t *testing.T) {
 	s := NewAdminStore()
-	raw1, e1, _ := s.CreateKey("admin", "acme", []string{"rules:read"}, 0)
+	raw1, e1, _ := s.CreateKey("admin", "", "acme", []string{"rules:read"}, 0)
 	raw2, old, e2, err := s.RotateKey(e1.KeyID, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +159,7 @@ func TestAdminStore_Rotate_Missing(t *testing.T) {
 
 func TestAdminStore_Disable(t *testing.T) {
 	s := NewAdminStore()
-	raw, e, _ := s.CreateKey("admin", "acme", nil, 0)
+	raw, e, _ := s.CreateKey("admin", "", "acme", nil, 0)
 	if err := s.DisableKey(e.KeyID); err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +181,7 @@ func TestAdminStore_Disable_Missing(t *testing.T) {
 
 func TestAdminStore_Delete(t *testing.T) {
 	s := NewAdminStore()
-	raw, e, _ := s.CreateKey("admin", "acme", nil, 0)
+	raw, e, _ := s.CreateKey("admin", "", "acme", nil, 0)
 	if err := s.DeleteKey(e.KeyID); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +200,7 @@ func TestAdminStore_Delete_Missing(t *testing.T) {
 func TestAdminStore_List(t *testing.T) {
 	s := NewAdminStore()
 	for i := 0; i < 5; i++ {
-		s.CreateKey("admin", "acme", nil, 0)
+		s.CreateKey("admin", "", "acme", nil, 0)
 	}
 	list := s.ListKeys()
 	if len(list) != 5 {
@@ -195,10 +211,10 @@ func TestAdminStore_List(t *testing.T) {
 func TestAdminStore_PurgeExpired(t *testing.T) {
 	s := NewAdminStore()
 	// Create a key already expired by setting CreatedAt manually.
-	raw, e, _ := s.CreateKey("admin", "acme", nil, 0)
+	raw, e, _ := s.CreateKey("admin", "", "acme", nil, 0)
 	e.ExpiresAt = time.Now().Add(-time.Hour)
 	// And a fresh one.
-	_, _, _ = s.CreateKey("admin", "acme", nil, time.Hour)
+	_, _, _ = s.CreateKey("admin", "", "acme", nil, time.Hour)
 	n := s.PurgeExpired(time.Now())
 	if n != 1 {
 		t.Fatalf("purged: %d", n)

@@ -322,7 +322,9 @@ export const apiService = {
   promRemoteWrite: (body: string, isJson = false) =>
     apiFetch<unknown>(
       isJson ? `/v1/write` : `/prom/write`,
-      { method: "POST", body, headers: { "Content-Type": "application/x-protobuf" } }
+      // 后端 R3 起同时接受 Prometheus protobuf 与 text/plain;
+      // 前端 hook 默认按文本格式发送(适配人工调试)。
+      { method: "POST", body, headers: { "Content-Type": "text/plain" } }
     ),
 
   // /api/keys 列出现有 API key(只读 + 隐藏前缀)

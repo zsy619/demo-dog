@@ -317,3 +317,122 @@ func TestHandleOIDC_DeleteBad(t *testing.T) {
 		t.Fatalf("status: %d", rr.Code)
 	}
 }
+
+// TestHandleOIDC_PutGroupsClaim 验证 PUT 时前端发送的 groups_claim
+// 会被持久化,而不是被硬编码覆盖回 "groups" (R3 修复)。
+func TestHandleOIDC_PutGroupsClaim(t *testing.T) {
+	s := newAdminTestServer(t)
+	body := bytes.NewReader([]byte(`{"issuer":"https://idp.example.com","client_id":"abc","audiences":["dog"],"scopes":["openid"],"groups_claim":"departments"}`))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/oidc", body)
+	s.handleOIDC(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put status: %d", rr.Code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["groups_claim"] != "departments" {
+		t.Errorf("groups_claim not round-tripped: %v", got["groups_claim"])
+	}
+	// 后续 GET 应回带自定义的 groups_claim 而不是默认 "groups"。
+	listRR := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc", nil)
+	s.handleOIDC(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("get status: %d", listRR.Code)
+	}
+	var listResp struct {
+		Providers []map[string]any `json:"providers"`
+	}
+	if err := json.Unmarshal(listRR.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	found := false
+	for _, p := range listResp.Providers {
+		if p["issuer"] == "https://idp.example.com" {
+			if p["groups_claim"] != "departments" {
+				t.Errorf("list groups_claim mismatch: %v", p["groups_claim"])
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("provider not in list")
+	}
+	// 清理。
+	delRR := httptest.NewRecorder()
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/oidc?issuer=https://idp.example.com", nil)
+	s.handleOIDC(delRR, delReq)
+}
+
+// TestHandleOIDC_GroupsClaimFallback 验证旧客户端 PUT 时
+// 不带 groups_claim 时回退到默认 "groups",保持兼容。
+func TestHandleOIDC_GroupsClaimFallback(t *testing.T) {
+	s := newAdminTestServer(t)
+	body := bytes.NewReader([]byte(`{"issuer":"https://idp-old.example.com","client_id":"old"}`))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/oidc", body)
+	s.handleOIDC(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put status: %d", rr.Code)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got["groups_claim"] != "groups" {
+		t.Errorf("expected fallback groups, got %v", got["groups_claim"])
+	}
+	// 清理。
+	delRR := httptest.NewRecorder()
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/oidc?issuer=https://idp-old.example.com", nil)
+	s.handleOIDC(delRR, delReq)
+}
+
+// TestHandleProbe_NoTarget 验证 R3 后不带 target 的
+// /api/probe 也返回 ProbeResult 兼容形状(ok/target/status_code/duration_ns)。
+func TestHandleProbe_NoTarget(t *testing.T) {
+	s := newAdminTestServer(t)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/probe", nil)
+	s.handleProbe(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: %d", rr.Code)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, field := range []string{"ok", "target", "status_code", "duration_ns"} {
+		if _, ok := got[field]; !ok {
+			t.Errorf("missing field %q in response: %v", field, got)
+		}
+	}
+	if got["ok"] != true {
+		t.Errorf("expected ok=true, got %v", got["ok"])
+	}
+}
+
+// TestHandleProbe_WithTarget 验证带 target 的 /api/probe 走外部探测,
+// 返回完整 ProbeResult。
+func TestHandleProbe_WithTarget(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(204)
+	}))
+	defer target.Close()
+	s := newAdminTestServer(t)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/probe?target="+target.URL, nil)
+	s.handleProbe(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: %d", rr.Code)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if int(got["status_code"].(float64)) != 204 {
+		t.Errorf("expected status_code=204, got %v", got["status_code"])
+	}
+	if got["ok"] != true {
+		t.Errorf("expected ok=true, got %v", got["ok"])
+	}
+}

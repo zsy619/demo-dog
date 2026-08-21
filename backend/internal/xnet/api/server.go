@@ -465,8 +465,12 @@ func (s *Server) withCORS(h http.Handler) http.Handler {
 		} else if wildcard {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+		// R3: 补齐 PATCH / DELETE / PUT。前端 tenants、admin keys、
+		// alerts/rule、SLO/retention、backups 等多处
+		// 用到这三个 method——原 allow-list 只有 GET/POST/OPTIONS
+		// 会让跨域前端被浏览器 preflight 拒绝。
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Tenant-Id, traceparent")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -573,14 +577,21 @@ func (s *Server) WrapWithSelfTrace(loopback string) {
 func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
 	target := r.URL.Query().Get("target")
 	if target == "" {
+		// R3: 把 stats dump 包装成 ProbeResult 兼容的形状,
+		// 不然前端 probe() 即使没传 target 也会拿到一个
+		// 缺 ok / duration_ns / status_code 的对象,UI 解析时会
+		// 报 undefined。stats 字段全部平铺在顶层保留向后兼容。
 		stats := s.store.Stats()
 		writeJSON(w, http.StatusOK, map[string]any{
-			"status":            "ok",
-			"uptime_seconds":    int(time.Since(s.started).Seconds()),
-			"logs_accepted":     stats.LogsAccepted,
-			"metrics_accepted":  stats.MetricsAccepted,
-			"spans_accepted":    stats.SpansAccepted,
-			"queries_served":    stats.QueriesServed,
+			"ok":               true,
+			"target":           "self",
+			"status_code":      http.StatusOK,
+			"duration_ns":      int64(0),
+			"uptime_seconds":   int(time.Since(s.started).Seconds()),
+			"logs_accepted":    stats.LogsAccepted,
+			"metrics_accepted": stats.MetricsAccepted,
+			"spans_accepted":   stats.SpansAccepted,
+			"queries_served":   stats.QueriesServed,
 		})
 		return
 	}

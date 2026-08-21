@@ -86,7 +86,7 @@ func (s *Server) handleTenantMintKey(w http.ResponseWriter, r *http.Request) {
 	// 同时在 admin store 中留一份,使 listTenantKeys
 	// /rotateTenantKey/revokeTenantKey 能够工作。
 	if s.adminKeys != nil {
-		if _, entry, aerr := s.adminKeys.CreateKey(req.Role, tenantID, nil, 0); aerr == nil && entry != nil {
+		if _, entry, aerr := s.adminKeys.CreateKey(req.Role, req.Label, tenantID, nil, 0); aerr == nil && entry != nil {
 			k.KeyID = entry.KeyID
 			k.CreatedAt = entry.CreatedAt
 		}
@@ -275,7 +275,7 @@ func (s *Server) handleTenantListKeys(w http.ResponseWriter, r *http.Request) {
 			}
 			out = append(out, map[string]any{
 				"id":         k.KeyID,
-				"label":      k.Identity,
+				"label":      adminKeyLabel(k),
 				"role":       k.Identity,
 				"tenant":     k.Tenant,
 				"scopes":     k.Scopes,
