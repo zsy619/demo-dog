@@ -158,6 +158,15 @@ func (s *Server) SetAuditLog(l *AuditLog) { s.auditLog = l }
 // Quota 返回按租户的配额跟踪器（第 42 轮）。
 func (s *Server) Quota() *QuotaTracker { return s.quota }
 
+// SetQuota 替换配额跟踪器(W1.4b 起用于挂载持久化的 KV 后端)。
+// 必须在 apiServer.Handler() 之前调用。
+func (s *Server) SetQuota(q *QuotaTracker) {
+	if q == nil {
+		return
+	}
+	s.quota = q
+}
+
 // Breakers 返回熔断器注册表。
 func (s *Server) Breakers() *BreakerRegistry { return s.breaker }
 
@@ -172,6 +181,15 @@ func (s *Server) SetBreakers(r *BreakerRegistry) {
 
 // Webhooks 返回 webhook 分发器句柄。
 func (s *Server) Webhooks() *WebhookDispatcher { return s.webhooks }
+
+// SetWebhooks 替换 webhook 分发器(W1.4b 起用于挂载持久化的 KV 后端)。
+// 必须在 apiServer.Handler() 之前调用。
+func (s *Server) SetWebhooks(w *WebhookDispatcher) {
+	if w == nil {
+		return
+	}
+	s.webhooks = w
+}
 
 // Retention 返回留存管理器句柄。
 func (s *Server) Retention() *RetentionManager { return s.retention }

@@ -40,14 +40,17 @@ type Event struct {
 }
 
 // Subscriber 描述一个出站目标。
+//
+// JSON tag 用于 W1.4b KV 持久化:每个订阅者的全部字段都
+// 落盘,Now 字段在还原时仍为 nil(由 dispatcher.now() 兜底)。
 type Subscriber struct {
-	ID         string
-	URL        string
-	Secret     string
-	EventTypes []string // empty = all events
-	MaxRetries int
-	Timeout    time.Duration
-	Now        func() time.Time
+	ID         string        `json:"id"`
+	URL        string        `json:"url"`
+	Secret     string        `json:"secret"`
+	EventTypes []string      `json:"event_types"` // empty = all events
+	MaxRetries int           `json:"max_retries"`
+	Timeout    time.Duration `json:"timeout_ns"`
+	Now        func() time.Time `json:"-"`
 }
 
 func (s *Subscriber) now() func() time.Time {

@@ -182,6 +182,8 @@ func main() {
 	var oidcReg *api.OIDCRegistry
 	var breakerReg *api.BreakerRegistry
 	var retentionMgr *api.RetentionManager
+	var quotaTracker *api.QuotaTracker
+	var webhookDisp *api.WebhookDispatcher
 	var kv xpersistence.KV
 	if *dataDir != "" {
 		if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -226,6 +228,18 @@ func main() {
 			log.Printf("[DOG] retention manager load failed: %v", err)
 			os.Exit(2)
 		}
+		if qt, err := api.NewQuotaTrackerWithKV(context.Background(), kv); err == nil {
+			quotaTracker = qt
+		} else {
+			log.Printf("[DOG] quota tracker load failed: %v", err)
+			os.Exit(2)
+		}
+		if wd, err := api.NewWebhookDispatcherWithKV(context.Background(), kv, 256); err == nil {
+			webhookDisp = wd
+		} else {
+			log.Printf("[DOG] webhook dispatcher load failed: %v", err)
+			os.Exit(2)
+		}
 		fmt.Printf("  Persistence        : %s (control KV active)\n", kvPath)
 	} else if *tenantsFlag != "" {
 		// 没有 -data-dir 但有 -tenants:回退纯内存
@@ -258,6 +272,12 @@ func main() {
 	}
 	if retentionMgr != nil {
 		apiServer.SetRetention(retentionMgr)
+	}
+	if quotaTracker != nil {
+		apiServer.SetQuota(quotaTracker)
+	}
+	if webhookDisp != nil {
+		apiServer.SetWebhooks(webhookDisp)
 	}
 
 	// If seed services are provided, drop a few records before serving so the

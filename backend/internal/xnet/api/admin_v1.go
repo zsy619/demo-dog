@@ -404,10 +404,114 @@ func (s *Server) handleRateLimits(w http.ResponseWriter, r *http.Request) {
 type WebhookDispatcher struct {
 	mu   sync.RWMutex
 	disp *webhook.Dispatcher
+	kv   xpersistence.KV // 可选,nil = 纯内存
 }
 
 func NewWebhookDispatcher() *WebhookDispatcher {
 	return &WebhookDispatcher{disp: webhook.NewDispatcher(256)}
+}
+
+// NewWebhookDispatcherWithKV 创建带持久化的 webhook 分发器。
+//
+// 启动时从 KV 加载全部 subscriber 重新挂到 dispatcher。
+// 后面的 AddSubscriber/RemoveSubscriber 走写穿。
+//
+// 存储 key 命名:webhooks/<id>  →  JSON Subscriber。
+func NewWebhookDispatcherWithKV(ctx context.Context, kv xpersistence.KV, dlqCap int) (*WebhookDispatcher, error) {
+	if kv == nil {
+		return nil, errors.New("webhook: kv is nil")
+	}
+	if dlqCap <= 0 {
+		dlqCap = 256
+	}
+	d := &WebhookDispatcher{
+		disp: webhook.NewDispatcher(dlqCap),
+		kv:   kv,
+	}
+	if err := d.load(ctx); err != nil {
+		return nil, fmt.Errorf("webhook: load: %w", err)
+	}
+	return d, nil
+}
+
+// SetKV 用于测试或后注入 KV。
+func (d *WebhookDispatcher) SetKV(ctx context.Context, kv xpersistence.KV, dlqCap int) error {
+	if kv == nil {
+		return errors.New("webhook: kv is nil")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(d.disp.Subscribers()) > 0 {
+		return errors.New("webhook: SetKV on non-empty dispatcher")
+	}
+	if d.disp == nil {
+		d.disp = webhook.NewDispatcher(dlqCap)
+	}
+	d.kv = kv
+	return d.load(ctx)
+}
+
+// load 从 KV 读所有 subscriber 并重新注册。
+func (d *WebhookDispatcher) load(ctx context.Context) error {
+	keys, err := d.kv.List(ctx, "webhooks/")
+	if err != nil {
+		return err
+	}
+	for _, k := range keys {
+		raw, err := d.kv.Get(ctx, k)
+		if err != nil {
+			continue
+		}
+		var sub webhook.Subscriber
+		if err := json.Unmarshal(raw, &sub); err != nil {
+			continue
+		}
+		if sub.ID == "" || sub.URL == "" {
+			continue
+		}
+		// 复制一份再注册,防止 dispatcher 后续持有
+		// 解引用后的对象引用。
+		dup := sub
+		_ = d.disp.AddSubscriber(&dup)
+	}
+	return nil
+}
+
+// persist 写一个 subscriber 到 KV。
+func (d *WebhookDispatcher) persist(sub *webhook.Subscriber) error {
+	if d.kv == nil {
+		return nil
+	}
+	raw, err := json.Marshal(sub)
+	if err != nil {
+		return err
+	}
+	return d.kv.Set(context.Background(), "webhooks/"+sub.ID, raw)
+}
+
+// remove 从 KV 删一个 subscriber。
+func (d *WebhookDispatcher) remove(id string) {
+	if d.kv == nil {
+		return
+	}
+	_ = d.kv.Delete(context.Background(), "webhooks/"+id)
+}
+
+// AddSubscriber 是 dispatcher.AddSubscriber 的写穿包装。
+//
+// 直接调用底层的 dispatcher 也仍然有效(用于 fan-out 测试
+// 等不需要持久化的场景);但通过 wrapper 注册才能跨重启生效。
+func (d *WebhookDispatcher) AddSubscriber(s *webhook.Subscriber) error {
+	if err := d.disp.AddSubscriber(s); err != nil {
+		return err
+	}
+	return d.persist(s)
+}
+
+// RemoveSubscriber 是 dispatcher.RemoveSubscriber 的写穿包装。
+func (d *WebhookDispatcher) RemoveSubscriber(id string) {
+	d.disp.RemoveSubscriber(id)
+	d.remove(id)
 }
 
 func (d *WebhookDispatcher) Dispatcher() *webhook.Dispatcher {
@@ -442,7 +546,8 @@ func (s *Server) handleWebhooks(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := d.AddSubscriber(&sub); err != nil {
+		// W1.4b: 走 wrapper 的 AddSubscriber,确保 KV 写穿。
+		if err := s.webhooks.AddSubscriber(&sub); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -468,7 +573,8 @@ func (s *Server) handleWebhookItem(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodDelete && len(parts) == 1:
-		d.RemoveSubscriber(id)
+		// W1.4b: 走 wrapper,确保 KV 删除同步。
+		s.webhooks.RemoveSubscriber(id)
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "test":
 		s.handleWebhookTest(w, r, d, id)
