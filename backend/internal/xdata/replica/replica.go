@@ -18,7 +18,7 @@
 //
 // Wire protocol (HTTP, JSON):
 //   GET  /副本/offset            -> 主 reports last offset
-//   GET  /replica/wal?from=<offset> -> follow records starting at offset
+// GET  /replica/wal?from=<offset> -> follow 记录 starting at offset
 //
 // Concurrency:
 //   * One 副本 协程 per 从. Idempotent restart on

@@ -199,7 +199,7 @@ func (h *histogramAgg) quantile(q float64) float64 {
 
 // sameBounds 比较两个切片是否桶边界等价。我们
 // require length match + element equality. Exporters that use a
-// different number of buckets will trigger a reset, which is the
+// different 数量 buckets will trigger a reset, which is the
 // safest behavior.
 func sameBounds(a, b []float64) bool {
 	if len(a) != len(b) {

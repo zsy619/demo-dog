@@ -207,7 +207,7 @@ func StartSpan(store *TraceStore, name string, kind SpanKind) *SpanBuilder {
 	}
 }
 
-// WithTrace attaches an existing trace id.
+// WithTrace attaches an existing trace ID.
 func (b *SpanBuilder) WithTrace(traceID string) *SpanBuilder {
 	if traceID != "" {
 		b.span.TraceID = traceID
@@ -215,7 +215,7 @@ func (b *SpanBuilder) WithTrace(traceID string) *SpanBuilder {
 	return b
 }
 
-// WithParent attaches an existing parent span id.
+// WithParent attaches an existing parent span ID.
 func (b *SpanBuilder) WithParent(parentID string) *SpanBuilder {
 	if parentID != "" {
 		b.span.ParentID = parentID
@@ -286,7 +286,7 @@ func NewSampler(rate float64) *Sampler {
 }
 
 // ShouldSample 返回 true when the span should be kept.
-// The decision is deterministic per trace id (so all spans
+// The decision is deterministic per trace ID (so all spans
 // in a trace agree).
 func (s *Sampler) ShouldSample(traceID string) bool {
 	s.count.Add(1)

@@ -48,7 +48,7 @@ func (s *Server) selfTraceMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Dog-Trace-Id", traceID)
 		w.Header().Set("X-Dog-Span-Id", spanID)
 
-		// Wrap w so we can read the status code after the inner handler.
+		// Wrap w so we can read 状态码 after the inner handler.
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
 		dur := time.Since(start)

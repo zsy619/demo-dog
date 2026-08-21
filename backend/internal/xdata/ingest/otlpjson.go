@@ -238,7 +238,7 @@ func DecodeOTLPJSON(body []byte) (model.OTLPRequest, error) {
 					mergeAttrs(attrs, resourceAttrs)
 					// 如果 SDK 发送了显式桶边界 + 计数，
 					// pass them through so the store can compute true
-					// quantiles. Otherwise fall back to the count+sum
+					// quantiles. Otherwise fall back to 数量+sum
 					// pseudo-metrics that mimic OTel semantics over a
 					// backend that only supports numeric points.
 					if len(dp.ExplicitBounds) > 0 && len(dp.BucketCounts) > 0 {
@@ -355,7 +355,7 @@ func nsToTime(s string) time.Time {
 }
 
 // trimHex 去除 JSON 编码器可能留下的空白/前缀
-// a hex-encoded trace/span id.
+// a hex-encoded trace/span ID.
 func trimHex(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {

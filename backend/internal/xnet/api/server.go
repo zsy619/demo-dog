@@ -328,7 +328,7 @@ func (s *Server) Handler() http.Handler {
 // 和尾部服务标识的 URL 路径，这样即使存在多个不同的服务，
 // 基数也能保持稳定。
 //
-// Exposed via /metrics under the name `dog_request_duration_seconds`.
+// Exposed via /metrics under 名称 `dog_request_duration_seconds`.
 func perHandlerLatency(next http.Handler) http.Handler {
 	// 使用为可观测后端调优的固定桶边界集：
 	// 1 ms ... 30 s。桶是全局的（非按路由），以保持指标基数有界。

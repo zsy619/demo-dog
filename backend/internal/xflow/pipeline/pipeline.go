@@ -58,7 +58,7 @@ type ForkResult[T any] struct {
 }
 
 // Fork 并发执行每个阶段，使用相同输入
-// and returns each branch result. Context-aware: if ctx is
+// and 返回 each branch result. Context-aware: if ctx is
 // cancelled all branches see Done.
 func Fork[T any](ctx context.Context, branches map[string]Stage[T], in T) []ForkResult[T] {
 	results := make([]ForkResult[T], 0, len(branches))
