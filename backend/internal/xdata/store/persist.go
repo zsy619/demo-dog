@@ -1,5 +1,10 @@
 package store
 
+// persist.go:快照编解码 + 文件 IO。
+//
+// 包含 PersistSnapshotBytes/RestoreSnapshot/SaveToFile/LoadFromFile
+// 以及 gob 类型注册(persistRegister)。
+
 import (
 	"bytes"
 	"encoding/gob"
@@ -12,42 +17,13 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/model"
 )
 
-// PersistSnapshot 是 Doris 引擎的可序列化表示。
-// It is intentionally limited to the hot tier + service summaries + 物化视图
-// buckets so cold tiers can be rebuilt on next ingest.
-//
-// Round 30 adds Histograms (OTel bucket aggregates + t-digest
-// centroids) so 百分位 state survives restart.
-type PersistSnapshot struct {
-	Version    int
-	SavedAt    time.Time
-	HotLogs    []model.LogRecord
-	HotMetrics map[string][]model.MetricPoint
-	HotSpans   map[string][]model.SpanRecord
-	MV1m       map[string][]model.MVBucket
-	MV5m       map[string][]model.MVBucket
-	Services   map[string]*model.ServiceSummary
-	Histograms map[string]*PersistHistogram
-}
-
-// PersistHistogram 是 histogramAgg 的磁盘形式。
-type PersistHistogram struct {
-	Bounds  []float64
-	Counts  []int64
-	Sum     float64
-	Total   int64
-	Min     float64
-	Max     float64
-	Centroids []CentroidSnapshot
-	TDTotal    int64
-	TDMin      float64
-	TDMax      float64
-}
-
+// persistVersion 是当前快照格式版本号。
 const persistVersion = 2
 
+// persistOnce 保证 gob 类型注册只执行一次。
 var persistOnce sync.Once
 
+// persistRegister 注册 gob 序列化所需的全部类型。
 func persistRegister() {
 	persistOnce.Do(func() {
 		gob.Register([]model.MVBucket(nil))
@@ -191,7 +167,7 @@ func (d *Doris) RestoreSnapshot(r io.Reader) error {
 	return nil
 }
 
-// SaveToFile 原子地写入快照。
+// SaveToFile 原子地写入快照(临时文件 + rename)。
 func (d *Doris) SaveToFile(path string) error {
 	data, err := d.PersistSnapshotBytes()
 	if err != nil {
@@ -204,7 +180,7 @@ func (d *Doris) SaveToFile(path string) error {
 	return os.Rename(tmp, path)
 }
 
-// LoadFromFile 加载快照。文件不存在不视为错误。
+// LoadFromFile 加载快照;文件不存在不视为错误。
 func (d *Doris) LoadFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -215,15 +191,4 @@ func (d *Doris) LoadFromFile(path string) error {
 	}
 	defer f.Close()
 	return d.RestoreSnapshot(f)
-}
-
-func copyPersistMV(src map[string][]model.MVBucket) map[string][]model.MVBucket {
-	if src == nil {
-		return nil
-	}
-	out := make(map[string][]model.MVBucket, len(src))
-	for k, v := range src {
-		out[k] = append([]model.MVBucket(nil), v...)
-	}
-	return out
 }
