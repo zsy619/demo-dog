@@ -219,10 +219,94 @@ func (s *Server) handleAdminKeyItem(w http.ResponseWriter, r *http.Request) {
 type BreakerRegistry struct {
 	mu       sync.RWMutex
 	breakers map[string]*circuit.Breaker
+	kv       xpersistence.KV // 可选,nil = 纯内存
 }
 
 func NewBreakerRegistry() *BreakerRegistry {
 	return &BreakerRegistry{breakers: make(map[string]*circuit.Breaker)}
+}
+
+// NewBreakerRegistryWithKV 创建一个带持久化的断路器注册表。
+//
+// 启动时从 KV 加载所有断路器的 Snapshot,先在内存里还原
+// 状态,运行时由 circuit.Breaker 自己的并发原语保护。
+//
+// 存储 key 命名:breakers/<name>  →  JSON snapshot。
+func NewBreakerRegistryWithKV(ctx context.Context, kv xpersistence.KV) (*BreakerRegistry, error) {
+	if kv == nil {
+		return nil, errors.New("breaker: kv is nil")
+	}
+	r := &BreakerRegistry{
+		breakers: make(map[string]*circuit.Breaker),
+		kv:       kv,
+	}
+	if err := r.load(ctx); err != nil {
+		return nil, fmt.Errorf("breaker: load: %w", err)
+	}
+	return r, nil
+}
+
+// SetKV 用于测试或后注入 KV。调用前必须空 registry。
+func (r *BreakerRegistry) SetKV(ctx context.Context, kv xpersistence.KV) error {
+	if kv == nil {
+		return errors.New("breaker: kv is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.breakers) > 0 {
+		return errors.New("breaker: SetKV on non-empty registry")
+	}
+	r.kv = kv
+	return r.load(ctx)
+}
+
+// load 从 KV 读所有快照,恢复断路器。
+func (r *BreakerRegistry) load(ctx context.Context) error {
+	keyNames, err := r.kv.List(ctx, "breakers/")
+	if err != nil {
+		return err
+	}
+	for _, k := range keyNames {
+		raw, err := r.kv.Get(ctx, k)
+		if err != nil {
+			continue
+		}
+		var snap circuit.Snapshot
+		if err := json.Unmarshal(raw, &snap); err != nil {
+			continue
+		}
+		name := strings.TrimPrefix(k, "breakers/")
+		if name == "" {
+			continue
+		}
+		settings := circuit.Settings{
+			FailureThreshold: snap.Threshold,
+			CoolDown:         time.Duration(snap.CoolDownNanos),
+		}
+		if settings.FailureThreshold <= 0 {
+			settings.FailureThreshold = 5
+		}
+		if settings.CoolDown <= 0 {
+			settings.CoolDown = 30 * time.Second
+		}
+		b := circuit.New(settings)
+		b.Restore(snap)
+		r.breakers[name] = b
+	}
+	return nil
+}
+
+// persist 写一个断路器的当前快照到 KV。
+func (r *BreakerRegistry) persist(name string, b *circuit.Breaker) error {
+	if r.kv == nil {
+		return nil
+	}
+	snap := b.Snapshot()
+	raw, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	return r.kv.Set(context.Background(), "breakers/"+name, raw)
 }
 
 func (r *BreakerRegistry) Get(name string) *circuit.Breaker {
@@ -239,6 +323,8 @@ func (r *BreakerRegistry) Get(name string) *circuit.Breaker {
 	}
 	b = circuit.New(circuit.Settings{FailureThreshold: 5, CoolDown: 30 * time.Second})
 	r.breakers[name] = b
+	// 新创建的 breaker 立即落盘,保证重启后 All() 仍能看到。
+	_ = r.persist(name, b)
 	return b
 }
 
@@ -246,9 +332,11 @@ func (r *BreakerRegistry) Reset(name string) {
 	r.mu.RLock()
 	b, ok := r.breakers[name]
 	r.mu.RUnlock()
-	if ok {
-		b.Success()
+	if !ok {
+		return
 	}
+	b.Success()
+	_ = r.persist(name, b)
 }
 
 func (r *BreakerRegistry) All() map[string]circuit.Snapshot {
@@ -469,18 +557,123 @@ func (s *Server) handleWebhookStats(w http.ResponseWriter, r *http.Request) {
 // ---- 留存（第 50 轮） ----
 
 type RetentionManager struct {
-	mu sync.RWMutex
-	m  *retention.Manager
+	mu    sync.RWMutex
+	m     *retention.Manager
+	kv    xpersistence.KV // 可选,nil = 纯内存
 }
 
 func NewRetentionManager() *RetentionManager {
 	return &RetentionManager{m: retention.NewManager("", nil)}
 }
 
+// NewRetentionManagerWithKV 创建一个带持久化的留存管理器。
+//
+// 启动时从 KV 加载所有 tenant 的 Policy 并灌入底层的
+// retention.Manager;SetPolicy/Remove 走写穿模式。
+//
+// 存储 key 命名:retention/<tenant>  →  JSON Policy。
+func NewRetentionManagerWithKV(ctx context.Context, kv xpersistence.KV, coldDir string) (*RetentionManager, error) {
+	if kv == nil {
+		return nil, errors.New("retention: kv is nil")
+	}
+	r := &RetentionManager{
+		m:  retention.NewManager(coldDir, nil),
+		kv: kv,
+	}
+	if err := r.load(ctx); err != nil {
+		return nil, fmt.Errorf("retention: load: %w", err)
+	}
+	return r, nil
+}
+
+// SetKV 用于测试或后注入 KV。调用前必须空 manager。
+func (r *RetentionManager) SetKV(ctx context.Context, kv xpersistence.KV, coldDir string) error {
+	if kv == nil {
+		return errors.New("retention: kv is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.m != nil && len(r.m.List()) > 0 {
+		return errors.New("retention: SetKV on non-empty manager")
+	}
+	r.kv = kv
+	if r.m == nil {
+		r.m = retention.NewManager(coldDir, nil)
+	}
+	return r.load(ctx)
+}
+
+// load 从 KV 读所有 Policy,灌入底层的 manager。
+func (r *RetentionManager) load(ctx context.Context) error {
+	keyNames, err := r.kv.List(ctx, "retention/")
+	if err != nil {
+		return err
+	}
+	for _, k := range keyNames {
+		raw, err := r.kv.Get(ctx, k)
+		if err != nil {
+			continue
+		}
+		var p retention.Policy
+		if err := json.Unmarshal(raw, &p); err != nil {
+			continue
+		}
+		if p.Tenant == "" {
+			continue
+		}
+		r.m.SetPolicy(p)
+	}
+	return nil
+}
+
+// persist 写一条 Policy 到 KV。
+func (r *RetentionManager) persist(p retention.Policy) error {
+	if r.kv == nil {
+		return nil
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return r.kv.Set(context.Background(), "retention/"+p.Tenant, raw)
+}
+
+// remove 从 KV 删除一条 Policy。
+func (r *RetentionManager) remove(tenant string) {
+	if r.kv == nil {
+		return
+	}
+	_ = r.kv.Delete(context.Background(), "retention/"+tenant)
+}
+
 func (r *RetentionManager) Manager() *retention.Manager {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.m
+}
+
+// SetPolicy 是 retention.Manager.SetPolicy 的写穿包装。
+//
+// 不直接暴露底层 manager 是为了确保 KV 与内存同步。
+func (r *RetentionManager) SetPolicy(p retention.Policy) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.m.SetPolicy(p); err != nil {
+		return err
+	}
+	// 重新读一次拿到 UpdatedAt 等被底层填充的字段。
+	if got, ok := r.m.Get(p.Tenant); ok {
+		return r.persist(got)
+	}
+	return nil
+}
+
+// Remove 是 retention.Manager.Remove 的写穿包装。
+func (r *RetentionManager) Remove(tenant string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.m.Remove(tenant)
+	r.remove(tenant)
 }
 
 func (s *Server) handleRetention(w http.ResponseWriter, r *http.Request) {
@@ -509,16 +702,23 @@ func (s *Server) handleRetention(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := m.SetPolicy(p); err != nil {
+		// W1.4a: 通过 RetentionManager 的写穿包装,而不是
+		// 直接 m.SetPolicy(p),这样 KV 才能同步。
+		if err := s.retention.SetPolicy(p); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
+		}
+		// 重新读取拿到 UpdatedAt
+		var updated time.Time
+		if got, ok := s.retention.Manager().Get(p.Tenant); ok {
+			updated = got.UpdatedAt
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"tenant":     p.Tenant,
 			"tier":       string(p.Tier),
 			"hot_ttl_ns": int64(p.HotTTL),
 			"cold_ttl_ns": int64(p.ColdTTL),
-			"updated_at": p.UpdatedAt.Format(time.RFC3339Nano),
+			"updated_at": updated.Format(time.RFC3339Nano),
 		})
 	default:
 		w.Header().Set("Allow", "GET PUT")

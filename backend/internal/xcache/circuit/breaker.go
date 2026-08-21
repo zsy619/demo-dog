@@ -145,3 +145,29 @@ func (b *Breaker) Snapshot() Snapshot {
 	}
 	return snap
 }
+
+// Restore 把一个快照强制写回到断路器。用于
+// 进程重启后恢复 breaker 状态(例如刚刚把 ingest
+// 标记为 open,我们重启后不希望它忘记这件事)。
+//
+// 必须持锁外部调用方;该函数内部不锁。
+func (b *Breaker) Restore(snap Snapshot) {
+	switch snap.State {
+	case "open":
+		b.state.Store(int32(StateOpen))
+	case "half_open":
+		b.state.Store(int32(StateHalfOpen))
+	default:
+		b.state.Store(int32(StateClosed))
+	}
+	if snap.Failures > 0 {
+		b.fails.Store(snap.Failures)
+	} else {
+		b.fails.Store(0)
+	}
+	if t, err := time.Parse(time.RFC3339Nano, snap.OpenedAt); err == nil && !t.IsZero() {
+		b.openedAt.Store(t.UnixNano())
+	} else if snap.State != "open" {
+		b.openedAt.Store(0)
+	}
+}

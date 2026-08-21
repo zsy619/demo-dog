@@ -39,12 +39,17 @@ const (
 )
 
 // Policy 是每租户的保留设置。
+//
+// JSON tag 与 KV 持久化耦合;加字段请保持兼容性。
+// 注意:HotTTL/ColdTTL 用整数纳秒编码,与现有 HTTP
+// 端点的 wire format 保持一致(/api/v1/retention 接受
+// 整数 nanos 而不是 duration string)。
 type Policy struct {
-	Tenant    string
-	Tier      Tier
-	HotTTL    time.Duration
-	ColdTTL   time.Duration
-	UpdatedAt time.Time
+	Tenant    string        `json:"tenant"`
+	Tier      Tier          `json:"tier"`
+	HotTTL    time.Duration `json:"hot_ttl_ns"`
+	ColdTTL   time.Duration `json:"cold_ttl_ns"`
+	UpdatedAt time.Time     `json:"updated_at"`
 }
 
 // DefaultPolicies 返回标准的分层设置。

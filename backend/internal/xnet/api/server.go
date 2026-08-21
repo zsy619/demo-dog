@@ -161,11 +161,29 @@ func (s *Server) Quota() *QuotaTracker { return s.quota }
 // Breakers 返回熔断器注册表。
 func (s *Server) Breakers() *BreakerRegistry { return s.breaker }
 
+// SetBreakers 替换熔断器注册表(W1.4a 起用于挂载持久化的 KV 后端)。
+// 必须在 apiServer.Handler() 之前调用。
+func (s *Server) SetBreakers(r *BreakerRegistry) {
+	if r == nil {
+		return
+	}
+	s.breaker = r
+}
+
 // Webhooks 返回 webhook 分发器句柄。
 func (s *Server) Webhooks() *WebhookDispatcher { return s.webhooks }
 
 // Retention 返回留存管理器句柄。
 func (s *Server) Retention() *RetentionManager { return s.retention }
+
+// SetRetention 替换留存管理器(W1.4a 起用于挂载持久化的 KV 后端)。
+// 必须在 apiServer.Handler() 之前调用。
+func (s *Server) SetRetention(r *RetentionManager) {
+	if r == nil {
+		return
+	}
+	s.retention = r
+}
 
 // AdminKeys 返回管理 API 密钥存储。
 func (s *Server) AdminKeys() *auth.AdminStore { return s.adminKeys }

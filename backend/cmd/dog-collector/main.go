@@ -180,6 +180,8 @@ func main() {
 	var reg *tenants.Registry
 	var adminStore *auth.AdminStore
 	var oidcReg *api.OIDCRegistry
+	var breakerReg *api.BreakerRegistry
+	var retentionMgr *api.RetentionManager
 	var kv xpersistence.KV
 	if *dataDir != "" {
 		if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -212,6 +214,18 @@ func main() {
 			log.Printf("[DOG] OIDC registry load failed: %v", err)
 			os.Exit(2)
 		}
+		if br, err := api.NewBreakerRegistryWithKV(context.Background(), kv); err == nil {
+			breakerReg = br
+		} else {
+			log.Printf("[DOG] breaker registry load failed: %v", err)
+			os.Exit(2)
+		}
+		if rm, err := api.NewRetentionManagerWithKV(context.Background(), kv, ""); err == nil {
+			retentionMgr = rm
+		} else {
+			log.Printf("[DOG] retention manager load failed: %v", err)
+			os.Exit(2)
+		}
 		fmt.Printf("  Persistence        : %s (control KV active)\n", kvPath)
 	} else if *tenantsFlag != "" {
 		// 没有 -data-dir 但有 -tenants:回退纯内存
@@ -238,6 +252,12 @@ func main() {
 	}
 	if oidcReg != nil {
 		apiServer.SetOIDC(oidcReg)
+	}
+	if breakerReg != nil {
+		apiServer.SetBreakers(breakerReg)
+	}
+	if retentionMgr != nil {
+		apiServer.SetRetention(retentionMgr)
 	}
 
 	// If seed services are provided, drop a few records before serving so the
