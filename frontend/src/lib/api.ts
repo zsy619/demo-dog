@@ -118,6 +118,22 @@ export const apiService = {
     apiFetch<HistogramResponse>(
       `/histogram?service=${encodeURIComponent(service)}&bins=${bins}`
     ),
+  histogramOTel: (service: string, name: string) =>
+    apiFetch<{
+      service: string;
+      name: string;
+      bounds: number[];
+      counts: number[];
+      total: number;
+      sum: number;
+      min: number;
+      max: number;
+      p50: number;
+      p95: number;
+      p99: number;
+    }>(
+      `/histogram/otel?service=${encodeURIComponent(service)}&name=${encodeURIComponent(name)}`
+    ),
   severity: (service = "") =>
     apiFetch<SeverityResponse>(
       service ? `/severity?service=${encodeURIComponent(service)}` : "/severity"
@@ -283,6 +299,35 @@ export const apiService = {
       `/v1/auth/oidc?issuer=${encodeURIComponent(issuer)}`,
       { method: "DELETE" }
     ),
+
+  // Prometheus 兼容端点
+  // /api/v1/series 与 /api/v1/metadata 用于 grafana 等外部工具发现指标
+  // /api/v1/query 与 /api/v1/write 兼容 prometheus HTTP API
+  promSeries: (match = "{}") =>
+    apiFetch<{ status: string; data: Array<{ __name__: string; service?: string }> }>(
+      `/v1/series?match[]=${encodeURIComponent(match)}`
+    ),
+  promMetadata: () =>
+    apiFetch<{ status: string; data: Record<string, Array<{ type: string; help: string }>> }>(
+      `/v1/metadata`
+    ),
+  promQuery: (query: string, time?: number) =>
+    apiFetch<{ status: string; data: { resultType: string; result: unknown[] } }>(
+      `/v1/query?query=${encodeURIComponent(query)}${time ? `&time=${time}` : ""}`
+    ),
+  promRemoteWrite: (body: string, isJson = false) =>
+    apiFetch<unknown>(
+      isJson ? `/v1/write` : `/prom/write`,
+      { method: "POST", body, headers: { "Content-Type": "application/x-protobuf" } }
+    ),
+
+  // /api/keys 列出现有 API key(只读 + 隐藏前缀)
+  listKeys: () =>
+    apiFetch<{ count: number; keys: Array<{ label: string; role: string; key_prefix: string }> }>(
+      `/keys`
+    ),
+
+  // /api/dashboards/{id}/panels 已经在 panels() 中暴露
 };
 
 // Legacy alias — pages that imported `api` keep working while new

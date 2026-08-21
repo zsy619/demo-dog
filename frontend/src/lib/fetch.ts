@@ -23,6 +23,10 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  // Custom headers to attach (merged with default Content-Type/Accept).
+  // Useful for endpoints that require a non-JSON Content-Type
+  // (e.g. Prometheus remote write uses application/x-protobuf).
+  headers?: Record<string, string>;
   // When true the request omits the Authorization header. Used by
   // the login modal itself, which obviously cannot present a key it
   // does not have yet.
@@ -41,6 +45,11 @@ export async function apiFetch<T>(
   }
   if (!opts.anonymous) {
     Object.assign(headers, authHeaders());
+  }
+  // Allow callers to override or add headers (e.g. for non-JSON
+  // endpoints like Prometheus remote write).
+  if (opts.headers) {
+    Object.assign(headers, opts.headers);
   }
 
   const init: RequestInit = {
