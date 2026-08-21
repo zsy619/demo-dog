@@ -1,55 +1,33 @@
-// Package vault 凭证保管：加密存储 API key / 密码等敏感配置，支持生命周期管理。
+// Package vault 凭证保管:加密存储 API key / 密码等敏感配置,支持生命周期管理。
+//
+// 文件职责拆分:
+//   - vault.go  Vault 主体 + Put/Get/Delete/Names/Audit
+//   - entry.go  Entry + AuditEntry 类型定义
+//   - crypto.go 加密/解密 + EncodeAudit
 package vault
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
 	"sync"
 	"time"
 )
 
-// Entry is one stored secret.
-type Entry struct {
-	Tenant     string
-	Name       string
-	Ciphertext []byte
-	Nonce      []byte
-	Version    int
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	CreatedBy  string
-}
-
-// AuditEntry 记录 every Get/Put/Delete.
-type AuditEntry struct {
-	Tenant   string
-	Name     string
-	Actor    string
-	Action   string
-	At       time.Time
-	Found    bool
-}
-
-// Vault is the encrypted secrets store. Each value is
-// encrypted with a per-tenant key derived from a master key
-// via HKDF-style SHA256(master || 租户). The vault itself
-// never stores plaintext.
+// Vault 是加密秘密存储。
+//
+// 每个值用 per-tenant key 加密,通过 SHA256(master || tenant) 派生;
+// vault 自身永不存储明文。
 type Vault struct {
-	mu        sync.RWMutex
-	master    []byte
-	entries   map[string]map[string]*Entry // tenant -> name -> entry
-	audit     []AuditEntry
-	auditCap  int
-	now       func() time.Time
+	mu       sync.RWMutex             // 保护 entries / audit
+	master   []byte                   // 主密钥(复制保存)
+	entries  map[string]map[string]*Entry // tenant → name → entry
+	audit    []AuditEntry             // 审计日志(滚动)
+	auditCap int                      // 审计日志容量上限
+	now      func() time.Time         // 时钟源(便于测试)
 }
 
-// NewVault 创建 a Vault keyed by the given master secret.
+// NewVault 创建一个由主密钥派生的 Vault。
+//
+// auditCap <= 0 默认 1024;master 至少 16 字节,否则 panic。
 func NewVault(master []byte, auditCap int) *Vault {
 	if auditCap <= 0 {
 		auditCap = 1024
@@ -65,14 +43,15 @@ func NewVault(master []byte, auditCap int) *Vault {
 	}
 }
 
-// WithTime overrides the time source for tests.
+// WithTime 替换时钟源(供测试)。
 func (v *Vault) WithTime(now func() time.Time) *Vault {
 	v.now = now
 	return v
 }
 
-// Put encrypts plaintext under the 租户 key and stores it.
-// 返回 version number assigned.
+// Put 在租户密钥下加密 plaintext 并存储。
+//
+// 返回分配的版本号。
 func (v *Vault) Put(tenant, name, plaintext, actor string) (int, error) {
 	if tenant == "" || name == "" {
 		return 0, errors.New("tenant and name required")
@@ -108,7 +87,9 @@ func (v *Vault) Put(tenant, name, plaintext, actor string) (int, error) {
 	return ver, nil
 }
 
-// Get decrypts the secret for 租户 + name.
+// Get 解密 tenant + name 对应的秘密。
+//
+// 返回 (明文, 是否存在, 错误)。
 func (v *Vault) Get(tenant, name, actor string) (string, bool, error) {
 	v.mu.RLock()
 	e, ok := v.entries[tenant][name]
@@ -129,7 +110,7 @@ func (v *Vault) Get(tenant, name, actor string) (string, bool, error) {
 	return string(pt), true, nil
 }
 
-// Delete 移除 the secret.
+// Delete 移除一个秘密。
 func (v *Vault) Delete(tenant, name, actor string) error {
 	v.mu.Lock()
 	found := true
@@ -147,7 +128,7 @@ func (v *Vault) Delete(tenant, name, actor string) error {
 	return nil
 }
 
-// Names lists the names stored under a 租户.
+// Names 列出某租户下存储的秘密名。
 func (v *Vault) Names(tenant string) []string {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -162,7 +143,7 @@ func (v *Vault) Names(tenant string) []string {
 	return out
 }
 
-// Audit 返回 a copy of the 审计 log.
+// Audit 返回审计日志的副本。
 func (v *Vault) Audit() []AuditEntry {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -171,6 +152,7 @@ func (v *Vault) Audit() []AuditEntry {
 	return out
 }
 
+// recordAudit 追加一条审计记录;超出容量则丢弃最旧。
 func (v *Vault) recordAudit(e AuditEntry) {
 	v.mu.Lock()
 	if len(v.audit) >= v.auditCap {
@@ -178,51 +160,4 @@ func (v *Vault) recordAudit(e AuditEntry) {
 	}
 	v.audit = append(v.audit, e)
 	v.mu.Unlock()
-}
-
-// tenantKey derives a per-tenant 32-byte key via SHA256(master || 租户).
-func (v *Vault) tenantKey(tenant string) ([]byte, error) {
-	h := sha256.New()
-	h.Write(v.master)
-	h.Write([]byte(tenant))
-	return h.Sum(nil), nil
-}
-
-func encrypt(key []byte, plaintext string) ([]byte, []byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, nil, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, nil, err
-	}
-	ct := gcm.Seal(nil, nonce, []byte(plaintext), nil)
-	return ct, nonce, nil
-}
-
-func decrypt(key, ct, nonce []byte) ([]byte, error) {
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	pt, err := gcm.Open(nil, nonce, ct, nil)
-	if err != nil {
-		return nil, err
-	}
-	return pt, nil
-}
-
-// EncodeAudit encodes one 审计 entry as base64 JSON for export.
-func EncodeAudit(e AuditEntry) string {
-	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"tenant":%q,"name":%q,"actor":%q,"action":%q,"at":%q,"found":%v}`,
-		e.Tenant, e.Name, e.Actor, e.Action, e.At.Format(time.RFC3339Nano), e.Found)))
 }
