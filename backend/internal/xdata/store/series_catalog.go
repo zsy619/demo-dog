@@ -1,39 +1,29 @@
 package store
 
+// series_catalog.go:SeriesCatalog 主题。
+//
+// 遍历 Doris 的内存 hot/cold metrics 缓冲,
+// 产出 (metric, 标签集) 清单;带 ttl memo。
+
 import (
 	"sort"
 	"sync"
 	"time"
 )
 
-// SeriesEntry 是某指标观察到的一个唯一标签集。
-type SeriesEntry struct {
-	Service string            `json:"service"`
-	Name    string            `json:"name"`
-	Labels  map[string]string `json:"labels,omitempty"`
-	LastMs  int64             `json:"last_ms"`
-}
-
-// MetricCard 汇总一个指标名称。
-type MetricCard struct {
-	Name        string `json:"name"`
-	Series      int    `json:"series"`
-	Samples     int    `json:"samples"`
-	Services    int    `json:"services"`
-	FirstSeenMs int64  `json:"first_seen_ms,omitempty"`
-	LastSeenMs  int64  `json:"last_seen_ms,omitempty"`
-}
-
-// SeriesCatalog 遍历内存热/冷指标缓冲，并
-// produces a catalog of (metric, 序列).
+// SeriesCatalog 遍历内存热/冷指标缓冲,
+// 并产出 (metric, 序列) 清单。
+//
+// 带 ttl 缓存:ttl 内直接返回缓存结果。
 type SeriesCatalog struct {
-	mu   sync.RWMutex
-	d    *Doris
-	ttl  time.Duration
-	last time.Time
-	memo []MetricCard
+	mu   sync.RWMutex // 保护 memo / last
+	d    *Doris       // 源数据
+	ttl  time.Duration // 缓存有效期
+	last time.Time     // 上次重算时间
+	memo []MetricCard  // 缓存结果
 }
 
+// NewSeriesCatalog 构造一个 catalog,ttl <= 0 默认为 5 秒。
 func (d *Doris) NewSeriesCatalog(ttl time.Duration) *SeriesCatalog {
 	if ttl <= 0 {
 		ttl = 5 * time.Second
@@ -41,6 +31,7 @@ func (d *Doris) NewSeriesCatalog(ttl time.Duration) *SeriesCatalog {
 	return &SeriesCatalog{d: d, ttl: ttl}
 }
 
+// Series 返回所有指标的汇总(缓存命中直接返回)。
 func (c *SeriesCatalog) Series() []MetricCard {
 	c.mu.RLock()
 	if time.Since(c.last) < c.ttl && c.memo != nil {
@@ -52,6 +43,9 @@ func (c *SeriesCatalog) Series() []MetricCard {
 	return c.recompute()
 }
 
+// ForMetric 返回指定指标名下的所有唯一标签集。
+//
+// 按 service 升序、LastMs 降序排序;limit > 0 截断。
 func (c *SeriesCatalog) ForMetric(name string, limit int) []SeriesEntry {
 	d := c.d
 	d.muMetrics.RLock()
@@ -100,6 +94,9 @@ func (c *SeriesCatalog) ForMetric(name string, limit int) []SeriesEntry {
 	return out
 }
 
+// recompute 重新遍历 hot metrics 缓冲并构造 MetricCard 列表。
+//
+// 结果按 series 数降序、名称升序排序。
 func (c *SeriesCatalog) recompute() []MetricCard {
 	d := c.d
 	d.muMetrics.RLock()
@@ -157,51 +154,5 @@ func (c *SeriesCatalog) recompute() []MetricCard {
 	c.memo = out
 	c.last = time.Now()
 	c.mu.Unlock()
-	return out
-}
-
-func (d *Doris) metricKeyOrder(name string) []string {
-	out := make([]string, 0, len(d.hotMetrics))
-	for k := range d.hotMetrics {
-		if _, n := splitMetricKey(k); n == name {
-			out = append(out, k)
-		}
-	}
-	return out
-}
-
-func splitMetricKey(k string) (svc, name string) {
-	for i := 0; i < len(k); i++ {
-		if k[i] == '|' {
-			return k[:i], k[i+1:]
-		}
-	}
-	return k, ""
-}
-
-func labelsKey(m map[string]string) string {
-	if len(m) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([]byte, 0, 32)
-	for _, k := range keys {
-		out = append(out, k...)
-		out = append(out, '=')
-		out = append(out, m[k]...)
-		out = append(out, ';')
-	}
-	return string(out)
-}
-
-func copyLabels(m map[string]string) map[string]string {
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
 	return out
 }
