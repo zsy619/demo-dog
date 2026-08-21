@@ -186,6 +186,15 @@ func (s *Server) Replica() *ReplicaStatus { return s.replica }
 // OIDC 返回 OIDC 注册表。
 func (s *Server) OIDC() *OIDCRegistry { return s.oidc }
 
+// SetOIDC 替换 server 的 OIDC registry(W1.3 起用于挂载
+// 持久化的 KV 后端)。必须在 apiServer.Handler() 之前调用。
+func (s *Server) SetOIDC(r *OIDCRegistry) {
+	if r == nil {
+		return
+	}
+	s.oidc = r
+}
+
 // Datasources 暴露 datasource 注册表，以便调用方（例如启动时的
 // driver 插件）注册额外后端。
 func (s *Server) Datasources() *datasourceRegistry {

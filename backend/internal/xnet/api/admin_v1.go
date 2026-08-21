@@ -30,6 +30,7 @@ import (
 	"github.com/zsy619/demo-dog/backend/internal/xdata/retention"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
 	"github.com/zsy619/demo-dog/backend/internal/xnet/webhook"
+	"github.com/zsy619/demo-dog/backend/internal/xpersistence"
 )
 
 // ---- quota（第 42 轮） ----
@@ -608,10 +609,88 @@ type OIDCBundle struct {
 type OIDCRegistry struct {
 	mu        sync.RWMutex
 	providers map[string]OIDCBundle
+	kv        xpersistence.KV // 可选,nil = 纯内存
 }
 
 func NewOIDCRegistry() *OIDCRegistry {
 	return &OIDCRegistry{providers: make(map[string]OIDCBundle)}
+}
+
+// NewOIDCRegistryWithKV 创建一个带持久化的 OIDC registry。
+//
+// 启动时从 KV 加载所有 OIDCBundle;加载失败(损坏、I/O 错误)
+// 返回错误,由调用方决定是否中断启动。
+//
+// 存储 key 命名:oidc/<issuer>  →  JSON bundle。
+func NewOIDCRegistryWithKV(ctx context.Context, kv xpersistence.KV) (*OIDCRegistry, error) {
+	if kv == nil {
+		return nil, errors.New("oidc: kv is nil")
+	}
+	r := &OIDCRegistry{
+		providers: make(map[string]OIDCBundle),
+		kv:        kv,
+	}
+	if err := r.load(ctx); err != nil {
+		return nil, fmt.Errorf("oidc: load: %w", err)
+	}
+	return r, nil
+}
+
+// SetKV 用于测试或后注入 KV。调用前必须空 registry。
+func (r *OIDCRegistry) SetKV(ctx context.Context, kv xpersistence.KV) error {
+	if kv == nil {
+		return errors.New("oidc: kv is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.providers) > 0 {
+		return errors.New("oidc: SetKV on non-empty registry")
+	}
+	r.kv = kv
+	return r.load(ctx)
+}
+
+// load 从 KV 读所有 OIDCBundle,填到内存索引。
+func (r *OIDCRegistry) load(ctx context.Context) error {
+	keyNames, err := r.kv.List(ctx, "oidc/")
+	if err != nil {
+		return err
+	}
+	for _, k := range keyNames {
+		raw, err := r.kv.Get(ctx, k)
+		if err != nil {
+			continue
+		}
+		var b OIDCBundle
+		if err := json.Unmarshal(raw, &b); err != nil {
+			continue
+		}
+		if b.Issuer == "" {
+			continue
+		}
+		r.providers[b.Issuer] = b
+	}
+	return nil
+}
+
+// persist 写一个 bundle 到 KV。
+func (r *OIDCRegistry) persist(b OIDCBundle) error {
+	if r.kv == nil {
+		return nil
+	}
+	raw, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	return r.kv.Set(context.Background(), "oidc/"+b.Issuer, raw)
+}
+
+// remove 删除一个 bundle 的 KV 记录。
+func (r *OIDCRegistry) remove(issuer string) {
+	if r.kv == nil {
+		return
+	}
+	_ = r.kv.Delete(context.Background(), "oidc/"+issuer)
 }
 
 func (r *OIDCRegistry) List() []OIDCBundle {
@@ -628,12 +707,14 @@ func (r *OIDCRegistry) Upsert(b OIDCBundle) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.providers[b.Issuer] = b
+	_ = r.persist(b)
 }
 
 func (r *OIDCRegistry) Delete(issuer string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.providers, issuer)
+	r.remove(issuer)
 }
 
 func (s *Server) handleOIDC(w http.ResponseWriter, r *http.Request) {

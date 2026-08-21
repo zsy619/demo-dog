@@ -179,6 +179,7 @@ func main() {
 	// 加载上次持久化的 tenant,不创建任何新租户。
 	var reg *tenants.Registry
 	var adminStore *auth.AdminStore
+	var oidcReg *api.OIDCRegistry
 	var kv xpersistence.KV
 	if *dataDir != "" {
 		if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -205,6 +206,12 @@ func main() {
 			log.Printf("[DOG] admin store load failed: %v", err)
 			os.Exit(2)
 		}
+		if o2, err := api.NewOIDCRegistryWithKV(context.Background(), kv); err == nil {
+			oidcReg = o2
+		} else {
+			log.Printf("[DOG] OIDC registry load failed: %v", err)
+			os.Exit(2)
+		}
 		fmt.Printf("  Persistence        : %s (control KV active)\n", kvPath)
 	} else if *tenantsFlag != "" {
 		// 没有 -data-dir 但有 -tenants:回退纯内存
@@ -228,6 +235,9 @@ func main() {
 	}
 	if adminStore != nil {
 		apiServer.SetAdminKeys(adminStore)
+	}
+	if oidcReg != nil {
+		apiServer.SetOIDC(oidcReg)
 	}
 
 	// If seed services are provided, drop a few records before serving so the
