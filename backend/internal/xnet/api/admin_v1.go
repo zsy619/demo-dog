@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -749,9 +750,41 @@ func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"backups": out})
+	case http.MethodPost:
+		// R4: 前端 createBackup hook 一直 POST /api/v1/backups,
+		// 旧 handler 只接受 GET,R4 前端会拿到 405。这里补上
+		// POST 路径,接收 {output, compress} 并返回与
+		// store.BackupResult 完全一致的字段。
+		var body struct {
+			Output   string `json:"output"`
+			Compress bool   `json:"compress"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if body.Output == "" {
+			writeError(w, http.StatusBadRequest, errors.New("output required"))
+			return
+		}
+		bm := store.NewBackupManager(s.cfg.DataDir)
+		comp := body.Compress
+		res, err := bm.Backup(s.store, store.BackupOptions{Output: body.Output, Compress: &comp})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"output":      res.Output,
+			"sha256":      res.SHA256,
+			"bytes":       res.Bytes,
+			"snapshot_id": res.SnapshotID,
+			"taken_at":    res.TakenAt.Format(time.RFC3339Nano),
+			"compress":    res.Compress,
+		})
 	default:
-		w.Header().Set("Allow", "GET")
-		writeError(w, http.StatusMethodNotAllowed, errors.New("GET only"))
+		w.Header().Set("Allow", "GET POST")
+		writeError(w, http.StatusMethodNotAllowed, errors.New("GET POST only"))
 	}
 }
 

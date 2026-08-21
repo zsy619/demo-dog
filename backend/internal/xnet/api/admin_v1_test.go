@@ -436,3 +436,61 @@ func TestHandleProbe_WithTarget(t *testing.T) {
 		t.Errorf("expected ok=true, got %v", got["ok"])
 	}
 }
+
+// TestHandleBackups_POST 验证 R4 修复:前端 createBackup
+// 一直 POST /api/v1/backups,旧 handler 只接受 GET,R4
+// 之后必须能成功创建备份并返回 BackupResult 视图。
+func TestHandleBackups_POST(t *testing.T) {
+	s := newAdminTestServer(t)
+	output := t.TempDir() + "/backup.tar"
+	body := strings.NewReader(`{"output":"` + output + `","compress":false}`)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups", body)
+	s.handleBackups(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: %d body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["output"] != output {
+		t.Errorf("output mismatch: %v", got["output"])
+	}
+	if got["sha256"] == "" {
+		t.Errorf("missing sha256: %v", got["sha256"])
+	}
+	if got["snapshot_id"] == "" {
+		t.Errorf("missing snapshot_id: %v", got["snapshot_id"])
+	}
+	if got["taken_at"] == "" {
+		t.Errorf("missing taken_at: %v", got["taken_at"])
+	}
+}
+
+// TestHandleBackups_POST_MissingOutput 验证缺少 output 字段时返回 400。
+func TestHandleBackups_POST_MissingOutput(t *testing.T) {
+	s := newAdminTestServer(t)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups",
+		strings.NewReader(`{"compress":false}`))
+	s.handleBackups(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestHandleBackups_MethodNotAllowed 验证 PUT/PATCH/DELETE 仍
+// 返回 405,避免 R4 之后的 POST 路径意外放开其它 method。
+func TestHandleBackups_MethodNotAllowed(t *testing.T) {
+	s := newAdminTestServer(t)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/backups", nil)
+	s.handleBackups(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status: %d body=%s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("Allow") != "GET POST" {
+		t.Errorf("Allow header wrong: %q", rr.Header().Get("Allow"))
+	}
+}

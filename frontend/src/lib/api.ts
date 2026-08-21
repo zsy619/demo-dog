@@ -155,11 +155,15 @@ export const apiService = {
     apiFetch<{ rules: AlertRule[] }>("/alerts/rules"),
   alertsRule: (name: string) =>
     apiFetch<AlertRule>(`/v1/rules/${encodeURIComponent(name)}`),
+  // R4: 后端 PUT /api/v1/rules/<name> 返回
+  // {rule, previous, created},而不是直接 AlertRule。这里把返回
+  // 类型改为 {rule, previous?, created} 以避免上层
+  // 解构 .rule 时拿到 undefined。
   upsertAlertRule: (rule: AlertRule) =>
-    apiFetch<AlertRule>(`/v1/rules/${encodeURIComponent(rule.name)}`, {
-      method: "PUT",
-      body: rule,
-    }),
+    apiFetch<{ rule: AlertRule; previous?: AlertRule; created: boolean }>(
+      `/v1/rules/${encodeURIComponent(rule.name)}`,
+      { method: "PUT", body: rule }
+    ),
   deleteAlertRule: (name: string) =>
     apiFetch<void>(`/v1/rules/${encodeURIComponent(name)}`, {
       method: "DELETE",
