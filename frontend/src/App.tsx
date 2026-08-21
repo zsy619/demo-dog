@@ -31,6 +31,7 @@ const Retention = lazy(() => import("@/pages/Retention"));
 const SLOs = lazy(() => import("@/pages/SLOs"));
 const Replica = lazy(() => import("@/pages/Replica"));
 const AdminKeys = lazy(() => import("@/pages/AdminKeys"));
+const Billing = lazy(() => import("@/pages/Billing"));
 
 export type Page =
   | "overview"
@@ -52,7 +53,8 @@ export type Page =
   | "retention"
   | "slos"
   | "replica"
-  | "admin-keys";
+  | "admin-keys"
+  | "billing";
 
 const VALID_PAGES: Page[] = [
   "overview",
@@ -75,6 +77,7 @@ const VALID_PAGES: Page[] = [
   "slos",
   "replica",
   "admin-keys",
+  "billing",
 ];
 
 function isValid(p: string): p is Page {
@@ -265,6 +268,8 @@ export default function App() {
         return <Replica />;
       case "admin-keys":
         return <AdminKeys />;
+      case "billing":
+        return <Billing />;
       default:
         return null;
     }

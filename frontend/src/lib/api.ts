@@ -21,6 +21,13 @@ import type {
   SLOBudget,
   SLODecision,
   RetentionPolicy,
+  BillingUsage,
+  BillingPeriodTotal,
+  BillingPointResponse,
+  BillingTenantResponse,
+  BillingMetricsResponse,
+  BillingAllResponse,
+  BillingRecordResponse,
   QuotaStatus,
   CircuitSnapshot,
   ReplicaStatus,
@@ -32,6 +39,7 @@ import type {
   OIDCProviderConfig,
 } from "@/types/api";
 import { apiFetch } from "./fetch";
+import { authHeaders } from "./auth";
 
 const API_BASE = "/api";
 
@@ -338,6 +346,55 @@ export const apiService = {
     ),
 
   // /api/dashboards/{id}/panels 已经在 panels() 中暴露
+
+  // ---- W1.5: 多租户用量计量 (billing) ----
+
+  billingUsageAll: () =>
+    apiFetch<BillingAllResponse>("/v1/billing/usage"),
+
+  billingUsageTenant: (tenant: string) =>
+    apiFetch<BillingTenantResponse>(
+      `/v1/billing/usage?tenant=${encodeURIComponent(tenant)}`
+    ),
+
+  billingUsagePeriod: (tenant: string, period: string, metric?: string) => {
+    let path = `/v1/billing/usage?tenant=${encodeURIComponent(tenant)}&period=${encodeURIComponent(period)}`;
+    if (metric) path += `&metric=${encodeURIComponent(metric)}`;
+    return metric
+      ? apiFetch<BillingPointResponse>(path)
+      : apiFetch<BillingMetricsResponse>(path);
+  },
+
+  recordUsage: (body: {
+    tenant: string;
+    metric: string;
+    delta: number;
+    at?: string;
+  }) =>
+    apiFetch<BillingRecordResponse>("/v1/billing/usage", {
+      method: "POST",
+      body,
+    }),
+
+  // 直接返回 CSV 文本(text/csv),不解析 JSON。
+  billingUsageCSV: (q?: { tenant?: string; period?: string }) => {
+    const params = new URLSearchParams();
+    if (q?.tenant) params.set("tenant", q.tenant);
+    if (q?.period) params.set("period", q.period);
+    const qs = params.toString();
+    const path = `/v1/billing/usage.csv${qs ? `?${qs}` : ""}`;
+    // apiFetch 默认要求 JSON,这里直接走 fetch + authHeaders。
+    return fetch(`/api${path}`, {
+      method: "GET",
+      headers: {
+        Accept: "text/csv",
+        ...authHeaders(),
+      },
+    }).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    });
+  },
 };
 
 // Legacy alias — pages that imported `api` keep working while new

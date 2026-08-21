@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zsy619/demo-dog/backend/internal/xbilling"
 	"github.com/zsy619/demo-dog/backend/internal/xsecure/auth"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/ingest"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
@@ -83,6 +84,10 @@ type Server struct {
 
 	// oidc 是 OIDC 联邦提供方列表（第 41 轮）。
 	oidc *OIDCRegistry
+
+	// metering 是 W1.5 多租户用量计量。nil 时
+	// /api/v1/billing/* 端点仍存在但返回空。
+	metering xbilling.Meter
 
 	// cfg 保存数据目录与管理端点所需的配置。
 	cfg ServerConfig
@@ -190,6 +195,18 @@ func (s *Server) SetWebhooks(w *WebhookDispatcher) {
 	}
 	s.webhooks = w
 }
+
+// SetMeter 挂载 W1.5 用量计量。nil 时 /api/v1/billing/*
+// 端点存在但返回空。必须在 Handler() 之前调用。
+func (s *Server) SetMeter(m xbilling.Meter) {
+	if m == nil {
+		return
+	}
+	s.metering = m
+}
+
+// Meter 返回底层 Meter(供测试/内部访问)。
+func (s *Server) Meter() xbilling.Meter { return s.metering }
 
 // Retention 返回留存管理器句柄。
 func (s *Server) Retention() *RetentionManager { return s.retention }
@@ -334,6 +351,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/webhooks/dlq", s.handleWebhookDLQ)
 	mux.HandleFunc("/api/v1/webhooks/stats", s.handleWebhookStats)
 	mux.HandleFunc("/api/v1/retention", s.handleRetention)
+
+	// W1.5 多租户计费导出。
+	mux.HandleFunc("/api/v1/billing/usage", s.handleUsage)
+	mux.HandleFunc("/api/v1/billing/usage.csv", s.handleUsageCSV)
 	mux.HandleFunc("/api/v1/retention/", s.handleRetentionReport)
 	mux.HandleFunc("/api/v1/backups", s.handleBackups)
 	mux.HandleFunc("/api/v1/backups/verify", s.handleBackupsVerify)

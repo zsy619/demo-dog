@@ -298,6 +298,50 @@ export interface RetentionPolicy {
   updated_at: string;
 }
 
+export interface BillingUsage {
+  tenant: string;
+  metric: string;
+  periods: Record<string, number>; // period (YYYY-MM) → value
+  total: number;
+}
+
+export interface BillingPeriodTotal {
+  tenant: string;
+  metric: string;
+  period: string; // YYYY-MM
+  value: number;
+  updated_at: string;
+}
+
+export interface BillingPointResponse {
+  tenant: string;
+  metric: string;
+  period: string;
+  value: number;
+  present: boolean;
+}
+
+export interface BillingTenantResponse {
+  tenant: string;
+  usage: BillingUsage[];
+}
+
+export interface BillingMetricsResponse {
+  tenant: string;
+  period: string;
+  metrics: BillingPeriodTotal[];
+}
+
+export interface BillingAllResponse {
+  rows: BillingPeriodTotal[];
+}
+
+export interface BillingRecordResponse {
+  tenant: string;
+  metric: string;
+  delta: number;
+}
+
 export interface QuotaStatus {
   tenant: string;
   requests: number;

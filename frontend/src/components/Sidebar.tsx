@@ -39,6 +39,7 @@ const ADMIN_ITEMS: Array<{ id: Page; label: string; icon: string }> = [
   { id: "slos", label: "SLOs", icon: "%" },
   { id: "replica", label: "Replica", icon: "⇄" },
   { id: "admin-keys", label: "Admin keys", icon: "⚿" },
+  { id: "billing", label: "Billing", icon: "$" },
 ];
 
 function NavItem({

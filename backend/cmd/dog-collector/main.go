@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zsy619/demo-dog/backend/internal/xbilling"
 	"github.com/zsy619/demo-dog/backend/internal/xnet/api"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/ingest"
 	"github.com/zsy619/demo-dog/backend/internal/xdata/store"
@@ -279,6 +280,21 @@ func main() {
 	if webhookDisp != nil {
 		apiServer.SetWebhooks(webhookDisp)
 	}
+	// W1.5 用量计量:独立加载,与 tenants / webhooks 等共用
+	// 同一份 KV 控制文件。如果失败,不退出(metering 是
+	// 可选子系统),只记录警告并降级为纯内存 Counter。
+	var meter xbilling.Meter
+	if kv != nil {
+		if a, err := xbilling.NewAggregator(context.Background(), kv); err == nil {
+			meter = a
+		} else {
+			log.Printf("[DOG] metering aggregator load failed: %v (falling back to in-memory counter)", err)
+			meter = xbilling.NewCounter()
+		}
+	} else {
+		meter = xbilling.NewCounter()
+	}
+	apiServer.SetMeter(meter)
 
 	// If seed services are provided, drop a few records before serving so the
 	// first dashboard isnt empty.

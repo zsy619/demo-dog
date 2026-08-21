@@ -32,6 +32,7 @@ const TITLES: Record<Page, string> = {
   slos: "SLO budgets",
   replica: "Replica state",
   "admin-keys": "Admin keys",
+  billing: "Billing",
 };
 
 interface Props {
